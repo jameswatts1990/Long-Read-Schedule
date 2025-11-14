@@ -53,14 +53,82 @@ export class MemStorage implements IStorage {
       { name: "Equipment Maintenance", color: "#E0E7FF", description: "Regular equipment calibration and cleaning" },
     ];
 
+    const peopleIds: string[] = [];
     samplePeople.forEach((p) => {
       const id = randomUUID();
       this.people.set(id, { id, ...p });
+      peopleIds.push(id);
     });
 
+    const taskIds: string[] = [];
     sampleTasks.forEach((t) => {
       const id = randomUUID();
       this.tasks.set(id, { id, ...t });
+      taskIds.push(id);
+    });
+
+    const getMonday = (date: Date): Date => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      return new Date(d.setDate(diff));
+    };
+
+    const formatDate = (date: Date): string => {
+      return date.toISOString().split("T")[0];
+    };
+
+    const currentWeekStart = formatDate(getMonday(new Date()));
+
+    const sampleAssignments: InsertAssignment[] = [
+      {
+        taskId: taskIds[0],
+        personId: peopleIds[0],
+        day: "Monday",
+        period: "AM",
+        weekStartDate: currentWeekStart,
+        batchNumber: "B-2024-001",
+        notes: null,
+        date: null,
+      },
+      {
+        taskId: taskIds[1],
+        personId: peopleIds[0],
+        day: "Monday",
+        period: "PM",
+        weekStartDate: currentWeekStart,
+        batchNumber: null,
+        notes: null,
+        date: null,
+      },
+      {
+        taskId: taskIds[0],
+        personId: peopleIds[1],
+        day: "Tuesday",
+        period: "AM",
+        weekStartDate: currentWeekStart,
+        batchNumber: "B-2024-002",
+        notes: "Priority sample",
+        date: null,
+      },
+      {
+        taskId: taskIds[2],
+        personId: peopleIds[2],
+        day: "Wednesday",
+        period: "PM",
+        weekStartDate: currentWeekStart,
+        batchNumber: null,
+        notes: null,
+        date: null,
+      },
+    ];
+
+    sampleAssignments.forEach((a) => {
+      const id = randomUUID();
+      this.assignments.set(id, {
+        id,
+        ...a,
+      });
     });
   }
 
@@ -125,12 +193,22 @@ export class MemStorage implements IStorage {
 
   async updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment> {
     const existing = this.assignments.get(id);
-    if (!existing) {
-      throw new Error("Assignment not found");
+    if (!existing) throw new Error("Assignment not found");
+
+    const next: Assignment = { ...existing };
+    for (const [key, value] of Object.entries(data)) {
+      if (value === undefined) continue;
+      if (key === "weekStartDate") {
+        const trimmed = typeof value === "string" ? value.trim() : "";
+        if (!trimmed) continue;
+        next.weekStartDate = trimmed;
+        continue;
+      }
+      next[key as keyof Assignment] = value as Assignment[keyof Assignment];
     }
-    const updated = { ...existing, ...data };
-    this.assignments.set(id, updated);
-    return updated;
+
+    this.assignments.set(id, next);
+    return next;
   }
 
   async deleteAssignment(id: string): Promise<void> {

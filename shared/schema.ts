@@ -28,16 +28,24 @@ export const assignments = pgTable("assignments", {
   personId: varchar("person_id").notNull(),
   day: text("day").notNull(),
   period: text("period").notNull(),
+  weekStartDate: text("week_start_date").notNull(),
   batchNumber: text("batch_number"),
   notes: text("notes"),
   date: text("date"),
 });
+
+export const isoDateString = z.string()
+  .trim()
+  .refine((val) => val.length > 0, { message: "Required" })
+  .refine((val) => /^\d{4}-\d{2}-\d{2}$/.test(val), { message: "Use YYYY-MM-DD" })
+  .refine((val) => !Number.isNaN(Date.parse(val)), { message: "Invalid date" });
 
 export const insertPersonSchema = createInsertSchema(people).omit({ id: true });
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true });
 export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id: true }).extend({
   day: z.enum(DAYS),
   period: z.enum(PERIODS),
+  weekStartDate: isoDateString,
 });
 
 export type Person = typeof people.$inferSelect;

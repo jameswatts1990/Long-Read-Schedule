@@ -42,10 +42,12 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   });
 
   const handleSave = () => {
+    if (!assignment) return;
     updateMutation.mutate({
       batchNumber: batchNumber || undefined,
       notes: notes || undefined,
       date: date || undefined,
+      weekStartDate: assignment.weekStartDate,
     });
   };
 

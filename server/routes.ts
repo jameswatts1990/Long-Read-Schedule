@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPersonSchema, insertTaskSchema, insertAssignmentSchema } from "@shared/schema";
+import { insertPersonSchema, insertTaskSchema, insertAssignmentSchema, isoDateString } from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/people", async (_req, res) => {
@@ -79,12 +80,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const assignmentPatchSchema = z.object({
+    taskId: insertAssignmentSchema.shape.taskId.optional(),
+    batchNumber: insertAssignmentSchema.shape.batchNumber.optional(),
+    notes: insertAssignmentSchema.shape.notes.optional(),
+    date: insertAssignmentSchema.shape.date.optional(),
+    weekStartDate: isoDateString.optional(),
+  }).strict();
+
   app.patch("/api/assignments/:id", async (req, res) => {
     try {
-      const updateSchema = insertAssignmentSchema.partial();
-      const data = updateSchema.parse(req.body);
-      const assignment = await storage.updateAssignment(req.params.id, data);
-      res.json(assignment);
+      const assignmentId = req.params.id;
+      const existing = await storage.getAssignment(assignmentId);
+      if (!existing) {
+        return res.status(404).json({ error: "Assignment not found" });
+      }
+
+      const parsed = assignmentPatchSchema.parse(req.body ?? {});
+      const { weekStartDate, ...mutable } = parsed;
+      const nextPayload = {
+        ...mutable,
+        weekStartDate: weekStartDate ?? existing.weekStartDate,
+      };
+
+      const updated = await storage.updateAssignment(assignmentId, nextPayload);
+      res.json(updated);
     } catch (error) {
       res.status(400).json({ error: "Invalid update data" });
     }
