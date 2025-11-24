@@ -29,8 +29,9 @@ import { z } from "zod";
 import { type Person, type Task } from "@shared/schema";
 
 const PRESET_COLORS = [
-  "#DBEAFE", "#D1FAE5", "#FEF3C7", "#E0E7FF", "#F3E8FF",
-  "#FCE7F3", "#DBEAFE", "#C7D2FE", "#BFE1FF", "#FECACA",
+  "#DBEAFE", "#BAE6FD", "#D1FAE5", "#A7F3D0", "#FEF3C7", "#FEF08A",
+  "#FECDD3", "#FCE7F3", "#E9D5FF", "#F3E8FF", "#C7D2FE", "#E0E7FF",
+  "#FEDBA8", "#FED7AA", "#FECACA", "#DDD6FE",
 ];
 
 const PERSON_COLORS = [
