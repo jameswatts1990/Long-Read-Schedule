@@ -123,6 +123,13 @@ export function DuplicateAssignmentDialog({
 
   if (!assignment) return null;
 
+  // Sort people: original person first, then others
+  const sortedPeople = [...people].sort((a, b) => {
+    if (a.id === assignment.personId) return -1;
+    if (b.id === assignment.personId) return 1;
+    return 0;
+  });
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto" data-testid="dialog-duplicate-assignment">
@@ -134,15 +141,27 @@ export function DuplicateAssignmentDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {people.map((person) => (
-            <div key={person.id} className="space-y-2">
+          {sortedPeople.map((person) => {
+            const isOriginalPerson = person.id === assignment.personId;
+            return (
+            <div 
+              key={person.id} 
+              className={`space-y-2 p-3 rounded-md border transition-colors ${
+                isOriginalPerson 
+                  ? "bg-primary/10 border-primary/50" 
+                  : "border-transparent"
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <div
                     className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: person.color }}
                   />
-                  <span className="font-medium text-sm">{person.name}</span>
+                  <span className={`font-medium text-sm ${isOriginalPerson ? "font-semibold text-primary" : ""}`}>
+                    {person.name}
+                    {isOriginalPerson && <span className="ml-1 text-xs text-primary font-normal">(Original)</span>}
+                  </span>
                 </div>
                 <Button
                   variant="ghost"
@@ -186,7 +205,8 @@ export function DuplicateAssignmentDialog({
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <DialogFooter>
