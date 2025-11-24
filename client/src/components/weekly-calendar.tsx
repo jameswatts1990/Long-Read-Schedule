@@ -27,7 +27,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
   const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
-  const [isOutsideCalendar, setIsOutsideCalendar] = useState(false);
+  const [deleteDragTarget, setDeleteDragTarget] = useState<string | null>(null);
   const { toast } = useToast();
 
   const updateAssignmentMutation = useMutation({
@@ -91,22 +91,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
 
   return (
     <>
-      <div
-        className="border rounded-md bg-card h-full flex flex-col"
-        onDragLeave={(e) => {
-          if (draggedAssignment && e.clientX <= 0 && e.clientY <= 0) {
-            setIsOutsideCalendar(true);
-          }
-        }}
-        onDragOver={(e) => {
-          if (draggedAssignment) {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const isInside = e.clientX >= rect.left && e.clientX <= rect.right &&
-                            e.clientY >= rect.top && e.clientY <= rect.bottom;
-            setIsOutsideCalendar(!isInside);
-          }
-        }}
-      >
+      <div className="border rounded-md bg-card h-full flex flex-col">
         <div className="overflow-auto flex-1">
           <div
             className="grid"
@@ -135,14 +120,30 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
             {/* Person Rows */}
             {people.map((person, personIndex) => (
               <div key={person.id} className="contents">
-                {/* Person Name Cell - Sticky */}
+                {/* Person Name Cell - Sticky (Drop zone for deletion) */}
                 <div
                   className={cn(
-                    "sticky left-0 z-30 border-r border-b p-3 flex items-center gap-2 bg-card",
-                    personIndex % 2 === 0 && "bg-muted"
+                    "sticky left-0 z-30 border-r border-b p-3 flex items-center gap-2 bg-card cursor-pointer",
+                    personIndex % 2 === 0 && "bg-muted",
+                    deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
                   )}
                   style={{ top: "57px" }}
                   data-testid={`person-row-${person.id}`}
+                  onDragOver={(e) => {
+                    if (draggedAssignment) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDeleteDragTarget(person.id);
+                    }
+                  }}
+                  onDragLeave={() => setDeleteDragTarget(null)}
+                  onDrop={() => {
+                    if (draggedAssignment) {
+                      deleteAssignmentMutation.mutate(draggedAssignment.id);
+                    }
+                    setDeleteDragTarget(null);
+                    setDraggedAssignment(null);
+                  }}
                 >
                   <div
                     className="w-2 h-2 rounded-full shrink-0"
@@ -209,15 +210,11 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                               draggable
                               onDragStart={(e) => {
                                 setDraggedAssignment(assignment);
-                                setIsOutsideCalendar(false);
                                 e.dataTransfer.effectAllowed = "move";
                               }}
                               onDragEnd={() => {
-                                if (isOutsideCalendar && draggedAssignment) {
-                                  deleteAssignmentMutation.mutate(draggedAssignment.id);
-                                }
                                 setDraggedAssignment(null);
-                                setIsOutsideCalendar(false);
+                                setDeleteDragTarget(null);
                               }}
                               onClick={() => onAssignmentClick(assignment)}
                               data-testid={`assignment-${assignment.id}`}
