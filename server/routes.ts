@@ -91,6 +91,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     personId: insertAssignmentSchema.shape.personId.optional(),
     day: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]).optional(),
     period: z.enum(["AM", "PM"]).optional(),
+    endDay: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]).optional(),
     weekStartDate: isoDateString.optional(),
   }).strict();
 

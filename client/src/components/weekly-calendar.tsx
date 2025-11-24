@@ -58,9 +58,13 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
   });
 
   const getAssignmentsForCell = (personId: string, day: string, period: string) => {
-    return assignments.filter(
-      a => a.personId === personId && a.day === day && a.period === period
-    );
+    return assignments.filter(a => {
+      if (a.personId !== personId || a.period !== period) return false;
+      const startIdx = getDayIndex(a.day);
+      const endIdx = getDayIndex(a.endDay || a.day);
+      const currentIdx = getDayIndex(day);
+      return currentIdx >= startIdx && currentIdx <= endIdx;
+    });
   };
 
   const hasConflict = (personId: string, day: string, period: string) => {
@@ -176,13 +180,18 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                 </div>
 
                 {/* Day/Period Cells */}
-                {DAYS.map(day => (
+                {DAYS.map((day, dayIndex) => (
                   PERIODS.map(period => {
                     const cellAssignments = getAssignmentsForCell(person.id, day, period);
                     const conflict = hasConflict(person.id, day, period);
                     
                     const currentCell = { personId: person.id, day, period };
                     const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day && dropTargetCell?.period === period;
+
+                    // Check if this cell should show task blocks (first day of a span)
+                    const assignmentsStartingHere = assignments.filter(a => 
+                      a.personId === person.id && a.day === day && a.period === period
+                    );
 
                     return (
                       <div
@@ -233,9 +242,14 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                           </div>
                         )}
                         <div className="space-y-1.5">
-                          {cellAssignments.map(assignment => {
+                          {assignmentsStartingHere.map(assignment => {
                             const task = getTaskById(assignment.taskId);
                             if (!task) return null;
+
+                            const startIdx = getDayIndex(assignment.day);
+                            const endIdx = getDayIndex(assignment.endDay || assignment.day);
+                            const spanLength = endIdx - startIdx + 1;
+                            const colSpan = spanLength * 2; // 2 columns per day (AM/PM)
 
                             return (
                               <div
@@ -247,6 +261,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                                 style={{ 
                                   backgroundColor: task.color,
                                   borderColor: person.color,
+                                  gridColumn: `span ${colSpan}`,
                                 }}
                                 draggable
                                 onDragStart={(e) => {
@@ -292,16 +307,18 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                             );
                           })}
 
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start text-muted-foreground hover:text-foreground"
-                            onClick={() => setSelectedCell({ personId: person.id, day, period })}
-                            data-testid={`button-add-${person.id}-${day.toLowerCase()}-${period.toLowerCase()}`}
-                          >
-                            <Plus className="w-3 h-3 mr-1" />
-                            <span className="text-xs">Add</span>
-                          </Button>
+                          {assignmentsStartingHere.length === 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start text-muted-foreground hover:text-foreground"
+                              onClick={() => setSelectedCell({ personId: person.id, day, period })}
+                              data-testid={`button-add-${person.id}-${day.toLowerCase()}-${period.toLowerCase()}`}
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              <span className="text-xs">Add</span>
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );
