@@ -91,17 +91,26 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
 
   return (
     <>
-      <div className="border rounded-md bg-card h-full flex flex-col">
+      <div
+        className="border rounded-md bg-card h-full flex flex-col"
+        onDragLeave={(e) => {
+          if (draggedAssignment && e.clientX <= 0 && e.clientY <= 0) {
+            setIsOutsideCalendar(true);
+          }
+        }}
+        onDragOver={(e) => {
+          if (draggedAssignment) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const isInside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                            e.clientY >= rect.top && e.clientY <= rect.bottom;
+            setIsOutsideCalendar(!isInside);
+          }
+        }}
+      >
         <div className="overflow-auto flex-1">
           <div
             className="grid"
             style={{ gridTemplateColumns: "200px repeat(5, minmax(180px, 1fr))", minWidth: "max-content" }}
-            onDragLeave={(e) => {
-              if (e.target === e.currentTarget) {
-                setIsOutsideCalendar(true);
-              }
-            }}
-            onDragEnter={() => setIsOutsideCalendar(false)}
           >
             {/* Header Row: Person + Day Names */}
             <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-3">
