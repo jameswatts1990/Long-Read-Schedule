@@ -107,19 +107,18 @@ export function DuplicateAssignmentDialog({
     onClose();
   };
 
-  const handleSelectAllWeek = () => {
+  const handleSelectPersonWeek = (personId: string) => {
     if (!assignment) return;
     
-    const allSlots = new Set<string>();
-    people.forEach((person) => {
-      DAYS.forEach((day) => {
-        // Don't select the original assignment slot
-        if (!(person.id === assignment.personId && day === assignment.day)) {
-          allSlots.add(`${person.id}-${day}`);
-        }
-      });
+    const newSet = new Set(selectedSlots);
+    DAYS.forEach((day) => {
+      // Don't select the original assignment slot
+      if (!(personId === assignment.personId && day === assignment.day)) {
+        const slotKey = `${personId}-${day}`;
+        newSet.add(slotKey);
+      }
     });
-    setSelectedSlots(allSlots);
+    setSelectedSlots(newSet);
   };
 
   if (!assignment) return null;
@@ -132,25 +131,28 @@ export function DuplicateAssignmentDialog({
           <DialogDescription>
             Select days to duplicate this task to. The task will be copied with the same batch number, notes, and date.
           </DialogDescription>
-          <Button
-            variant="outline"
-            onClick={handleSelectAllWeek}
-            className="w-full mt-2"
-            data-testid="button-select-all-week"
-          >
-            Select All Week
-          </Button>
         </DialogHeader>
 
         <div className="space-y-4">
           {people.map((person) => (
             <div key={person.id} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: person.color }}
-                />
-                <span className="font-medium text-sm">{person.name}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: person.color }}
+                  />
+                  <span className="font-medium text-sm">{person.name}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSelectPersonWeek(person.id)}
+                  className="text-xs h-6 px-2"
+                  data-testid={`button-select-all-week-${person.id}`}
+                >
+                  All week
+                </Button>
               </div>
               <div className="grid grid-cols-5 gap-2 ml-4">
                 {DAYS.map((day) => {
