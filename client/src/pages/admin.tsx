@@ -228,8 +228,10 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* People Management */}
-        <Card className="p-6">
+        {/* People and Tasks Grid */}
+        <div className="grid grid-cols-2 gap-8">
+          {/* People Management */}
+          <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">People</h2>
             <Button onClick={() => { setEditingPerson(null); setShowAddPerson(true); }} data-testid="button-add-person">
@@ -331,8 +333,8 @@ export default function Admin() {
           </div>
         </Card>
 
-        {/* Tasks Management */}
-        <Card className="p-6">
+          {/* Tasks Management */}
+          <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">Tasks</h2>
             <Button onClick={() => { setEditingTask(null); setShowAddTask(true); }} data-testid="button-add-task">
@@ -438,6 +440,7 @@ export default function Admin() {
             )}
           </div>
         </Card>
+        </div>
       </div>
 
       {/* Add/Edit Person Dialog */}
