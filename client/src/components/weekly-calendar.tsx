@@ -74,14 +74,14 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
         <div className="overflow-auto flex-1">
           <div className="grid" style={{ gridTemplateColumns: "200px repeat(5, minmax(180px, 1fr))", minWidth: "max-content" }}>
             {/* Header Row: Person + Day Names */}
-            <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted/50 p-3">
+            <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-3">
               <span className="font-semibold text-foreground" data-testid="header-person">Person</span>
             </div>
             
             {DAYS.map((day, dayIndex) => (
               <div 
                 key={day} 
-                className="sticky top-0 z-40 border-b text-center bg-muted/50 p-3"
+                className="sticky top-0 z-40 border-b text-center bg-muted p-3"
                 data-testid={`header-day-${day.toLowerCase()}`}
               >
                 <div className="font-semibold text-foreground">
