@@ -72,6 +72,11 @@ export default function Scheduler() {
 
   const hasActiveFilters = filterPersonIds.size > 0 || filterTaskIds.size > 0;
 
+  // When filters are active, only show people who have assignments in the filtered results
+  const displayPeople = hasActiveFilters
+    ? people.filter(p => weekAssignments.some(a => a.personId === p.id))
+    : people;
+
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeekStart);
     newWeek.setDate(newWeek.getDate() - 7);
@@ -382,7 +387,7 @@ export default function Scheduler() {
         <WeeklyCalendar
           weekStartDate={weekStartStr}
           assignments={weekAssignments}
-          people={people}
+          people={displayPeople}
           tasks={tasks}
           onAssignmentClick={setSelectedAssignment}
         />
