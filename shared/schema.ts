@@ -4,10 +4,8 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
-export const PERIODS = ["AM", "PM"] as const;
 
 export type Day = typeof DAYS[number];
-export type Period = typeof PERIODS[number];
 
 export const people = pgTable("people", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -27,7 +25,6 @@ export const assignments = pgTable("assignments", {
   taskId: varchar("task_id").notNull(),
   personId: varchar("person_id").notNull(),
   day: text("day").notNull(),
-  period: text("period").notNull(),
   weekStartDate: text("week_start_date").notNull(),
   batchNumber: text("batch_number"),
   notes: text("notes"),
@@ -44,7 +41,6 @@ export const insertPersonSchema = createInsertSchema(people).omit({ id: true });
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true });
 export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id: true }).extend({
   day: z.enum(DAYS),
-  period: z.enum(PERIODS),
   weekStartDate: isoDateString,
 });
 
