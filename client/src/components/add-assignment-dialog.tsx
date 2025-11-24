@@ -32,11 +32,10 @@ interface AddAssignmentDialogProps {
   weekStartDate: string;
   personId: string;
   day: string;
-  period: string;
   tasks: Task[];
 }
 
-const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: true, day: true, period: true }).extend({
+const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: true, day: true }).extend({
   taskId: z.string().min(1, "Please select a task"),
   batchNumber: z.string().optional(),
   notes: z.string().optional(),
@@ -45,7 +44,7 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
 
 type FormData = z.infer<typeof formSchema>;
 
-export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, day, period, tasks }: AddAssignmentDialogProps) {
+export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, day, tasks }: AddAssignmentDialogProps) {
   const { toast } = useToast();
   const [conflictData, setConflictData] = useState<{ conflicts: any[], conflictCount: number } | null>(null);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
@@ -67,7 +66,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         ...data,
         personId,
         day,
-        period,
         weekStartDate,
         batchNumber: data.batchNumber || undefined,
         notes: data.notes || undefined,
@@ -147,7 +145,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         <DialogHeader>
           <DialogTitle>Add Task Assignment</DialogTitle>
           <DialogDescription>
-            Assign a task for {day} {period}
+            Assign a task for {day}
           </DialogDescription>
         </DialogHeader>
 
@@ -282,7 +280,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           <DialogHeader>
             <DialogTitle>Scheduling Conflict Detected</DialogTitle>
             <DialogDescription>
-              This person already has {conflictData.conflictCount} assignment(s) in this time slot ({day} {period}).
+              This person already has {conflictData.conflictCount} assignment(s) on {day}.
             </DialogDescription>
           </DialogHeader>
           
