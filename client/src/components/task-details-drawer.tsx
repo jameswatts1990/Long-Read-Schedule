@@ -126,9 +126,9 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Time Slot</Label>
+            <Label className="text-sm font-medium">Day</Label>
             <div className="text-sm p-3 rounded-md border">
-              {assignment.day} - {assignment.period}
+              {assignment.day}
             </div>
           </div>
 
