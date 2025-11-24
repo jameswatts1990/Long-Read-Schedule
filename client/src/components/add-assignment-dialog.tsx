@@ -181,7 +181,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg" data-testid="dialog-add-assignment">
+      <DialogContent className="max-w-xl" data-testid="dialog-add-assignment">
         <DialogHeader>
           <DialogTitle>Add Task Assignment</DialogTitle>
           <DialogDescription>
