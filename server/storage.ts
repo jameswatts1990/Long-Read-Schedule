@@ -22,6 +22,7 @@ export interface IStorage {
   deletePerson(id: string): Promise<void>;
   updatePersonOrder(id: string, newOrder: number): Promise<Person>;
   reorderPeople(personIds: string[]): Promise<Person[]>;
+  togglePersonExcluded(id: string): Promise<Person>;
 
   getTasks(): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
@@ -213,6 +214,15 @@ export class MemStorage implements IStorage {
     return await this.getPeople();
   }
 
+  async togglePersonExcluded(id: string): Promise<Person> {
+    const person = this.people.get(id);
+    if (!person) throw new Error("Person not found");
+    const excluded = (person as any).excluded ? 0 : 1;
+    const updated = { ...person, excluded } as any;
+    this.people.set(id, updated);
+    return updated;
+  }
+
   async getTasks(): Promise<Task[]> {
     return Array.from(this.tasks.values()).sort((a, b) => {
       const orderA = (a as any).order ?? 0;
@@ -373,6 +383,18 @@ export class PostgresStorage implements IStorage {
       await this.db.update(people).set({ order: i }).where(eq(people.id, personIds[i]));
     }
     return await this.getPeople();
+  }
+
+  async togglePersonExcluded(id: string): Promise<Person> {
+    const person = await this.getPerson(id);
+    if (!person) throw new Error("Person not found");
+    const excluded = (person.excluded ? 0 : 1);
+    const result = await this.db
+      .update(people)
+      .set({ excluded })
+      .where(eq(people.id, id))
+      .returning();
+    return result[0];
   }
 
   async getTasks(): Promise<Task[]> {

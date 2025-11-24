@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

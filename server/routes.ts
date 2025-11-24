@@ -46,6 +46,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/people/:id/toggle-excluded", async (req, res) => {
+    try {
+      const person = await storage.togglePersonExcluded(req.params.id);
+      res.json(person);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to toggle excluded status" });
+    }
+  });
+
   app.get("/api/tasks", async (_req, res) => {
     try {
       const tasks = await storage.getTasks();

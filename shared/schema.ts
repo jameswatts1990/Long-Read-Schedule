@@ -12,6 +12,7 @@ export const people = pgTable("people", {
   name: text("name").notNull(),
   color: text("color").notNull(),
   order: integer("order").default(0),
+  excluded: integer("excluded").default(0),
 });
 
 export const tasks = pgTable("tasks", {
