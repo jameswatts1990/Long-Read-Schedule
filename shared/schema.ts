@@ -28,7 +28,6 @@ export const assignments = pgTable("assignments", {
   personId: varchar("person_id").notNull(),
   day: text("day").notNull(),
   period: text("period").notNull(),
-  endDay: text("end_day"),
   weekStartDate: text("week_start_date").notNull(),
   batchNumber: text("batch_number"),
   notes: text("notes"),
