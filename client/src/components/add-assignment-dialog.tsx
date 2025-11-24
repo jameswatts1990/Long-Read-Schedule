@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertAssignmentSchema, type Task } from "@shared/schema";
+import { insertAssignmentSchema, type Task, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -139,6 +139,46 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
     setPendingFormData(null);
   };
 
+  const handleCreateAllWeek = async (data: FormData) => {
+    setPendingFormData(data);
+    
+    const promises = DAYS.map((d) =>
+      apiRequest("POST", "/api/assignments", {
+        ...data,
+        personId,
+        day: d,
+        weekStartDate,
+        batchNumber: data.batchNumber || undefined,
+        notes: data.notes || undefined,
+        date: data.date || undefined,
+      })
+    );
+
+    try {
+      const results = await Promise.all(promises);
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      toast({
+        title: "Success",
+        description: `Assignment created for all 5 days`,
+      });
+      form.reset({
+        taskId: "",
+        batchNumber: "",
+        notes: "",
+        date: "",
+      });
+      setConflictData(null);
+      setPendingFormData(null);
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create assignments",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent data-testid="dialog-add-assignment">
@@ -247,6 +287,18 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                 Close
               </Button>
               <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={createMutation.isPending || !form.getValues("taskId")}
+                  data-testid="button-all-week"
+                  onClick={() => {
+                    const data = form.getValues();
+                    handleCreateAllWeek(data);
+                  }}
+                >
+                  All Week
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
