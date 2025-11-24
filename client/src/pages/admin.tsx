@@ -325,8 +325,24 @@ export default function Admin() {
                     </div>
                     </div>
                 ))}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverIndex(people.length);
+                  }}
+                  onDragLeave={() => setDragOverIndex(null)}
+                  onDrop={() => {
+                    if (draggedId) {
+                      const newOrder = people.filter(p => p.id !== draggedId).map(p => p.id);
+                      newOrder.push(draggedId);
+                      reorderPersonMutation.mutate(newOrder);
+                    }
+                    setDragOverIndex(null);
+                  }}
+                  className="h-12 -mx-3 -mb-3 px-3 pb-3"
+                />
                 {draggedId && dragOverIndex === people.length && (
-                  <div className="h-1 bg-primary"></div>
+                  <div className="h-1 bg-primary mb-2"></div>
                 )}
               </div>
             )}
@@ -433,8 +449,24 @@ export default function Admin() {
                     </div>
                   </div>
                 ))}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverTaskIndex(tasks.length);
+                  }}
+                  onDragLeave={() => setDragOverTaskIndex(null)}
+                  onDrop={() => {
+                    if (draggedTaskId) {
+                      const newOrder = tasks.filter(t => t.id !== draggedTaskId).map(t => t.id);
+                      newOrder.push(draggedTaskId);
+                      reorderTaskMutation.mutate(newOrder);
+                    }
+                    setDragOverTaskIndex(null);
+                  }}
+                  className="h-12 -mx-3 -mb-3 px-3 pb-3"
+                />
                 {draggedTaskId && dragOverTaskIndex === tasks.length && (
-                  <div className="h-1 bg-primary"></div>
+                  <div className="h-1 bg-primary mb-2"></div>
                 )}
               </div>
             )}
