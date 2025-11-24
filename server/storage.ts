@@ -29,7 +29,7 @@ export interface IStorage {
 
   getAssignments(): Promise<Assignment[]>;
   getAssignment(id: string): Promise<Assignment | undefined>;
-  getConflictingAssignments(personId: string, day: string, period: string, weekStartDate: string): Promise<Assignment[]>;
+  getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]>;
   createAssignment(assignment: InsertAssignment): Promise<Assignment>;
   updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment>;
   deleteAssignment(id: string): Promise<void>;
@@ -94,7 +94,6 @@ export class MemStorage implements IStorage {
         taskId: taskIds[0],
         personId: peopleIds[0],
         day: "Monday",
-        period: "AM",
         weekStartDate: currentWeekStart,
         batchNumber: "B-2024-001",
         notes: null,
@@ -104,7 +103,6 @@ export class MemStorage implements IStorage {
         taskId: taskIds[1],
         personId: peopleIds[0],
         day: "Monday",
-        period: "PM",
         weekStartDate: currentWeekStart,
         batchNumber: null,
         notes: null,
@@ -114,7 +112,6 @@ export class MemStorage implements IStorage {
         taskId: taskIds[0],
         personId: peopleIds[1],
         day: "Tuesday",
-        period: "AM",
         weekStartDate: currentWeekStart,
         batchNumber: "B-2024-002",
         notes: "Priority sample",
@@ -124,7 +121,6 @@ export class MemStorage implements IStorage {
         taskId: taskIds[2],
         personId: peopleIds[2],
         day: "Wednesday",
-        period: "PM",
         weekStartDate: currentWeekStart,
         batchNumber: null,
         notes: null,
@@ -195,11 +191,10 @@ export class MemStorage implements IStorage {
     return this.assignments.get(id);
   }
 
-  async getConflictingAssignments(personId: string, day: string, period: string, weekStartDate: string): Promise<Assignment[]> {
+  async getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]> {
     return Array.from(this.assignments.values()).filter(
       a => a.personId === personId &&
            a.day === day &&
-           a.period === period &&
            a.weekStartDate === weekStartDate
     );
   }
@@ -317,7 +312,7 @@ export class PostgresStorage implements IStorage {
     return result[0];
   }
 
-  async getConflictingAssignments(personId: string, day: string, period: string, weekStartDate: string): Promise<Assignment[]> {
+  async getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]> {
     const result = await this.db
       .select()
       .from(assignments)
@@ -327,7 +322,6 @@ export class PostgresStorage implements IStorage {
     
     return result.filter(
       a => a.day === day &&
-           a.period === period &&
            a.weekStartDate === weekStartDate
     );
   }
