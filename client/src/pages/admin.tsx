@@ -59,6 +59,7 @@ export default function Admin() {
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -226,24 +227,35 @@ export default function Admin() {
             {people.length === 0 ? (
               <p className="text-muted-foreground">No people added yet</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-0">
                 {people.map((person, index) => (
-                  <div
-                    key={person.id}
-                    draggable
-                    onDragStart={() => setDraggedId(person.id)}
-                    onDragEnd={() => setDraggedId(null)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => {
-                      if (draggedId && draggedId !== person.id) {
-                        reorderPersonMutation.mutate({ id: draggedId, newOrder: index });
-                      }
-                    }}
-                    className={`flex items-center justify-between p-3 border rounded-md hover-elevate cursor-move transition-opacity ${
-                      draggedId === person.id ? "opacity-50" : ""
-                    }`}
-                    data-testid={`person-item-${person.id}`}
-                  >
+                  <div key={person.id}>
+                    {draggedId && dragOverIndex === index && draggedId !== person.id && (
+                      <div className="h-1 bg-primary mb-0.5"></div>
+                    )}
+                    <div
+                      draggable
+                      onDragStart={() => setDraggedId(person.id)}
+                      onDragEnd={() => {
+                        setDraggedId(null);
+                        setDragOverIndex(null);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverIndex(index);
+                      }}
+                      onDragLeave={() => setDragOverIndex(null)}
+                      onDrop={() => {
+                        if (draggedId && draggedId !== person.id) {
+                          reorderPersonMutation.mutate({ id: draggedId, newOrder: index });
+                        }
+                        setDragOverIndex(null);
+                      }}
+                      className={`flex items-center justify-between p-3 border rounded-md hover-elevate cursor-move transition-opacity mb-2 ${
+                        draggedId === person.id ? "opacity-50" : ""
+                      }`}
+                      data-testid={`person-item-${person.id}`}
+                    >
                     <div className="flex items-center gap-3">
                       <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <div
@@ -271,8 +283,12 @@ export default function Admin() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </div>
+                    </div>
+                    </div>
                 ))}
+                {draggedId && dragOverIndex === people.length && (
+                  <div className="h-1 bg-primary"></div>
+                )}
               </div>
             )}
           </div>
