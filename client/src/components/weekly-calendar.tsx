@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { parse, addDays, format } from "date-fns";
 
 interface WeeklyCalendarProps {
   weekStartDate: string;
@@ -61,6 +62,12 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
 
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
+  const getDateForDay = (dayIndex: number) => {
+    const startDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
+    const dayDate = addDays(startDate, dayIndex);
+    return format(dayDate, "MMM d");
+  };
+
   return (
     <>
       <div className="border rounded-md overflow-auto bg-card">
@@ -71,7 +78,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
               <span className="font-semibold text-foreground" data-testid="header-person">Person</span>
             </div>
             
-            {DAYS.map((day) => (
+            {DAYS.map((day, dayIndex) => (
               <div 
                 key={day} 
                 className="border-b text-center bg-muted/50 p-3"
@@ -79,6 +86,9 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
               >
                 <div className="font-semibold text-foreground">
                   {day}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {getDateForDay(dayIndex)}
                 </div>
               </div>
             ))}
