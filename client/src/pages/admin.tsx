@@ -508,7 +508,7 @@ export default function Admin() {
       </Dialog>
 
       {/* Add/Edit Task Dialog */}
-      <Dialog open={showAddTask || !!editingTask} onOpenChange={(open) => { if (!open) { setShowAddTask(false); setEditingTask(null); } }}>
+      <Dialog open={showAddTask || !!editingTask} onOpenChange={(open) => { if (!open) { setShowAddTask(false); setEditingTask(null); taskForm.reset(); } }}>
         <DialogContent data-testid="dialog-add-task">
           <DialogHeader>
             <DialogTitle>{editingTask ? "Edit Task" : "Add Task"}</DialogTitle>
