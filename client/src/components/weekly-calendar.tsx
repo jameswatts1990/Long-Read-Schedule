@@ -100,7 +100,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                 <div
                   className={cn(
                     "sticky left-0 z-30 border-r border-b p-3 flex items-center gap-2 bg-card",
-                    personIndex % 2 === 0 && "bg-muted/20"
+                    personIndex % 2 === 0 && "bg-muted"
                   )}
                   style={{ top: "57px" }}
                   data-testid={`person-row-${person.id}`}
