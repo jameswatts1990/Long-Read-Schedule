@@ -253,20 +253,22 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   type="button"
                   variant="outline"
                   disabled={createMutation.isPending}
-                  data-testid="button-submit-and-close"
+                  data-testid="button-submit-and-add-another"
                   onClick={() => {
-                    setShouldCloseAfter(true);
                     form.handleSubmit(onSubmit)();
                   }}
                 >
-                  {createMutation.isPending ? "Creating..." : "Create & Close"}
+                  {createMutation.isPending ? "Creating..." : "Create & Add Another"}
                 </Button>
                 <Button
                   type="submit"
                   disabled={createMutation.isPending}
-                  data-testid="button-submit-and-add-another"
+                  data-testid="button-submit-and-close"
+                  onClick={() => {
+                    setShouldCloseAfter(true);
+                  }}
                 >
-                  {createMutation.isPending ? "Creating..." : "Create & Add Another"}
+                  {createMutation.isPending ? "Creating..." : "Create & Close"}
                 </Button>
               </div>
             </div>

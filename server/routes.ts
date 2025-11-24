@@ -75,24 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { override, ...bodyData } = req.body;
       const data = insertAssignmentSchema.parse(bodyData);
       
-      // Check for conflicts before creating
-      const conflicts = await storage.getConflictingAssignments(
-        data.personId,
-        data.day,
-        data.period,
-        data.weekStartDate
-      );
-      
-      // If conflicts exist and user hasn't confirmed override, return 409
-      if (conflicts.length > 0 && !override) {
-        return res.status(409).json({
-          error: "Conflict detected",
-          conflicts,
-          conflictCount: conflicts.length,
-        });
-      }
-      
-      // No conflicts or user confirmed override - create assignment
+      // Multiple tasks allowed per time slot - just create the assignment
       const assignment = await storage.createAssignment(data);
       res.json(assignment);
     } catch (error) {
