@@ -287,7 +287,8 @@ export class PostgresStorage implements IStorage {
   }
 
   async getPeople(): Promise<Person[]> {
-    return await this.db.select().from(people);
+    const result = await this.db.select().from(people).orderBy(people.order);
+    return result;
   }
 
   async getPerson(id: string): Promise<Person | undefined> {
@@ -311,6 +312,33 @@ export class PostgresStorage implements IStorage {
 
   async deletePerson(id: string): Promise<void> {
     await this.db.delete(people).where(eq(people.id, id));
+  }
+
+  async updatePersonOrder(id: string, newOrder: number): Promise<Person> {
+    const person = await this.getPerson(id);
+    if (!person) throw new Error("Person not found");
+    
+    const oldOrder = parseInt(person.order || "0", 10);
+    const allPeople = await this.db.select().from(people);
+
+    if (newOrder < oldOrder) {
+      for (const p of allPeople) {
+        const pOrder = parseInt(p.order || "0", 10);
+        if (p.id !== id && pOrder >= newOrder && pOrder < oldOrder) {
+          await this.db.update(people).set({ order: String(pOrder + 1) }).where(eq(people.id, p.id));
+        }
+      }
+    } else if (newOrder > oldOrder) {
+      for (const p of allPeople) {
+        const pOrder = parseInt(p.order || "0", 10);
+        if (p.id !== id && pOrder > oldOrder && pOrder <= newOrder) {
+          await this.db.update(people).set({ order: String(pOrder - 1) }).where(eq(people.id, p.id));
+        }
+      }
+    }
+
+    const result = await this.db.update(people).set({ order: String(newOrder) }).where(eq(people.id, id)).returning();
+    return result[0];
   }
 
   async getTasks(): Promise<Task[]> {

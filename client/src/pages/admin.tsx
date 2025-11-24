@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -58,6 +58,7 @@ export default function Admin() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -229,10 +230,22 @@ export default function Admin() {
                 {people.map((person, index) => (
                   <div
                     key={person.id}
-                    className="flex items-center justify-between p-3 border rounded-md hover-elevate"
+                    draggable
+                    onDragStart={() => setDraggedId(person.id)}
+                    onDragEnd={() => setDraggedId(null)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (draggedId && draggedId !== person.id) {
+                        reorderPersonMutation.mutate({ id: draggedId, newOrder: index });
+                      }
+                    }}
+                    className={`flex items-center justify-between p-3 border rounded-md hover-elevate cursor-move transition-opacity ${
+                      draggedId === person.id ? "opacity-50" : ""
+                    }`}
                     data-testid={`person-item-${person.id}`}
                   >
                     <div className="flex items-center gap-3">
+                      <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <div
                         className="w-6 h-6 rounded"
                         style={{ backgroundColor: person.color }}
@@ -240,24 +253,6 @@ export default function Admin() {
                       <span>{person.name}</span>
                     </div>
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => reorderPersonMutation.mutate({ id: person.id, newOrder: index - 1 })}
-                        disabled={index === 0 || reorderPersonMutation.isPending}
-                        data-testid={`button-move-up-person-${person.id}`}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => reorderPersonMutation.mutate({ id: person.id, newOrder: index + 1 })}
-                        disabled={index === people.length - 1 || reorderPersonMutation.isPending}
-                        data-testid={`button-move-down-person-${person.id}`}
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
