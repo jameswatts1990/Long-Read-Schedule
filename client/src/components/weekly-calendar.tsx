@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS, PERIODS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Plus, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface WeeklyCalendarProps {
   weekStartDate: string;
@@ -21,6 +24,35 @@ interface CellData {
 
 export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAssignmentClick }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
+  const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
+  const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
+  const { toast } = useToast();
+
+  const updateAssignmentMutation = useMutation({
+    mutationFn: async (data: { assignmentId: string; personId: string; day: string; period: string }) => {
+      const res = await apiRequest("PATCH", `/api/assignments/${data.assignmentId}`, {
+        personId: data.personId,
+        day: data.day,
+        period: data.period,
+        weekStartDate,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      toast({
+        title: "Task moved",
+        description: "Assignment updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to move assignment",
+        variant: "destructive",
+      });
+    },
+  });
 
   const getAssignmentsForCell = (personId: string, day: string, period: string) => {
     return assignments.filter(
@@ -101,6 +133,9 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                     const cellAssignments = getAssignmentsForCell(person.id, day, period);
                     const conflict = hasConflict(person.id, day, period);
                     
+                    const currentCell = { personId: person.id, day, period };
+                    const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day && dropTargetCell?.period === period;
+
                     return (
                       <div
                         key={`${person.id}-${day}-${period}`}
@@ -108,8 +143,29 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                           "border-b p-2 min-h-24 hover-elevate relative",
                           period === "PM" && "border-l",
                           personIndex % 2 === 0 && "bg-muted/20",
-                          conflict && "bg-destructive/10"
+                          conflict && "bg-destructive/10",
+                          isDropTarget && "bg-primary/10 border-2 border-primary"
                         )}
+                        onDragOver={(e) => {
+                          if (draggedAssignment) {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            setDropTargetCell(currentCell);
+                          }
+                        }}
+                        onDragLeave={() => setDropTargetCell(null)}
+                        onDrop={() => {
+                          if (draggedAssignment && (draggedAssignment.personId !== person.id || draggedAssignment.day !== day || draggedAssignment.period !== period)) {
+                            updateAssignmentMutation.mutate({
+                              assignmentId: draggedAssignment.id,
+                              personId: person.id,
+                              day,
+                              period,
+                            });
+                          }
+                          setDropTargetCell(null);
+                          setDraggedAssignment(null);
+                        }}
                         data-testid={`cell-${person.id}-${day.toLowerCase()}-${period.toLowerCase()}`}
                       >
                         {conflict && (
@@ -127,11 +183,20 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                             return (
                               <div
                                 key={assignment.id}
-                                className="rounded-md p-2 cursor-pointer group relative border-2 hover-elevate active-elevate-2"
+                                className={cn(
+                                  "rounded-md p-2 cursor-grab active:cursor-grabbing group relative border-2 hover-elevate active-elevate-2",
+                                  draggedAssignment?.id === assignment.id && "opacity-50"
+                                )}
                                 style={{ 
                                   backgroundColor: task.color,
                                   borderColor: person.color,
                                 }}
+                                draggable
+                                onDragStart={(e) => {
+                                  setDraggedAssignment(assignment);
+                                  e.dataTransfer.effectAllowed = "move";
+                                }}
+                                onDragEnd={() => setDraggedAssignment(null)}
                                 onClick={() => onAssignmentClick(assignment)}
                                 data-testid={`assignment-${assignment.id}`}
                               >
