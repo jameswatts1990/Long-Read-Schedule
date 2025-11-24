@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Calendar, Users, ListChecks, Download, Upload, ChevronLeft, ChevronRight, Filter, X } from "lucide-react";
+import { Plus, Calendar, Users, ListChecks, Download, Upload, ChevronLeft, ChevronRight, Filter, X, Settings } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
