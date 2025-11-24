@@ -64,9 +64,9 @@ export class MemStorage implements IStorage {
     ];
 
     const peopleIds: string[] = [];
-    samplePeople.forEach((p) => {
+    samplePeople.forEach((p, index) => {
       const id = randomUUID();
-      this.people.set(id, { id, ...p });
+      this.people.set(id, { id, ...p, order: String(index) } as any);
       peopleIds.push(id);
     });
 
