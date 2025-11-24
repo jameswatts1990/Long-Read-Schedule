@@ -74,8 +74,8 @@ export default function Scheduler() {
 
   // When filters are active, only show people who have assignments in the filtered results
   const displayPeople = hasActiveFilters
-    ? people.filter(p => weekAssignments.some(a => a.personId === p.id))
-    : people;
+    ? people.filter(p => !p.excluded && weekAssignments.some(a => a.personId === p.id))
+    : people.filter(p => !p.excluded);
 
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeekStart);

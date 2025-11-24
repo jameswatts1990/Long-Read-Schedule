@@ -308,6 +308,15 @@ export default function Admin() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => toggleExcludedMutation.mutate(person.id)}
+                        disabled={toggleExcludedMutation.isPending}
+                        data-testid={`button-toggle-excluded-person-${person.id}`}
+                      >
+                        {(person as any).excluded ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => handleEditPerson(person)}
                         data-testid={`button-edit-person-${person.id}`}
                       >
