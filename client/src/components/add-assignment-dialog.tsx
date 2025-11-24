@@ -49,6 +49,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const { toast } = useToast();
   const [conflictData, setConflictData] = useState<{ conflicts: any[], conflictCount: number } | null>(null);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
+  const [shouldCloseAfter, setShouldCloseAfter] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -87,10 +88,18 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         title: "Success",
         description: "Assignment created successfully",
       });
-      form.reset();
+      form.reset({
+        taskId: "",
+        batchNumber: "",
+        notes: "",
+        date: "",
+      });
       setConflictData(null);
       setPendingFormData(null);
-      onClose();
+      if (shouldCloseAfter) {
+        setShouldCloseAfter(false);
+        onClose();
+      }
     },
     onError: (error: any) => {
       if (error.isConflict) {
@@ -230,22 +239,36 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
               )}
             />
 
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex justify-between gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                data-testid="button-cancel"
+                data-testid="button-close"
               >
-                Cancel
+                Close
               </Button>
-              <Button
-                type="submit"
-                disabled={createMutation.isPending}
-                data-testid="button-submit"
-              >
-                {createMutation.isPending ? "Creating..." : "Create Assignment"}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={createMutation.isPending}
+                  data-testid="button-submit-and-close"
+                  onClick={() => {
+                    setShouldCloseAfter(true);
+                    form.handleSubmit(onSubmit)();
+                  }}
+                >
+                  {createMutation.isPending ? "Creating..." : "Create & Close"}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending}
+                  data-testid="button-submit-and-add-another"
+                >
+                  {createMutation.isPending ? "Creating..." : "Create & Add Another"}
+                </Button>
+              </div>
             </div>
           </form>
         </Form>
