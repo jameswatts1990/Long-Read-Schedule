@@ -404,6 +404,7 @@ export default function Scheduler() {
           people={displayPeople}
           tasks={tasks}
           onAssignmentClick={setSelectedAssignment}
+          isCompactView={isCompactView}
         />
       </div>
 

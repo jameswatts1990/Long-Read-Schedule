@@ -14,6 +14,7 @@ interface WeeklyCalendarProps {
   people: Person[];
   tasks: Task[];
   onAssignmentClick: (assignment: Assignment) => void;
+  isCompactView?: boolean;
 }
 
 interface CellData {
@@ -21,7 +22,7 @@ interface CellData {
   day: string;
 }
 
-export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAssignmentClick }: WeeklyCalendarProps) {
+export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAssignmentClick, isCompactView = false }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
   const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
@@ -181,16 +182,18 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                           );
                         })}
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start text-muted-foreground hover:text-foreground"
-                          onClick={() => setSelectedCell({ personId: person.id, day })}
-                          data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
-                        >
-                          <Plus className="w-3 h-3 mr-1" />
-                          <span className="text-xs">Add</span>
-                        </Button>
+                        {!isCompactView && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-muted-foreground hover:text-foreground"
+                            onClick={() => setSelectedCell({ personId: person.id, day })}
+                            data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            <span className="text-xs">Add</span>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
