@@ -62,6 +62,13 @@ export function DuplicateAssignmentDialog({
       setSelectedSlots(new Set());
       onClose();
     },
+    onError: (error) => {
+      toast({
+        title: "Failed to duplicate tasks",
+        description: error instanceof Error ? error.message : "An error occurred while duplicating tasks.",
+        variant: "destructive",
+      });
+    },
   });
 
   const toggleSlot = (personId: string, day: string) => {
