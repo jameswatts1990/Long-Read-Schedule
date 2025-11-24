@@ -228,6 +228,23 @@ export default function Admin() {
               <p className="text-muted-foreground">No people added yet</p>
             ) : (
               <div className="space-y-0">
+                {draggedId && dragOverIndex === -1 && (
+                  <div className="h-1 bg-primary mb-0.5"></div>
+                )}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverIndex(-1);
+                  }}
+                  onDragLeave={() => setDragOverIndex(null)}
+                  onDrop={() => {
+                    if (draggedId) {
+                      reorderPersonMutation.mutate({ id: draggedId, newOrder: 0 });
+                    }
+                    setDragOverIndex(null);
+                  }}
+                  className="h-1"
+                />
                 {people.map((person, index) => (
                   <div key={person.id}>
                     {draggedId && dragOverIndex === index && draggedId !== person.id && (
