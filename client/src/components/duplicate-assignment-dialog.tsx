@@ -107,6 +107,21 @@ export function DuplicateAssignmentDialog({
     onClose();
   };
 
+  const handleSelectAllWeek = () => {
+    if (!assignment) return;
+    
+    const allSlots = new Set<string>();
+    people.forEach((person) => {
+      DAYS.forEach((day) => {
+        // Don't select the original assignment slot
+        if (!(person.id === assignment.personId && day === assignment.day)) {
+          allSlots.add(`${person.id}-${day}`);
+        }
+      });
+    });
+    setSelectedSlots(allSlots);
+  };
+
   if (!assignment) return null;
 
   return (
@@ -117,6 +132,14 @@ export function DuplicateAssignmentDialog({
           <DialogDescription>
             Select days to duplicate this task to. The task will be copied with the same batch number, notes, and date.
           </DialogDescription>
+          <Button
+            variant="outline"
+            onClick={handleSelectAllWeek}
+            className="w-full mt-2"
+            data-testid="button-select-all-week"
+          >
+            Select All Week
+          </Button>
         </DialogHeader>
 
         <div className="space-y-4">
