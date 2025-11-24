@@ -20,6 +20,7 @@ export interface IStorage {
   createPerson(person: InsertPerson): Promise<Person>;
   updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person>;
   deletePerson(id: string): Promise<void>;
+  updatePersonOrder(id: string, newOrder: number): Promise<Person>;
 
   getTasks(): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
@@ -138,7 +139,11 @@ export class MemStorage implements IStorage {
   }
 
   async getPeople(): Promise<Person[]> {
-    return Array.from(this.people.values());
+    return Array.from(this.people.values()).sort((a, b) => {
+      const orderA = parseInt((a as any).order || "0", 10);
+      const orderB = parseInt((b as any).order || "0", 10);
+      return orderA - orderB;
+    });
   }
 
   async getPerson(id: string): Promise<Person | undefined> {
@@ -147,7 +152,8 @@ export class MemStorage implements IStorage {
 
   async createPerson(insertPerson: InsertPerson): Promise<Person> {
     const id = randomUUID();
-    const person: Person = { ...insertPerson, id };
+    const order = String(this.people.size);
+    const person: Person = { ...insertPerson, id, order } as any;
     this.people.set(id, person);
     return person;
   }
@@ -162,6 +168,37 @@ export class MemStorage implements IStorage {
 
   async deletePerson(id: string): Promise<void> {
     this.people.delete(id);
+  }
+
+  async updatePersonOrder(id: string, newOrder: number): Promise<Person> {
+    const person = this.people.get(id);
+    if (!person) throw new Error("Person not found");
+    const oldOrder = parseInt((person as any).order || "0", 10);
+    const allPeople = Array.from(this.people.values()).map(p => ({
+      ...p,
+      order: parseInt((p as any).order || "0", 10)
+    }));
+
+    if (newOrder < oldOrder) {
+      allPeople.forEach(p => {
+        if (p.id !== id && p.order >= newOrder && p.order < oldOrder) {
+          (p as any).order += 1;
+        }
+      });
+    } else if (newOrder > oldOrder) {
+      allPeople.forEach(p => {
+        if (p.id !== id && p.order > oldOrder && p.order <= newOrder) {
+          (p as any).order -= 1;
+        }
+      });
+    }
+
+    allPeople.forEach(p => {
+      this.people.set(p.id, { ...p, order: String(p.order) } as Person);
+    });
+
+    const updated = this.people.get(id)!;
+    return updated;
   }
 
   async getTasks(): Promise<Task[]> {

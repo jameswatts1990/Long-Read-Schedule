@@ -33,6 +33,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/people/:id/reorder", async (req, res) => {
+    try {
+      const { newOrder } = req.body;
+      if (typeof newOrder !== "number") {
+        return res.status(400).json({ error: "newOrder must be a number" });
+      }
+      const person = await storage.updatePersonOrder(req.params.id, newOrder);
+      res.json(person);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to reorder person" });
+    }
+  });
+
   app.get("/api/tasks", async (_req, res) => {
     try {
       const tasks = await storage.getTasks();

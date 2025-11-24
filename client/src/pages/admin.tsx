@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, ChevronUp, ChevronDown } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -159,6 +159,19 @@ export default function Admin() {
     },
   });
 
+  const reorderPersonMutation = useMutation({
+    mutationFn: async ({ id, newOrder }: { id: string; newOrder: number }) => {
+      const res = await apiRequest("POST", `/api/people/${id}/reorder`, { newOrder });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to reorder person", variant: "destructive" });
+    },
+  });
+
   const deleteTaskMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("DELETE", `/api/tasks/${id}`);
@@ -213,7 +226,7 @@ export default function Admin() {
               <p className="text-muted-foreground">No people added yet</p>
             ) : (
               <div className="space-y-2">
-                {people.map((person) => (
+                {people.map((person, index) => (
                   <div
                     key={person.id}
                     className="flex items-center justify-between p-3 border rounded-md hover-elevate"
@@ -227,6 +240,24 @@ export default function Admin() {
                       <span>{person.name}</span>
                     </div>
                     <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => reorderPersonMutation.mutate({ id: person.id, newOrder: index - 1 })}
+                        disabled={index === 0 || reorderPersonMutation.isPending}
+                        data-testid={`button-move-up-person-${person.id}`}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => reorderPersonMutation.mutate({ id: person.id, newOrder: index + 1 })}
+                        disabled={index === people.length - 1 || reorderPersonMutation.isPending}
+                        data-testid={`button-move-down-person-${person.id}`}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
