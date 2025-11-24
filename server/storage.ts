@@ -27,6 +27,7 @@ export interface IStorage {
 
   getAssignments(): Promise<Assignment[]>;
   getAssignment(id: string): Promise<Assignment | undefined>;
+  getConflictingAssignments(personId: string, day: string, period: string, weekStartDate: string): Promise<Assignment[]>;
   createAssignment(assignment: InsertAssignment): Promise<Assignment>;
   updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment>;
   deleteAssignment(id: string): Promise<void>;
@@ -184,6 +185,15 @@ export class MemStorage implements IStorage {
     return this.assignments.get(id);
   }
 
+  async getConflictingAssignments(personId: string, day: string, period: string, weekStartDate: string): Promise<Assignment[]> {
+    return Array.from(this.assignments.values()).filter(
+      a => a.personId === personId &&
+           a.day === day &&
+           a.period === period &&
+           a.weekStartDate === weekStartDate
+    );
+  }
+
   async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
     const id = randomUUID();
     const assignment: Assignment = {
@@ -277,6 +287,21 @@ export class PostgresStorage implements IStorage {
   async getAssignment(id: string): Promise<Assignment | undefined> {
     const result = await this.db.select().from(assignments).where(eq(assignments.id, id));
     return result[0];
+  }
+
+  async getConflictingAssignments(personId: string, day: string, period: string, weekStartDate: string): Promise<Assignment[]> {
+    const result = await this.db
+      .select()
+      .from(assignments)
+      .where(
+        eq(assignments.personId, personId)
+      );
+    
+    return result.filter(
+      a => a.day === day &&
+           a.period === period &&
+           a.weekStartDate === weekStartDate
+    );
   }
 
   async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {

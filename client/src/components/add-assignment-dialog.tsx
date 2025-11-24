@@ -47,6 +47,8 @@ type FormData = z.infer<typeof formSchema>;
 
 export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, day, period, tasks }: AddAssignmentDialogProps) {
   const { toast } = useToast();
+  const [conflictData, setConflictData] = useState<{ conflicts: any[], conflictCount: number } | null>(null);
+  const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -59,8 +61,8 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      return apiRequest("POST", "/api/assignments", {
+    mutationFn: async ({ data, override = false }: { data: FormData, override?: boolean }) => {
+      const res = await apiRequest("POST", "/api/assignments", {
         ...data,
         personId,
         day,
@@ -69,7 +71,15 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchNumber: data.batchNumber || undefined,
         notes: data.notes || undefined,
         date: data.date || undefined,
+        override,
       });
+      
+      if (res.status === 409) {
+        const conflictResponse = await res.json();
+        throw { isConflict: true, ...conflictResponse };
+      }
+      
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
@@ -78,14 +88,20 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         description: "Assignment created successfully",
       });
       form.reset();
+      setConflictData(null);
+      setPendingFormData(null);
       onClose();
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create assignment",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      if (error.isConflict) {
+        setConflictData({ conflicts: error.conflicts, conflictCount: error.conflictCount });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to create assignment",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -101,7 +117,19 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   }, [open, form]);
 
   const onSubmit = (data: FormData) => {
-    createMutation.mutate(data);
+    setPendingFormData(data);
+    createMutation.mutate({ data, override: false });
+  };
+
+  const handleConfirmOverride = () => {
+    if (pendingFormData) {
+      createMutation.mutate({ data: pendingFormData, override: true });
+    }
+  };
+
+  const handleCancelConflict = () => {
+    setConflictData(null);
+    setPendingFormData(null);
   };
 
   return (
@@ -222,6 +250,42 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           </form>
         </Form>
       </DialogContent>
+
+      {/* Conflict Confirmation Dialog */}
+      {conflictData && (
+        <DialogContent data-testid="dialog-conflict-confirmation">
+          <DialogHeader>
+            <DialogTitle>Scheduling Conflict Detected</DialogTitle>
+            <DialogDescription>
+              This person already has {conflictData.conflictCount} assignment(s) in this time slot ({day} {period}).
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Creating this assignment will result in a double-booking. Do you want to proceed anyway?
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={handleCancelConflict}
+              data-testid="button-cancel-conflict"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmOverride}
+              disabled={createMutation.isPending}
+              data-testid="button-confirm-conflict"
+            >
+              {createMutation.isPending ? "Creating..." : "Create Anyway"}
+            </Button>
+          </div>
+        </DialogContent>
+      )}
     </Dialog>
   );
 }

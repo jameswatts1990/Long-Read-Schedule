@@ -28,6 +28,11 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     );
   };
 
+  const hasConflict = (personId: string, day: string, period: string) => {
+    const cellAssignments = getAssignmentsForCell(personId, day, period);
+    return cellAssignments.length > 1;
+  };
+
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
   return (
@@ -94,17 +99,26 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                 {DAYS.map(day => (
                   PERIODS.map(period => {
                     const cellAssignments = getAssignmentsForCell(person.id, day, period);
+                    const conflict = hasConflict(person.id, day, period);
                     
                     return (
                       <div
                         key={`${person.id}-${day}-${period}`}
                         className={cn(
-                          "border-b p-2 min-h-24 hover-elevate",
+                          "border-b p-2 min-h-24 hover-elevate relative",
                           period === "PM" && "border-l",
-                          personIndex % 2 === 0 && "bg-muted/20"
+                          personIndex % 2 === 0 && "bg-muted/20",
+                          conflict && "bg-destructive/10"
                         )}
                         data-testid={`cell-${person.id}-${day.toLowerCase()}-${period.toLowerCase()}`}
                       >
+                        {conflict && (
+                          <div className="absolute top-1 right-1" title="Multiple assignments in this slot">
+                            <div className="w-5 h-5 rounded-full bg-destructive/20 flex items-center justify-center">
+                              <span className="text-xs font-bold text-destructive">!</span>
+                            </div>
+                          </div>
+                        )}
                         <div className="space-y-1.5">
                           {cellAssignments.map(assignment => {
                             const task = getTaskById(assignment.taskId);
