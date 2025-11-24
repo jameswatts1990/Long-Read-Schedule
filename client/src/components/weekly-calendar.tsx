@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS, PERIODS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -77,47 +77,71 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
   const getDayIndex = (day: string) => DAYS.indexOf(day as any);
 
   const handleResizeStart = (e: React.MouseEvent, assignmentId: string, direction: 'left' | 'right', currentDay: string) => {
+    e.preventDefault();
     e.stopPropagation();
     setResizingAssignment({ id: assignmentId, direction });
     setResizeStartDay(currentDay);
   };
 
-  const handleResizeMove = (day: string) => {
+  useEffect(() => {
     if (!resizingAssignment || !resizeStartDay) return;
-    
-    const assignment = assignments.find(a => a.id === resizingAssignment.id);
-    if (!assignment) return;
 
-    const startIdx = getDayIndex(resizeStartDay);
-    const currentIdx = getDayIndex(day);
+    const handleMouseMove = (e: MouseEvent) => {
+      const assignment = assignments.find(a => a.id === resizingAssignment.id);
+      if (!assignment) return;
 
-    if (resizingAssignment.direction === 'right') {
-      // Dragging right edge - update endDay
-      const newEndDay = day;
-      updateAssignmentMutation.mutate({
-        assignmentId: assignment.id,
-        personId: assignment.personId,
-        day: assignment.day,
-        period: assignment.period,
-        endDay: newEndDay === assignment.day ? undefined : newEndDay,
-      });
-    } else {
-      // Dragging left edge - update day
-      const newDay = day;
-      const currentEnd = assignment.endDay || assignment.day;
-      const currentEndIdx = getDayIndex(currentEnd);
-      
-      if (getDayIndex(newDay) <= currentEndIdx) {
-        updateAssignmentMutation.mutate({
-          assignmentId: assignment.id,
-          personId: assignment.personId,
-          day: newDay,
-          period: assignment.period,
-          endDay: assignment.endDay,
-        });
+      const elementAtMouse = document.elementFromPoint(e.clientX, e.clientY);
+      if (!elementAtMouse) return;
+
+      const cellElement = elementAtMouse.closest('[data-testid^="cell-"]');
+      if (!cellElement) return;
+
+      const testId = cellElement.getAttribute('data-testid') || '';
+      const matches = testId.match(/cell-(.+?)-(monday|tuesday|wednesday|thursday|friday)-(am|pm)/i);
+      if (!matches) return;
+
+      const targetDay = matches[2].charAt(0).toUpperCase() + matches[2].slice(1);
+
+      if (resizingAssignment.direction === 'right') {
+        const startIdx = getDayIndex(assignment.day);
+        const targetIdx = getDayIndex(targetDay);
+        if (targetIdx >= startIdx) {
+          updateAssignmentMutation.mutate({
+            assignmentId: assignment.id,
+            personId: assignment.personId,
+            day: assignment.day,
+            period: assignment.period,
+            endDay: targetDay === assignment.day ? undefined : targetDay,
+          });
+        }
+      } else {
+        const targetIdx = getDayIndex(targetDay);
+        const endIdx = getDayIndex(assignment.endDay || assignment.day);
+        if (targetIdx <= endIdx) {
+          updateAssignmentMutation.mutate({
+            assignmentId: assignment.id,
+            personId: assignment.personId,
+            day: targetDay,
+            period: assignment.period,
+            endDay: assignment.endDay,
+          });
+        }
       }
-    }
-  };
+    };
+
+    const handleMouseUp = () => {
+      setResizingAssignment(null);
+      setResizeStartDay(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingAssignment, resizeStartDay, assignments, updateAssignmentMutation]);
 
   return (
     <>
@@ -223,15 +247,6 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                           setDropTargetCell(null);
                           setDraggedAssignment(null);
                         }}
-                        onMouseMove={() => {
-                          if (resizingAssignment) {
-                            handleResizeMove(day);
-                          }
-                        }}
-                        onMouseUp={() => {
-                          setResizingAssignment(null);
-                          setResizeStartDay(null);
-                        }}
                         data-testid={`cell-${person.id}-${day.toLowerCase()}-${period.toLowerCase()}`}
                       >
                         {conflict && (
@@ -241,7 +256,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                             </div>
                           </div>
                         )}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 col-span-2">
                           {assignmentsStartingHere.map(assignment => {
                             const task = getTaskById(assignment.taskId);
                             if (!task) return null;
