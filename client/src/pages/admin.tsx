@@ -266,7 +266,8 @@ export default function Admin() {
                       onDragLeave={() => setDragOverIndex(null)}
                       onDrop={() => {
                         if (draggedId && draggedId !== person.id) {
-                          const newOrder = people.filter(p => p.id !== draggedId).map(p => p.id);
+                          const filteredPeople = people.filter(p => p.id !== draggedId);
+                          const newOrder = [...filteredPeople.map(p => p.id)];
                           newOrder.splice(index, 0, draggedId);
                           reorderPersonMutation.mutate(newOrder);
                         }

@@ -67,7 +67,7 @@ export class MemStorage implements IStorage {
     const peopleIds: string[] = [];
     samplePeople.forEach((p, index) => {
       const id = randomUUID();
-      this.people.set(id, { id, ...p, order: String(index) } as any);
+      this.people.set(id, { id, ...p, order: index } as any);
       peopleIds.push(id);
     });
 
@@ -141,8 +141,8 @@ export class MemStorage implements IStorage {
 
   async getPeople(): Promise<Person[]> {
     return Array.from(this.people.values()).sort((a, b) => {
-      const orderA = parseInt((a as any).order || "0", 10);
-      const orderB = parseInt((b as any).order || "0", 10);
+      const orderA = (a as any).order ?? 0;
+      const orderB = (b as any).order ?? 0;
       return orderA - orderB;
     });
   }
@@ -153,7 +153,7 @@ export class MemStorage implements IStorage {
 
   async createPerson(insertPerson: InsertPerson): Promise<Person> {
     const id = randomUUID();
-    const order = String(this.people.size);
+    const order = this.people.size;
     const person: Person = { ...insertPerson, id, order } as any;
     this.people.set(id, person);
     return person;
@@ -174,10 +174,10 @@ export class MemStorage implements IStorage {
   async updatePersonOrder(id: string, newOrder: number): Promise<Person> {
     const person = this.people.get(id);
     if (!person) throw new Error("Person not found");
-    const oldOrder = parseInt((person as any).order || "0", 10);
+    const oldOrder = (person as any).order ?? 0;
     const allPeople = Array.from(this.people.values()).map(p => ({
       ...p,
-      order: parseInt((p as any).order || "0", 10)
+      order: (p as any).order ?? 0
     }));
 
     if (newOrder < oldOrder) {
@@ -195,7 +195,7 @@ export class MemStorage implements IStorage {
     }
 
     allPeople.forEach(p => {
-      this.people.set(p.id, { ...p, order: String(p.order) } as Person);
+      this.people.set(p.id, { ...p, order: p.order } as Person);
     });
 
     const updated = this.people.get(id)!;
@@ -206,7 +206,7 @@ export class MemStorage implements IStorage {
     personIds.forEach((id, index) => {
       const person = this.people.get(id);
       if (person) {
-        this.people.set(id, { ...person, order: String(index) } as any);
+        this.people.set(id, { ...person, order: index } as any);
       }
     });
     return await this.getPeople();
@@ -329,32 +329,32 @@ export class PostgresStorage implements IStorage {
     const person = await this.getPerson(id);
     if (!person) throw new Error("Person not found");
     
-    const oldOrder = parseInt(person.order || "0", 10);
+    const oldOrder = person.order ?? 0;
     const allPeople = await this.db.select().from(people);
 
     if (newOrder < oldOrder) {
       for (const p of allPeople) {
-        const pOrder = parseInt(p.order || "0", 10);
+        const pOrder = p.order ?? 0;
         if (p.id !== id && pOrder >= newOrder && pOrder < oldOrder) {
-          await this.db.update(people).set({ order: String(pOrder + 1) }).where(eq(people.id, p.id));
+          await this.db.update(people).set({ order: pOrder + 1 }).where(eq(people.id, p.id));
         }
       }
     } else if (newOrder > oldOrder) {
       for (const p of allPeople) {
-        const pOrder = parseInt(p.order || "0", 10);
+        const pOrder = p.order ?? 0;
         if (p.id !== id && pOrder > oldOrder && pOrder <= newOrder) {
-          await this.db.update(people).set({ order: String(pOrder - 1) }).where(eq(people.id, p.id));
+          await this.db.update(people).set({ order: pOrder - 1 }).where(eq(people.id, p.id));
         }
       }
     }
 
-    const result = await this.db.update(people).set({ order: String(newOrder) }).where(eq(people.id, id)).returning();
+    const result = await this.db.update(people).set({ order: newOrder }).where(eq(people.id, id)).returning();
     return result[0];
   }
 
   async reorderPeople(personIds: string[]): Promise<Person[]> {
     for (let i = 0; i < personIds.length; i++) {
-      await this.db.update(people).set({ order: String(i) }).where(eq(people.id, personIds[i]));
+      await this.db.update(people).set({ order: i }).where(eq(people.id, personIds[i]));
     }
     return await this.getPeople();
   }
