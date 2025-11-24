@@ -276,6 +276,15 @@ export class PostgresStorage implements IStorage {
     return result[0];
   }
 
+  async updateTask(id: string, data: Partial<InsertTask>): Promise<Task> {
+    const result = await this.db
+      .update(tasks)
+      .set(data)
+      .where(eq(tasks.id, id))
+      .returning();
+    return result[0];
+  }
+
   async deleteTask(id: string): Promise<void> {
     await this.db.delete(tasks).where(eq(tasks.id, id));
   }

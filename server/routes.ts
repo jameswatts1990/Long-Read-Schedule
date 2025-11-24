@@ -52,6 +52,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/people/:id", async (req, res) => {
+    try {
+      const data = insertPersonSchema.partial().parse(req.body);
+      const person = await storage.updatePerson(req.params.id, data);
+      res.json(person);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid person data" });
+    }
+  });
+
+  app.put("/api/tasks/:id", async (req, res) => {
+    try {
+      const data = insertTaskSchema.partial().parse(req.body);
+      const task = await storage.updateTask(req.params.id, data);
+      res.json(task);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid task data" });
+    }
+  });
+
   app.delete("/api/tasks/:id", async (req, res) => {
     try {
       await storage.deleteTask(req.params.id);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,7 +28,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { type Person, type Task } from "@shared/schema";
 
-// Color picker for tasks
 const PRESET_COLORS = [
   "#DBEAFE", "#D1FAE5", "#FEF3C7", "#E0E7FF", "#F3E8FF",
   "#FCE7F3", "#DBEAFE", "#C7D2FE", "#BFE1FF", "#FECACA",
@@ -57,6 +56,8 @@ export default function Admin() {
   const { toast } = useToast();
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [editingPerson, setEditingPerson] = useState<Person | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -94,6 +95,23 @@ export default function Admin() {
     },
   });
 
+  const updatePersonMutation = useMutation({
+    mutationFn: async (data: PersonFormData) => {
+      if (!editingPerson) throw new Error("No person selected");
+      const res = await apiRequest("PUT", `/api/people/${editingPerson.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      toast({ title: "Success", description: "Person updated successfully" });
+      personForm.reset();
+      setEditingPerson(null);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update person", variant: "destructive" });
+    },
+  });
+
   const createTaskMutation = useMutation({
     mutationFn: async (data: TaskFormData) => {
       const res = await apiRequest("POST", "/api/tasks", data);
@@ -107,6 +125,23 @@ export default function Admin() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to add task", variant: "destructive" });
+    },
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: async (data: TaskFormData) => {
+      if (!editingTask) throw new Error("No task selected");
+      const res = await apiRequest("PUT", `/api/tasks/${editingTask.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      toast({ title: "Success", description: "Task updated successfully" });
+      taskForm.reset();
+      setEditingTask(null);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update task", variant: "destructive" });
     },
   });
 
@@ -138,6 +173,16 @@ export default function Admin() {
     },
   });
 
+  const handleEditPerson = (person: Person) => {
+    setEditingPerson(person);
+    personForm.reset({ name: person.name, color: person.color });
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    taskForm.reset({ name: task.name, color: task.color, description: task.description || "" });
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -157,7 +202,7 @@ export default function Admin() {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">People</h2>
-            <Button onClick={() => setShowAddPerson(true)} data-testid="button-add-person">
+            <Button onClick={() => { setEditingPerson(null); setShowAddPerson(true); }} data-testid="button-add-person">
               <Plus className="h-4 w-4 mr-2" />
               Add Person
             </Button>
@@ -181,15 +226,25 @@ export default function Admin() {
                       />
                       <span>{person.name}</span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deletePersonMutation.mutate(person.id)}
-                      disabled={deletePersonMutation.isPending}
-                      data-testid={`button-delete-person-${person.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditPerson(person)}
+                        data-testid={`button-edit-person-${person.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deletePersonMutation.mutate(person.id)}
+                        disabled={deletePersonMutation.isPending}
+                        data-testid={`button-delete-person-${person.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -201,7 +256,7 @@ export default function Admin() {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">Tasks</h2>
-            <Button onClick={() => setShowAddTask(true)} data-testid="button-add-task">
+            <Button onClick={() => { setEditingTask(null); setShowAddTask(true); }} data-testid="button-add-task">
               <Plus className="h-4 w-4 mr-2" />
               Add Task
             </Button>
@@ -230,15 +285,25 @@ export default function Admin() {
                         )}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteTaskMutation.mutate(task.id)}
-                      disabled={deleteTaskMutation.isPending}
-                      data-testid={`button-delete-task-${task.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditTask(task)}
+                        data-testid={`button-edit-task-${task.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteTaskMutation.mutate(task.id)}
+                        disabled={deleteTaskMutation.isPending}
+                        data-testid={`button-delete-task-${task.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -247,16 +312,18 @@ export default function Admin() {
         </Card>
       </div>
 
-      {/* Add Person Dialog */}
-      <Dialog open={showAddPerson} onOpenChange={setShowAddPerson}>
+      {/* Add/Edit Person Dialog */}
+      <Dialog open={showAddPerson || !!editingPerson} onOpenChange={(open) => { if (!open) { setShowAddPerson(false); setEditingPerson(null); } }}>
         <DialogContent data-testid="dialog-add-person">
           <DialogHeader>
-            <DialogTitle>Add Person</DialogTitle>
-            <DialogDescription>Create a new team member</DialogDescription>
+            <DialogTitle>{editingPerson ? "Edit Person" : "Add Person"}</DialogTitle>
+            <DialogDescription>
+              {editingPerson ? "Update team member details" : "Create a new team member"}
+            </DialogDescription>
           </DialogHeader>
 
           <Form {...personForm}>
-            <form onSubmit={personForm.handleSubmit((data) => createPersonMutation.mutate(data))} className="space-y-4">
+            <form onSubmit={personForm.handleSubmit((data) => editingPerson ? updatePersonMutation.mutate(data) : createPersonMutation.mutate(data))} className="space-y-4">
               <FormField
                 control={personForm.control}
                 name="name"
@@ -297,11 +364,11 @@ export default function Admin() {
               />
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setShowAddPerson(false)}>
+                <Button type="button" variant="outline" onClick={() => { setShowAddPerson(false); setEditingPerson(null); }}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createPersonMutation.isPending} data-testid="button-submit-person">
-                  {createPersonMutation.isPending ? "Creating..." : "Add Person"}
+                <Button type="submit" disabled={createPersonMutation.isPending || updatePersonMutation.isPending} data-testid="button-submit-person">
+                  {createPersonMutation.isPending || updatePersonMutation.isPending ? "Saving..." : editingPerson ? "Update Person" : "Add Person"}
                 </Button>
               </div>
             </form>
@@ -309,16 +376,18 @@ export default function Admin() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Task Dialog */}
-      <Dialog open={showAddTask} onOpenChange={setShowAddTask}>
+      {/* Add/Edit Task Dialog */}
+      <Dialog open={showAddTask || !!editingTask} onOpenChange={(open) => { if (!open) { setShowAddTask(false); setEditingTask(null); } }}>
         <DialogContent data-testid="dialog-add-task">
           <DialogHeader>
-            <DialogTitle>Add Task</DialogTitle>
-            <DialogDescription>Create a new task type</DialogDescription>
+            <DialogTitle>{editingTask ? "Edit Task" : "Add Task"}</DialogTitle>
+            <DialogDescription>
+              {editingTask ? "Update task details" : "Create a new task type"}
+            </DialogDescription>
           </DialogHeader>
 
           <Form {...taskForm}>
-            <form onSubmit={taskForm.handleSubmit((data) => createTaskMutation.mutate(data))} className="space-y-4">
+            <form onSubmit={taskForm.handleSubmit((data) => editingTask ? updateTaskMutation.mutate(data) : createTaskMutation.mutate(data))} className="space-y-4">
               <FormField
                 control={taskForm.control}
                 name="name"
@@ -378,11 +447,11 @@ export default function Admin() {
               />
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setShowAddTask(false)}>
+                <Button type="button" variant="outline" onClick={() => { setShowAddTask(false); setEditingTask(null); }}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createTaskMutation.isPending} data-testid="button-submit-task">
-                  {createTaskMutation.isPending ? "Creating..." : "Add Task"}
+                <Button type="submit" disabled={createTaskMutation.isPending || updateTaskMutation.isPending} data-testid="button-submit-task">
+                  {createTaskMutation.isPending || updateTaskMutation.isPending ? "Saving..." : editingTask ? "Update Task" : "Add Task"}
                 </Button>
               </div>
             </form>
