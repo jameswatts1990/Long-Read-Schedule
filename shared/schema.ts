@@ -19,6 +19,7 @@ export const tasks = pgTable("tasks", {
   name: text("name").notNull(),
   color: text("color").notNull(),
   description: text("description"),
+  order: integer("order").default(0),
 });
 
 export const assignments = pgTable("assignments", {

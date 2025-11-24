@@ -94,6 +94,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/tasks/reorder-list", async (req, res) => {
+    try {
+      const { taskIds } = req.body;
+      if (!Array.isArray(taskIds)) {
+        return res.status(400).json({ error: "taskIds must be an array" });
+      }
+      const result = await storage.reorderTasks(taskIds);
+      res.json(result);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to reorder tasks" });
+    }
+  });
+
   app.get("/api/assignments", async (_req, res) => {
     try {
       const assignments = await storage.getAssignments();

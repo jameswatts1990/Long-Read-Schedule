@@ -60,6 +60,8 @@ export default function Admin() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverTaskIndex, setDragOverTaskIndex] = useState<number | null>(null);
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -171,6 +173,19 @@ export default function Admin() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to reorder people", variant: "destructive" });
+    },
+  });
+
+  const reorderTaskMutation = useMutation({
+    mutationFn: async (taskIds: string[]) => {
+      const res = await apiRequest("POST", `/api/tasks/reorder-list`, { taskIds });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to reorder tasks", variant: "destructive" });
     },
   });
 
@@ -330,46 +345,95 @@ export default function Admin() {
             {tasks.length === 0 ? (
               <p className="text-muted-foreground">No tasks added yet</p>
             ) : (
-              <div className="space-y-2">
-                {tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex items-start justify-between p-3 border rounded-md hover-elevate"
-                    data-testid={`task-item-${task.id}`}
-                  >
-                    <div className="flex items-start gap-3 flex-1">
-                      <div
-                        className="w-6 h-6 rounded flex-shrink-0 mt-0.5"
-                        style={{ backgroundColor: task.color }}
-                      />
-                      <div className="flex-1">
-                        <p className="font-medium">{task.name}</p>
-                        {task.description && (
-                          <p className="text-sm text-muted-foreground">{task.description}</p>
-                        )}
+              <div className="space-y-0">
+                {draggedTaskId && dragOverTaskIndex === -1 && (
+                  <div className="h-1 bg-primary mb-0.5"></div>
+                )}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverTaskIndex(-1);
+                  }}
+                  onDragLeave={() => setDragOverTaskIndex(null)}
+                  onDrop={() => {
+                    if (draggedTaskId) {
+                      const newOrder = tasks.filter(t => t.id !== draggedTaskId).map(t => t.id);
+                      newOrder.unshift(draggedTaskId);
+                      reorderTaskMutation.mutate(newOrder);
+                    }
+                    setDragOverTaskIndex(null);
+                  }}
+                  className="h-1"
+                />
+                {tasks.map((task, index) => (
+                  <div key={task.id}>
+                    {draggedTaskId && dragOverTaskIndex === index && draggedTaskId !== task.id && (
+                      <div className="h-1 bg-primary mb-0.5"></div>
+                    )}
+                    <div
+                      draggable
+                      onDragStart={() => setDraggedTaskId(task.id)}
+                      onDragEnd={() => {
+                        setDraggedTaskId(null);
+                        setDragOverTaskIndex(null);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverTaskIndex(index);
+                      }}
+                      onDragLeave={() => setDragOverTaskIndex(null)}
+                      onDrop={() => {
+                        if (draggedTaskId && draggedTaskId !== task.id) {
+                          const filteredTasks = tasks.filter(t => t.id !== draggedTaskId);
+                          const newOrder = [...filteredTasks.map(t => t.id)];
+                          newOrder.splice(index, 0, draggedTaskId);
+                          reorderTaskMutation.mutate(newOrder);
+                        }
+                        setDragOverTaskIndex(null);
+                      }}
+                      className={`flex items-start justify-between p-3 border rounded-md hover-elevate cursor-move transition-opacity mb-2 ${
+                        draggedTaskId === task.id ? "opacity-50" : ""
+                      }`}
+                      data-testid={`task-item-${task.id}`}
+                    >
+                      <div className="flex items-start gap-3 flex-1">
+                        <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                        <div
+                          className="w-6 h-6 rounded flex-shrink-0 mt-0.5"
+                          style={{ backgroundColor: task.color }}
+                        />
+                        <div className="flex-1">
+                          <p className="font-medium">{task.name}</p>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground">{task.description}</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEditTask(task)}
-                        data-testid={`button-edit-task-${task.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteTaskMutation.mutate(task.id)}
-                        disabled={deleteTaskMutation.isPending}
-                        data-testid={`button-delete-task-${task.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditTask(task)}
+                          data-testid={`button-edit-task-${task.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteTaskMutation.mutate(task.id)}
+                          disabled={deleteTaskMutation.isPending}
+                          data-testid={`button-delete-task-${task.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
+                {draggedTaskId && dragOverTaskIndex === tasks.length && (
+                  <div className="h-1 bg-primary"></div>
+                )}
               </div>
             )}
           </div>

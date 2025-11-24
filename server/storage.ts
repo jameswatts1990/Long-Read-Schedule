@@ -28,6 +28,7 @@ export interface IStorage {
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, data: Partial<InsertTask>): Promise<Task>;
   deleteTask(id: string): Promise<void>;
+  reorderTasks(taskIds: string[]): Promise<Task[]>;
 
   getAssignments(): Promise<Assignment[]>;
   getAssignment(id: string): Promise<Assignment | undefined>;
@@ -72,9 +73,9 @@ export class MemStorage implements IStorage {
     });
 
     const taskIds: string[] = [];
-    sampleTasks.forEach((t) => {
+    sampleTasks.forEach((t, index) => {
       const id = randomUUID();
-      this.tasks.set(id, { id, ...t });
+      this.tasks.set(id, { id, ...t, order: index } as any);
       taskIds.push(id);
     });
 
@@ -213,7 +214,11 @@ export class MemStorage implements IStorage {
   }
 
   async getTasks(): Promise<Task[]> {
-    return Array.from(this.tasks.values());
+    return Array.from(this.tasks.values()).sort((a, b) => {
+      const orderA = (a as any).order ?? 0;
+      const orderB = (b as any).order ?? 0;
+      return orderA - orderB;
+    });
   }
 
   async getTask(id: string): Promise<Task | undefined> {
@@ -222,13 +227,24 @@ export class MemStorage implements IStorage {
 
   async createTask(insertTask: InsertTask): Promise<Task> {
     const id = randomUUID();
-    const task: Task = { ...insertTask, id };
+    const order = this.tasks.size;
+    const task: Task = { ...insertTask, id, order } as any;
     this.tasks.set(id, task);
     return task;
   }
 
   async deleteTask(id: string): Promise<void> {
     this.tasks.delete(id);
+  }
+
+  async reorderTasks(taskIds: string[]): Promise<Task[]> {
+    taskIds.forEach((id, index) => {
+      const task = this.tasks.get(id);
+      if (task) {
+        this.tasks.set(id, { ...task, order: index } as any);
+      }
+    });
+    return await this.getTasks();
   }
 
   async getAssignments(): Promise<Assignment[]> {
@@ -360,7 +376,7 @@ export class PostgresStorage implements IStorage {
   }
 
   async getTasks(): Promise<Task[]> {
-    return await this.db.select().from(tasks);
+    return await this.db.select().from(tasks).orderBy(tasks.order);
   }
 
   async getTask(id: string): Promise<Task | undefined> {
@@ -384,6 +400,13 @@ export class PostgresStorage implements IStorage {
 
   async deleteTask(id: string): Promise<void> {
     await this.db.delete(tasks).where(eq(tasks.id, id));
+  }
+
+  async reorderTasks(taskIds: string[]): Promise<Task[]> {
+    for (let i = 0; i < taskIds.length; i++) {
+      await this.db.update(tasks).set({ order: i }).where(eq(tasks.id, taskIds[i]));
+    }
+    return await this.getTasks();
   }
 
   async getAssignments(): Promise<Assignment[]> {
