@@ -39,7 +39,12 @@ export function DuplicateAssignmentDialog({
       if (!assignment) return;
 
       const promises = Array.from(selectedSlots).map((slotKey) => {
-        const [personId, day] = slotKey.split("-");
+        // slotKey is format: personId-day, but personId contains dashes
+        // so we split from the end: the day is always the last element
+        const parts = slotKey.split("-");
+        const day = parts[parts.length - 1];
+        const personId = parts.slice(0, -1).join("-");
+        
         const payload: any = {
           personId,
           taskId: assignment.taskId,
