@@ -334,7 +334,9 @@ export class PostgresStorage implements IStorage {
   }
 
   async createPerson(insertPerson: InsertPerson): Promise<Person> {
-    const result = await this.db.insert(people).values(insertPerson).returning();
+    const allPeople = await this.db.select().from(people);
+    const maxOrder = allPeople.length > 0 ? Math.max(...allPeople.map(p => p.order ?? 0)) : -1;
+    const result = await this.db.insert(people).values({ ...insertPerson, order: maxOrder + 1 }).returning();
     return result[0];
   }
 
@@ -407,7 +409,9 @@ export class PostgresStorage implements IStorage {
   }
 
   async createTask(insertTask: InsertTask): Promise<Task> {
-    const result = await this.db.insert(tasks).values(insertTask).returning();
+    const allTasks = await this.db.select().from(tasks);
+    const maxOrder = allTasks.length > 0 ? Math.max(...allTasks.map(t => t.order ?? 0)) : -1;
+    const result = await this.db.insert(tasks).values({ ...insertTask, order: maxOrder + 1 }).returning();
     return result[0];
   }
 
