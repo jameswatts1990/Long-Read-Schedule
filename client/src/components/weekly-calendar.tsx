@@ -74,14 +74,14 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
         <div className="min-w-max">
           <div className="grid" style={{ gridTemplateColumns: "200px repeat(5, minmax(180px, 1fr))" }}>
             {/* Header Row: Person + Day Names */}
-            <div className="sticky left-0 z-20 border-b border-r bg-muted/50 p-3">
+            <div className="sticky top-0 left-0 z-30 border-b border-r bg-muted/50 p-3">
               <span className="font-semibold text-foreground" data-testid="header-person">Person</span>
             </div>
             
             {DAYS.map((day, dayIndex) => (
               <div 
                 key={day} 
-                className="border-b text-center bg-muted/50 p-3"
+                className="sticky top-0 z-20 border-b text-center bg-muted/50 p-3"
                 data-testid={`header-day-${day.toLowerCase()}`}
               >
                 <div className="font-semibold text-foreground">
@@ -102,6 +102,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                     "sticky left-0 z-10 border-r border-b p-3 flex items-center gap-2 bg-card",
                     personIndex % 2 === 0 && "bg-muted/20"
                   )}
+                  style={{ top: "58px" }}
                   data-testid={`person-row-${person.id}`}
                 >
                   <div
