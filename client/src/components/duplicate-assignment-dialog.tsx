@@ -40,15 +40,18 @@ export function DuplicateAssignmentDialog({
 
       const promises = Array.from(selectedSlots).map((slotKey) => {
         const [personId, day] = slotKey.split("-");
-        return apiRequest("POST", "/api/assignments", {
+        const payload: any = {
           personId,
           taskId: assignment.taskId,
           day,
           weekStartDate,
-          batchNumber: assignment.batchNumber || undefined,
-          notes: assignment.notes || undefined,
-          date: assignment.date || undefined,
-        });
+        };
+        
+        if (assignment.batchNumber) payload.batchNumber = assignment.batchNumber;
+        if (assignment.notes) payload.notes = assignment.notes;
+        if (assignment.date) payload.date = assignment.date;
+        
+        return apiRequest("POST", "/api/assignments", payload);
       });
 
       return Promise.all(promises);
