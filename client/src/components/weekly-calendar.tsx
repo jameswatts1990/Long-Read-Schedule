@@ -114,7 +114,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                     <div
                       key={`${person.id}-${day}`}
                       className={cn(
-                        "border-b border-l p-2 min-h-32 hover-elevate relative",
+                        "border-b border-l p-2 hover-elevate relative",
                         personIndex % 2 === 0 && "bg-muted/20",
                         isDropTarget && "bg-primary/10 border-2 border-primary"
                       )}
