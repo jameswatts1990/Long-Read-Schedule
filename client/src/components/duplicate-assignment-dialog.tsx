@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
-import { type Assignment, type Person, DAYS, PERIODS } from "@shared/schema";
+import { type Assignment, type Person, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,19 +39,15 @@ export function DuplicateAssignmentDialog({
       if (!assignment) return;
 
       const promises = Array.from(selectedSlots).map((slotKey) => {
-        const [personId, day, period] = slotKey.split("-");
-        return apiRequest("/api/assignments", {
-          method: "POST",
-          body: JSON.stringify({
-            personId,
-            taskId: assignment.taskId,
-            day,
-            period,
-            weekStartDate,
-            batchNumber: assignment.batchNumber || "",
-            notes: assignment.notes || "",
-            date: assignment.date || "",
-          }),
+        const [personId, day] = slotKey.split("-");
+        return apiRequest("POST", "/api/assignments", {
+          personId,
+          taskId: assignment.taskId,
+          day,
+          weekStartDate,
+          batchNumber: assignment.batchNumber || undefined,
+          notes: assignment.notes || undefined,
+          date: assignment.date || undefined,
         });
       });
 
@@ -68,8 +64,8 @@ export function DuplicateAssignmentDialog({
     },
   });
 
-  const toggleSlot = (personId: string, day: string, period: string) => {
-    const key = `${personId}-${day}-${period}`;
+  const toggleSlot = (personId: string, day: string) => {
+    const key = `${personId}-${day}`;
     const newSet = new Set(selectedSlots);
     if (newSet.has(key)) {
       newSet.delete(key);
@@ -83,7 +79,7 @@ export function DuplicateAssignmentDialog({
     if (selectedSlots.size === 0) {
       toast({
         title: "No slots selected",
-        description: "Please select at least one time slot to duplicate to.",
+        description: "Please select at least one day to duplicate to.",
         variant: "destructive",
       });
       return;
@@ -104,7 +100,7 @@ export function DuplicateAssignmentDialog({
         <DialogHeader>
           <DialogTitle>Duplicate Task</DialogTitle>
           <DialogDescription>
-            Select time slots to duplicate this task to. The task will be copied with the same batch number, notes, and date.
+            Select days to duplicate this task to. The task will be copied with the same batch number, notes, and date.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,39 +114,36 @@ export function DuplicateAssignmentDialog({
                 />
                 <span className="font-medium text-sm">{person.name}</span>
               </div>
-              <div className="grid grid-cols-10 gap-2 ml-4">
-                {DAYS.map((day) =>
-                  PERIODS.map((period) => {
-                    const slotKey = `${person.id}-${day}-${period}`;
-                    const isSelected = selectedSlots.has(slotKey);
-                    // Disable if it's the original assignment
-                    const isOriginal =
-                      person.id === assignment.personId &&
-                      day === assignment.day &&
-                      period === assignment.period;
+              <div className="grid grid-cols-5 gap-2 ml-4">
+                {DAYS.map((day) => {
+                  const slotKey = `${person.id}-${day}`;
+                  const isSelected = selectedSlots.has(slotKey);
+                  // Disable if it's the original assignment
+                  const isOriginal =
+                    person.id === assignment.personId &&
+                    day === assignment.day;
 
-                    return (
-                      <div
-                        key={slotKey}
-                        className="flex items-center gap-1.5"
+                  return (
+                    <div
+                      key={slotKey}
+                      className="flex items-center gap-1.5"
+                    >
+                      <Checkbox
+                        id={slotKey}
+                        checked={isSelected}
+                        disabled={isOriginal}
+                        onCheckedChange={() => toggleSlot(person.id, day)}
+                        data-testid={`checkbox-${slotKey}`}
+                      />
+                      <Label
+                        htmlFor={slotKey}
+                        className="text-xs cursor-pointer"
                       >
-                        <Checkbox
-                          id={slotKey}
-                          checked={isSelected}
-                          disabled={isOriginal}
-                          onCheckedChange={() => toggleSlot(person.id, day, period)}
-                          data-testid={`checkbox-${slotKey}`}
-                        />
-                        <Label
-                          htmlFor={slotKey}
-                          className="text-xs cursor-pointer"
-                        >
-                          {day.charAt(0)}-{period}
-                        </Label>
-                      </div>
-                    );
-                  })
-                )}
+                        {day.charAt(0)}
+                      </Label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
