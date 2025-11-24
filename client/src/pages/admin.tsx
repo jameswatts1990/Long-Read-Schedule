@@ -264,7 +264,8 @@ export default function Admin() {
                       onDragLeave={() => setDragOverIndex(null)}
                       onDrop={() => {
                         if (draggedId && draggedId !== person.id) {
-                          reorderPersonMutation.mutate({ id: draggedId, newOrder: index });
+                          const targetOrder = parseInt((person as any).order || String(index), 10);
+                          reorderPersonMutation.mutate({ id: draggedId, newOrder: targetOrder });
                         }
                         setDragOverIndex(null);
                       }}
