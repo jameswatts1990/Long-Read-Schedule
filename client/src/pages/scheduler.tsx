@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Calendar, Users, ListChecks, Download, Upload, ChevronLeft, ChevronRight, Filter, X, Settings } from "lucide-react";
+import { Plus, Calendar, Users, ListChecks, Download, Upload, ChevronLeft, ChevronRight, Filter, X, Settings, Minimize2, Maximize2 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
@@ -52,6 +52,7 @@ export default function Scheduler() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
+  const [isCompactView, setIsCompactView] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -332,22 +333,35 @@ export default function Scheduler() {
 
           <Button
             variant="outline"
-            size="default"
-            onClick={() => setShowAddPerson(true)}
-            data-testid="button-add-person"
+            size="icon"
+            onClick={() => setIsCompactView(!isCompactView)}
+            data-testid="button-toggle-compact"
           >
-            <Users className="w-4 h-4" />
-            <span>Add Person</span>
+            {isCompactView ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
           </Button>
-          <Button
-            variant="outline"
-            size="default"
-            onClick={() => setShowAddTask(true)}
-            data-testid="button-add-task"
-          >
-            <ListChecks className="w-4 h-4" />
-            <span>Add Task</span>
-          </Button>
+
+          {!isCompactView && (
+            <>
+              <Button
+                variant="outline"
+                size="default"
+                onClick={() => setShowAddPerson(true)}
+                data-testid="button-add-person"
+              >
+                <Users className="w-4 h-4" />
+                <span>Add Person</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="default"
+                onClick={() => setShowAddTask(true)}
+                data-testid="button-add-task"
+              >
+                <ListChecks className="w-4 h-4" />
+                <span>Add Task</span>
+              </Button>
+            </>
+          )}
           <Button
             variant="outline"
             size="default"
@@ -383,7 +397,7 @@ export default function Scheduler() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className={`flex-1 overflow-auto ${isCompactView ? "p-2" : "p-6"}`}>
         <WeeklyCalendar
           weekStartDate={weekStartStr}
           assignments={weekAssignments}
