@@ -99,6 +99,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const assignment = await storage.createAssignment(data);
       res.json(assignment);
     } catch (error) {
+      console.error("Assignment validation error:", error);
+      console.error("Request body:", req.body);
       res.status(400).json({ error: "Invalid assignment data" });
     }
   });
