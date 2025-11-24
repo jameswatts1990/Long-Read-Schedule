@@ -162,15 +162,15 @@ export default function Admin() {
   });
 
   const reorderPersonMutation = useMutation({
-    mutationFn: async ({ id, newOrder }: { id: string; newOrder: number }) => {
-      const res = await apiRequest("POST", `/api/people/${id}/reorder`, { newOrder });
+    mutationFn: async (personIds: string[]) => {
+      const res = await apiRequest("POST", `/api/people/reorder-list`, { personIds });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to reorder person", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to reorder people", variant: "destructive" });
     },
   });
 
@@ -239,7 +239,9 @@ export default function Admin() {
                   onDragLeave={() => setDragOverIndex(null)}
                   onDrop={() => {
                     if (draggedId) {
-                      reorderPersonMutation.mutate({ id: draggedId, newOrder: 0 });
+                      const newOrder = people.filter(p => p.id !== draggedId).map(p => p.id);
+                      newOrder.unshift(draggedId);
+                      reorderPersonMutation.mutate(newOrder);
                     }
                     setDragOverIndex(null);
                   }}
@@ -264,8 +266,9 @@ export default function Admin() {
                       onDragLeave={() => setDragOverIndex(null)}
                       onDrop={() => {
                         if (draggedId && draggedId !== person.id) {
-                          const targetOrder = parseInt((person as any).order || String(index), 10);
-                          reorderPersonMutation.mutate({ id: draggedId, newOrder: targetOrder });
+                          const newOrder = people.filter(p => p.id !== draggedId).map(p => p.id);
+                          newOrder.splice(index, 0, draggedId);
+                          reorderPersonMutation.mutate(newOrder);
                         }
                         setDragOverIndex(null);
                       }}

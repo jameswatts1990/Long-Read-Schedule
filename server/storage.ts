@@ -21,6 +21,7 @@ export interface IStorage {
   updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person>;
   deletePerson(id: string): Promise<void>;
   updatePersonOrder(id: string, newOrder: number): Promise<Person>;
+  reorderPeople(personIds: string[]): Promise<Person[]>;
 
   getTasks(): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
@@ -201,6 +202,16 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  async reorderPeople(personIds: string[]): Promise<Person[]> {
+    personIds.forEach((id, index) => {
+      const person = this.people.get(id);
+      if (person) {
+        this.people.set(id, { ...person, order: String(index) } as any);
+      }
+    });
+    return await this.getPeople();
+  }
+
   async getTasks(): Promise<Task[]> {
     return Array.from(this.tasks.values());
   }
@@ -339,6 +350,13 @@ export class PostgresStorage implements IStorage {
 
     const result = await this.db.update(people).set({ order: String(newOrder) }).where(eq(people.id, id)).returning();
     return result[0];
+  }
+
+  async reorderPeople(personIds: string[]): Promise<Person[]> {
+    for (let i = 0; i < personIds.length; i++) {
+      await this.db.update(people).set({ order: String(i) }).where(eq(people.id, personIds[i]));
+    }
+    return await this.getPeople();
   }
 
   async getTasks(): Promise<Task[]> {

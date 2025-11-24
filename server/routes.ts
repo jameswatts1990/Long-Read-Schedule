@@ -33,16 +33,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/people/:id/reorder", async (req, res) => {
+  app.post("/api/people/reorder-list", async (req, res) => {
     try {
-      const { newOrder } = req.body;
-      if (typeof newOrder !== "number") {
-        return res.status(400).json({ error: "newOrder must be a number" });
+      const { personIds } = req.body;
+      if (!Array.isArray(personIds)) {
+        return res.status(400).json({ error: "personIds must be an array" });
       }
-      const person = await storage.updatePersonOrder(req.params.id, newOrder);
-      res.json(person);
+      const result = await storage.reorderPeople(personIds);
+      res.json(result);
     } catch (error) {
-      res.status(400).json({ error: "Failed to reorder person" });
+      res.status(400).json({ error: "Failed to reorder people" });
     }
   });
 
