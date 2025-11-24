@@ -60,7 +60,7 @@ const ALLOWED_EMAILS = new Set<string>([
 // Check if a domain is allowed (optional: allow all emails from specific domains)
 const ALLOWED_DOMAINS = new Set<string>([
   // Add allowed domains here, for example:
-  // "yourlab.org",
+  "sanger.ac.uk",
   // "youruniversity.edu",
 ]);
 
