@@ -6,6 +6,8 @@ This is a **Lab Team Scheduling Application** designed for laboratory environmen
 
 The application follows a Linear-inspired productivity design philosophy with Material Design data density principles, emphasizing clarity over decoration and maximizing useful information per viewport. It's optimized for desktop use with large touch targets and keyboard shortcuts.
 
+**Access Control:** The application is now protected by Replit Auth with email whitelisting. Only approved users can access the scheduler interface.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -33,12 +35,17 @@ Preferred communication style: Simple, everyday language.
 - No global client state management library (Redux, Zustand, etc.)
 
 **Key UI Features:**
+- Landing page for unauthenticated users with login button
+- Replit Auth integration with Google, GitHub, and email login
+- Protected scheduler and admin pages requiring authentication
+- Logout button in scheduler header
 - Drag-and-drop task assignment movement between calendar cells
 - Modal dialogs for creating/editing people, tasks, and assignments
 - Side drawer for detailed assignment editing
 - Conflict detection when assigning multiple tasks to same person/slot
 - Filter system for people and tasks visibility
 - Week navigation with Monday-based week starts
+- Drag-to-delete functionality (drag task onto person name to delete)
 
 ### Backend Architecture
 
@@ -49,6 +56,13 @@ Preferred communication style: Simple, everyday language.
 
 **API Structure:**
 ```
+# Authentication Endpoints (public)
+GET    /api/login           - Initiate Replit Auth OAuth flow
+GET    /api/callback        - OAuth callback handler
+POST   /api/logout          - Logout and destroy session
+GET    /api/auth/user       - Get current authenticated user
+
+# Protected Endpoints (require authentication)
 GET    /api/people          - Fetch all people
 POST   /api/people          - Create new person
 DELETE /api/people/:id      - Delete person
@@ -63,6 +77,13 @@ PATCH  /api/assignments/:id - Update assignment
 DELETE /api/assignments/:id - Delete assignment
 GET    /api/assignments/conflicts/:personId/:day/:weekStartDate - Check conflicts
 ```
+
+**Authentication & Authorization:**
+- Replit Auth integration using Passport.js with OpenID Connect strategy
+- Email whitelist configuration in `server/replitAuth.ts` via `ALLOWED_EMAILS` and `ALLOWED_DOMAINS` arrays
+- Session-based authentication with PostgreSQL session store (`connect-pg-simple`)
+- `isAuthenticated` middleware protects all non-auth API endpoints
+- Unauthorized requests return 401 status code
 
 **Data Validation:**
 - Zod schemas defined in shared directory for both client and server
@@ -84,16 +105,33 @@ GET    /api/assignments/conflicts/:personId/:day/:weekStartDate - Check conflict
 
 **Data Models:**
 
+**Users Table (Authentication):**
+- `id` (varchar, primary key) - Replit user ID
+- `email` (varchar, nullable) - User email address
+- `firstName` (varchar, nullable) - User first name
+- `lastName` (varchar, nullable) - User last name
+- `profileImageUrl` (varchar, nullable) - Profile picture URL
+- `createdAt` (timestamp) - Account creation timestamp
+- `updatedAt` (timestamp) - Last update timestamp
+
+**Sessions Table (Authentication):**
+- `sid` (varchar, primary key) - Session ID
+- `sess` (jsonb) - Session data
+- `expire` (timestamp) - Session expiration timestamp
+
 **People Table:**
 - `id` (UUID, primary key, auto-generated)
 - `name` (text, required)
 - `color` (text, required) - Hex color for person identification
+- `order` (integer) - Display order
+- `excluded` (integer, default 0) - Exclusion flag (0=active, 1=excluded)
 
 **Tasks Table:**
 - `id` (UUID, primary key, auto-generated)
 - `name` (text, required)
 - `color` (text, required) - Pastel background color
 - `description` (text, optional)
+- `order` (integer) - Display order
 
 **Assignments Table:**
 - `id` (UUID, primary key, auto-generated)
@@ -117,6 +155,10 @@ GET    /api/assignments/conflicts/:personId/:day/:weekStartDate - Check conflict
 - `drizzle-orm` - TypeScript ORM with type inference
 - `express` - Web server framework
 - `vite` - Build tool and dev server
+- `passport` - Authentication middleware
+- `openid-client` - OpenID Connect client for Replit Auth
+- `express-session` - Session management middleware
+- `connect-pg-simple` - PostgreSQL session store for express-session
 
 **React Ecosystem:**
 - `react` & `react-dom` - UI framework
