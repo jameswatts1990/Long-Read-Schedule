@@ -177,6 +177,20 @@ export default function Admin() {
     },
   });
 
+  const toggleExcludedMutation = useMutation({
+    mutationFn: async (personId: string) => {
+      const res = await apiRequest("PATCH", `/api/people/${personId}/toggle-excluded`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      toast({ title: "Success", description: "Exclusion status updated" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update exclusion status", variant: "destructive" });
+    },
+  });
+
   const reorderTaskMutation = useMutation({
     mutationFn: async (taskIds: string[]) => {
       const res = await apiRequest("POST", `/api/tasks/reorder-list`, { taskIds });
