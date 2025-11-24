@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS, PERIODS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical } from "lucide-react";
+import { Plus, GripVertical, GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -26,14 +26,17 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
   const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
+  const [resizingAssignment, setResizingAssignment] = useState<{ id: string; direction: 'left' | 'right' } | null>(null);
+  const [resizeStartDay, setResizeStartDay] = useState<string | null>(null);
   const { toast } = useToast();
 
   const updateAssignmentMutation = useMutation({
-    mutationFn: async (data: { assignmentId: string; personId: string; day: string; period: string }) => {
+    mutationFn: async (data: { assignmentId: string; personId: string; day: string; period: string; endDay?: string }) => {
       const res = await apiRequest("PATCH", `/api/assignments/${data.assignmentId}`, {
         personId: data.personId,
         day: data.day,
         period: data.period,
+        endDay: data.endDay,
         weekStartDate,
       });
       return res.json();
@@ -41,14 +44,14 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
       toast({
-        title: "Task moved",
+        title: "Task updated",
         description: "Assignment updated successfully",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to move assignment",
+        description: "Failed to update assignment",
         variant: "destructive",
       });
     },
@@ -66,6 +69,51 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
   };
 
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
+
+  const getDayIndex = (day: string) => DAYS.indexOf(day as any);
+
+  const handleResizeStart = (e: React.MouseEvent, assignmentId: string, direction: 'left' | 'right', currentDay: string) => {
+    e.stopPropagation();
+    setResizingAssignment({ id: assignmentId, direction });
+    setResizeStartDay(currentDay);
+  };
+
+  const handleResizeMove = (day: string) => {
+    if (!resizingAssignment || !resizeStartDay) return;
+    
+    const assignment = assignments.find(a => a.id === resizingAssignment.id);
+    if (!assignment) return;
+
+    const startIdx = getDayIndex(resizeStartDay);
+    const currentIdx = getDayIndex(day);
+
+    if (resizingAssignment.direction === 'right') {
+      // Dragging right edge - update endDay
+      const newEndDay = day;
+      updateAssignmentMutation.mutate({
+        assignmentId: assignment.id,
+        personId: assignment.personId,
+        day: assignment.day,
+        period: assignment.period,
+        endDay: newEndDay === assignment.day ? undefined : newEndDay,
+      });
+    } else {
+      // Dragging left edge - update day
+      const newDay = day;
+      const currentEnd = assignment.endDay || assignment.day;
+      const currentEndIdx = getDayIndex(currentEnd);
+      
+      if (getDayIndex(newDay) <= currentEndIdx) {
+        updateAssignmentMutation.mutate({
+          assignmentId: assignment.id,
+          personId: assignment.personId,
+          day: newDay,
+          period: assignment.period,
+          endDay: assignment.endDay,
+        });
+      }
+    }
+  };
 
   return (
     <>
@@ -166,6 +214,15 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                           setDropTargetCell(null);
                           setDraggedAssignment(null);
                         }}
+                        onMouseMove={() => {
+                          if (resizingAssignment) {
+                            handleResizeMove(day);
+                          }
+                        }}
+                        onMouseUp={() => {
+                          setResizingAssignment(null);
+                          setResizeStartDay(null);
+                        }}
                         data-testid={`cell-${person.id}-${day.toLowerCase()}-${period.toLowerCase()}`}
                       >
                         {conflict && (
@@ -184,7 +241,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                               <div
                                 key={assignment.id}
                                 className={cn(
-                                  "rounded-md p-2 cursor-grab active:cursor-grabbing group relative border-2 hover-elevate active-elevate-2",
+                                  "rounded-md p-2 cursor-grab active:cursor-grabbing group relative border-2 hover-elevate active-elevate-2 flex items-start gap-1",
                                   draggedAssignment?.id === assignment.id && "opacity-50"
                                 )}
                                 style={{ 
@@ -200,18 +257,36 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                                 onClick={() => onAssignmentClick(assignment)}
                                 data-testid={`assignment-${assignment.id}`}
                               >
-                                <div className="flex items-start gap-1.5">
-                                  <GripVertical className="w-3 h-3 shrink-0 opacity-50 mt-0.5" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-medium text-foreground truncate">
-                                      {task.name}
-                                    </div>
-                                    {assignment.batchNumber && (
-                                      <div className="text-xs font-mono text-foreground/70 mt-0.5">
-                                        #{assignment.batchNumber}
-                                      </div>
-                                    )}
+                                {/* Left resize handle */}
+                                <div
+                                  className="cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity py-1 px-0.5"
+                                  onMouseDown={(e) => handleResizeStart(e, assignment.id, 'left', assignment.day)}
+                                  data-testid={`resize-handle-left-${assignment.id}`}
+                                  title="Drag to expand left"
+                                >
+                                  <GripHorizontal className="w-2 h-3" />
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <GripVertical className="w-3 h-3 shrink-0 opacity-50 mt-0.5 inline mr-1" />
+                                  <div className="text-xs font-medium text-foreground truncate inline">
+                                    {task.name}
                                   </div>
+                                  {assignment.batchNumber && (
+                                    <div className="text-xs font-mono text-foreground/70 mt-0.5">
+                                      #{assignment.batchNumber}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Right resize handle */}
+                                <div
+                                  className="cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity py-1 px-0.5"
+                                  onMouseDown={(e) => handleResizeStart(e, assignment.id, 'right', assignment.endDay || assignment.day)}
+                                  data-testid={`resize-handle-right-${assignment.id}`}
+                                  title="Drag to expand right"
+                                >
+                                  <GripHorizontal className="w-2 h-3" />
                                 </div>
                               </div>
                             );
