@@ -70,18 +70,18 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
 
   return (
     <>
-      <div className="border rounded-md overflow-auto bg-card">
-        <div className="min-w-max">
-          <div className="grid" style={{ gridTemplateColumns: "200px repeat(5, minmax(180px, 1fr))" }}>
+      <div className="border rounded-md bg-card h-full flex flex-col">
+        <div className="overflow-auto flex-1">
+          <div className="grid" style={{ gridTemplateColumns: "200px repeat(5, minmax(180px, 1fr))", minWidth: "max-content" }}>
             {/* Header Row: Person + Day Names */}
-            <div className="sticky top-0 left-0 z-30 border-b border-r bg-muted/50 p-3">
+            <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted/50 p-3">
               <span className="font-semibold text-foreground" data-testid="header-person">Person</span>
             </div>
             
             {DAYS.map((day, dayIndex) => (
               <div 
                 key={day} 
-                className="sticky top-0 z-20 border-b text-center bg-muted/50 p-3"
+                className="sticky top-0 z-40 border-b text-center bg-muted/50 p-3"
                 data-testid={`header-day-${day.toLowerCase()}`}
               >
                 <div className="font-semibold text-foreground">
@@ -99,10 +99,10 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                 {/* Person Name Cell - Sticky */}
                 <div
                   className={cn(
-                    "sticky left-0 z-10 border-r border-b p-3 flex items-center gap-2 bg-card",
+                    "sticky left-0 z-30 border-r border-b p-3 flex items-center gap-2 bg-card",
                     personIndex % 2 === 0 && "bg-muted/20"
                   )}
-                  style={{ top: "58px" }}
+                  style={{ top: "57px" }}
                   data-testid={`person-row-${person.id}`}
                 >
                   <div
