@@ -27,6 +27,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
   const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
+  const [isOutsideCalendar, setIsOutsideCalendar] = useState(false);
   const { toast } = useToast();
 
   const updateAssignmentMutation = useMutation({
@@ -54,6 +55,26 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     },
   });
 
+  const deleteAssignmentMutation = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      toast({
+        title: "Task deleted",
+        description: "Assignment has been removed",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete assignment",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getAssignmentsForCell = (personId: string, day: string) => {
     return assignments.filter(
       a => a.personId === personId && a.day === day
@@ -72,7 +93,16 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     <>
       <div className="border rounded-md bg-card h-full flex flex-col">
         <div className="overflow-auto flex-1">
-          <div className="grid" style={{ gridTemplateColumns: "200px repeat(5, minmax(180px, 1fr))", minWidth: "max-content" }}>
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: "200px repeat(5, minmax(180px, 1fr))", minWidth: "max-content" }}
+            onDragLeave={(e) => {
+              if (e.target === e.currentTarget) {
+                setIsOutsideCalendar(true);
+              }
+            }}
+            onDragEnter={() => setIsOutsideCalendar(false)}
+          >
             {/* Header Row: Person + Day Names */}
             <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-3">
               <span className="font-semibold text-foreground" data-testid="header-person">Person</span>
@@ -170,9 +200,16 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                               draggable
                               onDragStart={(e) => {
                                 setDraggedAssignment(assignment);
+                                setIsOutsideCalendar(false);
                                 e.dataTransfer.effectAllowed = "move";
                               }}
-                              onDragEnd={() => setDraggedAssignment(null)}
+                              onDragEnd={() => {
+                                if (isOutsideCalendar && draggedAssignment) {
+                                  deleteAssignmentMutation.mutate(draggedAssignment.id);
+                                }
+                                setDraggedAssignment(null);
+                                setIsOutsideCalendar(false);
+                              }}
                               onClick={() => onAssignmentClick(assignment)}
                               data-testid={`assignment-${assignment.id}`}
                             >
