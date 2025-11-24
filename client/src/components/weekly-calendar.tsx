@@ -76,6 +76,21 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
 
   const getDayIndex = (day: string) => DAYS.indexOf(day as any);
 
+  const getDateFromDay = (day: string): string => {
+    const weekStart = new Date(weekStartDate);
+    const dayIdx = getDayIndex(day);
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + dayIdx);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatDateRange = (startDay: string, endDay?: string): string => {
+    const start = getDateFromDay(startDay);
+    if (!endDay || endDay === startDay) return start;
+    const end = getDateFromDay(endDay);
+    return `${start} - ${end}`;
+  };
+
   const handleResizeStart = (e: React.MouseEvent, assignmentId: string, direction: 'left' | 'right', currentDay: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -203,19 +218,16 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                   </span>
                 </div>
 
-                {/* Day/Period Cells */}
+                {/* Day/Period Cells - Grid structure for drop targets */}
                 {DAYS.map((day, dayIndex) => (
                   PERIODS.map(period => {
-                    const cellAssignments = getAssignmentsForCell(person.id, day, period);
                     const conflict = hasConflict(person.id, day, period);
-                    
                     const currentCell = { personId: person.id, day, period };
                     const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day && dropTargetCell?.period === period;
-
-                    // Check if this cell should show task blocks (first day of a span)
-                    const assignmentsStartingHere = assignments.filter(a => 
-                      a.personId === person.id && a.day === day && a.period === period
-                    );
+                    
+                    // Only show Add button on Monday AM cells
+                    const showAddButton = day === "Monday" && period === "AM";
+                    const assignmentsForPerson = assignments.filter(a => a.personId === person.id && a.period === period);
 
                     return (
                       <div
@@ -256,89 +268,94 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                             </div>
                           </div>
                         )}
-                        <div className="space-y-1.5 col-span-2">
-                          {assignmentsStartingHere.map(assignment => {
-                            const task = getTaskById(assignment.taskId);
-                            if (!task) return null;
-
-                            const startIdx = getDayIndex(assignment.day);
-                            const endIdx = getDayIndex(assignment.endDay || assignment.day);
-                            const spanLength = endIdx - startIdx + 1;
-                            const colSpan = spanLength * 2; // 2 columns per day (AM/PM)
-
-                            return (
-                              <div
-                                key={assignment.id}
-                                className={cn(
-                                  "rounded-md p-2 cursor-grab active:cursor-grabbing group relative border-2 hover-elevate active-elevate-2 flex items-start gap-1",
-                                  draggedAssignment?.id === assignment.id && "opacity-50"
-                                )}
-                                style={{ 
-                                  backgroundColor: task.color,
-                                  borderColor: person.color,
-                                  gridColumn: `span ${colSpan}`,
-                                }}
-                                draggable
-                                onDragStart={(e) => {
-                                  setDraggedAssignment(assignment);
-                                  e.dataTransfer.effectAllowed = "move";
-                                }}
-                                onDragEnd={() => setDraggedAssignment(null)}
-                                onClick={() => onAssignmentClick(assignment)}
-                                data-testid={`assignment-${assignment.id}`}
-                              >
-                                {/* Left resize handle */}
-                                <div
-                                  className="cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity py-1 px-0.5"
-                                  onMouseDown={(e) => handleResizeStart(e, assignment.id, 'left', assignment.day)}
-                                  data-testid={`resize-handle-left-${assignment.id}`}
-                                  title="Drag to expand left"
-                                >
-                                  <GripHorizontal className="w-2 h-3" />
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <GripVertical className="w-3 h-3 shrink-0 opacity-50 mt-0.5 inline mr-1" />
-                                  <div className="text-xs font-medium text-foreground truncate inline">
-                                    {task.name}
-                                  </div>
-                                  {assignment.batchNumber && (
-                                    <div className="text-xs font-mono text-foreground/70 mt-0.5">
-                                      #{assignment.batchNumber}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Right resize handle */}
-                                <div
-                                  className="cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity py-1 px-0.5"
-                                  onMouseDown={(e) => handleResizeStart(e, assignment.id, 'right', assignment.endDay || assignment.day)}
-                                  data-testid={`resize-handle-right-${assignment.id}`}
-                                  title="Drag to expand right"
-                                >
-                                  <GripHorizontal className="w-2 h-3" />
-                                </div>
-                              </div>
-                            );
-                          })}
-
-                          {assignmentsStartingHere.length === 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full justify-start text-muted-foreground hover:text-foreground"
-                              onClick={() => setSelectedCell({ personId: person.id, day, period })}
-                              data-testid={`button-add-${person.id}-${day.toLowerCase()}-${period.toLowerCase()}`}
-                            >
-                              <Plus className="w-3 h-3 mr-1" />
-                              <span className="text-xs">Add</span>
-                            </Button>
-                          )}
-                        </div>
+                        {showAddButton && assignmentsForPerson.length === 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-muted-foreground hover:text-foreground"
+                            onClick={() => setSelectedCell({ personId: person.id, day: "Monday", period })}
+                            data-testid={`button-add-${person.id}-${day.toLowerCase()}-${period.toLowerCase()}`}
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            <span className="text-xs">Add</span>
+                          </Button>
+                        )}
                       </div>
                     );
                   })
                 ))}
+
+                {/* Task blocks rendered at grid level to span across columns */}
+                {assignments
+                  .filter(a => a.personId === person.id && a.day === "Monday")
+                  .map(assignment => {
+                    const task = getTaskById(assignment.taskId);
+                    if (!task) return null;
+
+                    const startIdx = getDayIndex(assignment.day);
+                    const endIdx = getDayIndex(assignment.endDay || assignment.day);
+                    const colStart = 2 + startIdx * 2 + (assignment.period === "PM" ? 1 : 0);
+                    const spanLength = (endIdx - startIdx) * 2 + (assignment.period === "PM" ? 1 : 2);
+
+                    return (
+                      <div
+                        key={assignment.id}
+                        className={cn(
+                          "rounded-md p-2 cursor-grab active:cursor-grabbing group relative border-2 hover-elevate active-elevate-2 flex items-start gap-1 col-span-1",
+                          draggedAssignment?.id === assignment.id && "opacity-50"
+                        )}
+                        style={{
+                          backgroundColor: task.color,
+                          borderColor: person.color,
+                          gridColumn: `${colStart} / span ${spanLength}`,
+                          gridRow: `auto`,
+                        }}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedAssignment(assignment);
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => setDraggedAssignment(null)}
+                        onClick={() => onAssignmentClick(assignment)}
+                        data-testid={`assignment-${assignment.id}`}
+                      >
+                        {/* Left resize handle */}
+                        <div
+                          className="cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity py-1 px-0.5"
+                          onMouseDown={(e) => handleResizeStart(e, assignment.id, 'left', assignment.day)}
+                          data-testid={`resize-handle-left-${assignment.id}`}
+                          title="Drag to expand left"
+                        >
+                          <GripHorizontal className="w-2 h-3" />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <GripVertical className="w-3 h-3 shrink-0 opacity-50 mt-0.5 inline mr-1" />
+                          <div className="text-xs font-medium text-foreground truncate inline">
+                            {task.name}
+                          </div>
+                          <div className="text-xs text-foreground/70 mt-1">
+                            {formatDateRange(assignment.day, assignment.endDay)}
+                          </div>
+                          {assignment.batchNumber && (
+                            <div className="text-xs font-mono text-foreground/70 mt-0.5">
+                              #{assignment.batchNumber}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right resize handle */}
+                        <div
+                          className="cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity py-1 px-0.5"
+                          onMouseDown={(e) => handleResizeStart(e, assignment.id, 'right', assignment.endDay || assignment.day)}
+                          data-testid={`resize-handle-right-${assignment.id}`}
+                          title="Drag to expand right"
+                        >
+                          <GripHorizontal className="w-2 h-3" />
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             ))}
           </div>
