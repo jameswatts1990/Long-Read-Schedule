@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Calendar, Users, ListChecks, Download, Upload, ChevronLeft, ChevronRight, Filter, X, Settings, Minimize2, Maximize2, LogOut } from "lucide-react";
+import { Plus, Calendar, Users, ListChecks, Download, Upload, ChevronLeft, ChevronRight, Filter, X, Settings, Minimize2, Maximize2 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
@@ -394,15 +394,6 @@ export default function Scheduler() {
               <span>Admin</span>
             </Button>
           </Link>
-          <Button
-            variant="outline"
-            size="default"
-            onClick={() => window.location.href = "/api/logout"}
-            data-testid="button-logout"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Logout</span>
-          </Button>
         </div>
       </header>
 

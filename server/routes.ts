@@ -3,26 +3,9 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPersonSchema, insertTaskSchema, insertAssignmentSchema, isoDateString } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated } from "./replitAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup Replit Auth
-  await setupAuth(app);
-
-  // Auth endpoint - get current user
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
-  // All API routes below require authentication
-  app.get("/api/people", isAuthenticated, async (_req, res) => {
+  app.get("/api/people", async (_req, res) => {
     try {
       const people = await storage.getPeople();
       res.json(people);
@@ -31,7 +14,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/people", isAuthenticated, async (req, res) => {
+  app.post("/api/people", async (req, res) => {
     try {
       const data = insertPersonSchema.parse(req.body);
       const person = await storage.createPerson(data);
@@ -41,7 +24,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/people/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/people/:id", async (req, res) => {
     try {
       await storage.deletePerson(req.params.id);
       res.json({ success: true });
@@ -50,7 +33,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/people/reorder-list", isAuthenticated, async (req, res) => {
+  app.post("/api/people/reorder-list", async (req, res) => {
     try {
       const { personIds } = req.body;
       if (!Array.isArray(personIds)) {
@@ -63,7 +46,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/people/:id/toggle-excluded", isAuthenticated, async (req, res) => {
+  app.patch("/api/people/:id/toggle-excluded", async (req, res) => {
     try {
       const person = await storage.togglePersonExcluded(req.params.id);
       res.json(person);
@@ -72,7 +55,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/tasks", isAuthenticated, async (_req, res) => {
+  app.get("/api/tasks", async (_req, res) => {
     try {
       const tasks = await storage.getTasks();
       res.json(tasks);
@@ -81,7 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/tasks", isAuthenticated, async (req, res) => {
+  app.post("/api/tasks", async (req, res) => {
     try {
       const data = insertTaskSchema.parse(req.body);
       const task = await storage.createTask(data);
@@ -91,7 +74,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/people/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/people/:id", async (req, res) => {
     try {
       const data = insertPersonSchema.partial().parse(req.body);
       const person = await storage.updatePerson(req.params.id, data);
@@ -101,7 +84,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/tasks/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/tasks/:id", async (req, res) => {
     try {
       const data = insertTaskSchema.partial().parse(req.body);
       const task = await storage.updateTask(req.params.id, data);
@@ -111,7 +94,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/tasks/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/tasks/:id", async (req, res) => {
     try {
       await storage.deleteTask(req.params.id);
       res.json({ success: true });
@@ -120,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/tasks/reorder-list", isAuthenticated, async (req, res) => {
+  app.post("/api/tasks/reorder-list", async (req, res) => {
     try {
       const { taskIds } = req.body;
       if (!Array.isArray(taskIds)) {
@@ -133,7 +116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/assignments", isAuthenticated, async (_req, res) => {
+  app.get("/api/assignments", async (_req, res) => {
     try {
       const assignments = await storage.getAssignments();
       res.json(assignments);
@@ -142,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assignments", isAuthenticated, async (req, res) => {
+  app.post("/api/assignments", async (req, res) => {
     try {
       const { override, ...bodyData } = req.body;
       const data = insertAssignmentSchema.parse(bodyData);
@@ -167,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     weekStartDate: isoDateString.optional(),
   }).strict();
 
-  app.patch("/api/assignments/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/assignments/:id", async (req, res) => {
     try {
       const assignmentId = req.params.id;
       const existing = await storage.getAssignment(assignmentId);
@@ -189,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/assignments/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/assignments/:id", async (req, res) => {
     try {
       await storage.deleteAssignment(req.params.id);
       res.json({ success: true });

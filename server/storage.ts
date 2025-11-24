@@ -5,12 +5,9 @@ import {
   type InsertTask,
   type Assignment,
   type InsertAssignment,
-  type User,
-  type UpsertUser,
   people,
   tasks,
   assignments,
-  users,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { neon } from "@neondatabase/serverless";
@@ -18,10 +15,6 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { eq } from "drizzle-orm";
 
 export interface IStorage {
-  // User operations (required for Replit Auth)
-  getUser(id: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
-
   getPeople(): Promise<Person[]>;
   getPerson(id: string): Promise<Person | undefined>;
   createPerson(person: InsertPerson): Promise<Person>;
@@ -50,37 +43,13 @@ export class MemStorage implements IStorage {
   private people: Map<string, Person>;
   private tasks: Map<string, Task>;
   private assignments: Map<string, Assignment>;
-  private users: Map<string, User>;
 
   constructor() {
     this.people = new Map();
     this.tasks = new Map();
     this.assignments = new Map();
-    this.users = new Map();
     
     this.initializeSampleData();
-  }
-
-  // User operations (required for Replit Auth)
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    const now = new Date();
-    const existing = this.users.get(userData.id!);
-    const user: User = {
-      ...userData,
-      id: userData.id!,
-      email: userData.email ?? null,
-      firstName: userData.firstName ?? null,
-      lastName: userData.lastName ?? null,
-      profileImageUrl: userData.profileImageUrl ?? null,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    this.users.set(user.id, user);
-    return user;
   }
 
   private initializeSampleData() {
@@ -352,27 +321,6 @@ export class PostgresStorage implements IStorage {
     }
     const sql = neon(connectionString);
     this.db = drizzle(sql);
-  }
-
-  // User operations (required for Replit Auth)
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.id, id));
-    return user;
-  }
-
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await this.db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
   }
 
   async getPeople(): Promise<Person[]> {
