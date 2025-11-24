@@ -18,11 +18,13 @@ export interface IStorage {
   getPeople(): Promise<Person[]>;
   getPerson(id: string): Promise<Person | undefined>;
   createPerson(person: InsertPerson): Promise<Person>;
+  updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person>;
   deletePerson(id: string): Promise<void>;
 
   getTasks(): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
   createTask(task: InsertTask): Promise<Task>;
+  updateTask(id: string, data: Partial<InsertTask>): Promise<Task>;
   deleteTask(id: string): Promise<void>;
 
   getAssignments(): Promise<Assignment[]>;
@@ -154,6 +156,14 @@ export class MemStorage implements IStorage {
     return person;
   }
 
+  async updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person> {
+    const existing = this.people.get(id);
+    if (!existing) throw new Error("Person not found");
+    const updated: Person = { ...existing, ...data };
+    this.people.set(id, updated);
+    return updated;
+  }
+
   async deletePerson(id: string): Promise<void> {
     this.people.delete(id);
   }
@@ -255,6 +265,15 @@ export class PostgresStorage implements IStorage {
 
   async createPerson(insertPerson: InsertPerson): Promise<Person> {
     const result = await this.db.insert(people).values(insertPerson).returning();
+    return result[0];
+  }
+
+  async updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person> {
+    const result = await this.db
+      .update(people)
+      .set(data)
+      .where(eq(people.id, id))
+      .returning();
     return result[0];
   }
 

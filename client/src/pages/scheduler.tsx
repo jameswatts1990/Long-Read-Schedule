@@ -369,6 +369,12 @@ export default function Scheduler() {
             onChange={handleImport}
             data-testid="input-import-file"
           />
+          <Link href="/admin">
+            <Button variant="outline" size="default" data-testid="button-admin">
+              <Settings className="w-4 h-4" />
+              <span>Admin</span>
+            </Button>
+          </Link>
         </div>
       </header>
 
