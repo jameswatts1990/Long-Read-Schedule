@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { X, Save } from "lucide-react";
+import { X, Save, Copy, Trash2 } from "lucide-react";
 import { type Assignment, type Person, type Task } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { DuplicateAssignmentDialog } from "@/components/duplicate-assignment-dialog";
 
 interface TaskDetailsDrawerProps {
   assignment: Assignment | null;
@@ -21,6 +22,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const [batchNumber, setBatchNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState("");
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
 
   useEffect(() => {
     if (assignment) {
@@ -41,6 +43,17 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!assignment) return;
+      return apiRequest("DELETE", `/api/assignments/${assignment.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      onClose();
+    },
+  });
+
   const handleSave = () => {
     if (!assignment) return;
     updateMutation.mutate({
@@ -49,6 +62,13 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       date: date || undefined,
       weekStartDate: assignment.weekStartDate,
     });
+  };
+
+  const handleDelete = () => {
+    if (!assignment) return;
+    if (confirm("Are you sure you want to delete this assignment?")) {
+      deleteMutation.mutate();
+    }
   };
 
   if (!assignment) return null;
@@ -154,24 +174,51 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
           </div>
         </div>
 
-        <div className="h-14 border-t flex items-center justify-end gap-2 px-4 shrink-0">
+        <div className="h-14 border-t flex items-center justify-between gap-2 px-4 shrink-0">
           <Button
             variant="outline"
-            onClick={onClose}
-            data-testid="button-cancel"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+            data-testid="button-delete"
           >
-            Cancel
+            <Trash2 className="w-4 h-4" />
+            <span>Delete</span>
           </Button>
-          <Button
-            onClick={handleSave}
-            disabled={updateMutation.isPending}
-            data-testid="button-save"
-          >
-            <Save className="w-4 h-4" />
-            <span>Save</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDuplicateDialog(true)}
+              data-testid="button-duplicate"
+            >
+              <Copy className="w-4 h-4" />
+              <span>Duplicate</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              data-testid="button-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={updateMutation.isPending}
+              data-testid="button-save"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save</span>
+            </Button>
+          </div>
         </div>
       </div>
+
+      <DuplicateAssignmentDialog
+        assignment={assignment}
+        people={people}
+        weekStartDate={assignment.weekStartDate}
+        open={showDuplicateDialog}
+        onClose={() => setShowDuplicateDialog(false)}
+      />
     </div>
   );
 }

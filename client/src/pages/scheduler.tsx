@@ -1,12 +1,22 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Calendar, Users, ListChecks, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Calendar, Users, ListChecks, Download, Upload, ChevronLeft, ChevronRight, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
 import { AddPersonDialog } from "@/components/add-person-dialog";
 import { AddTaskDialog } from "@/components/add-task-dialog";
 import { type Person, type Task, type Assignment } from "@shared/schema";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -39,13 +49,27 @@ export default function Scheduler() {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
+  const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
 
   const weekStartStr = formatDate(currentWeekStart);
-  const weekAssignments = assignments.filter(a => a.weekStartDate === weekStartStr);
+  let weekAssignments = assignments.filter(a => a.weekStartDate === weekStartStr);
+
+  // Apply filters
+  if (filterPersonIds.size > 0) {
+    weekAssignments = weekAssignments.filter(a => filterPersonIds.has(a.personId));
+  }
+  if (filterTaskIds.size > 0) {
+    weekAssignments = weekAssignments.filter(a => filterTaskIds.has(a.taskId));
+  }
+
+  const hasActiveFilters = filterPersonIds.size > 0 || filterTaskIds.size > 0;
 
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeekStart);
@@ -72,6 +96,122 @@ export default function Scheduler() {
     a.download = `schedule-${weekStartStr}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      if (!data.people || !data.tasks || !data.assignments) {
+        throw new Error("Invalid file format - missing required fields");
+      }
+
+      // Create ID mapping for people
+      const personIdMap = new Map<string, string>();
+      for (const person of data.people) {
+        const res = await apiRequest("POST", "/api/people", {
+          name: person.name,
+          color: person.color,
+        });
+        const created: Person = await res.json();
+        personIdMap.set(person.id, created.id);
+      }
+
+      // Create ID mapping for tasks
+      const taskIdMap = new Map<string, string>();
+      for (const task of data.tasks) {
+        const res = await apiRequest("POST", "/api/tasks", {
+          name: task.name,
+          color: task.color,
+        });
+        const created: Task = await res.json();
+        taskIdMap.set(task.id, created.id);
+      }
+
+      // Import assignments with mapped IDs and normalized weekStartDate
+      for (const assignment of data.assignments) {
+        const newPersonId = personIdMap.get(assignment.personId);
+        const newTaskId = taskIdMap.get(assignment.taskId);
+
+        if (!newPersonId || !newTaskId) {
+          console.warn("Skipping assignment with invalid person or task ID", assignment);
+          continue;
+        }
+
+        // Normalize weekStartDate by trimming
+        const normalizedWeekStartDate = typeof assignment.weekStartDate === "string" 
+          ? assignment.weekStartDate.trim() 
+          : "";
+
+        if (!normalizedWeekStartDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedWeekStartDate)) {
+          console.warn("Skipping assignment with invalid weekStartDate", assignment);
+          continue;
+        }
+
+        await apiRequest("POST", "/api/assignments", {
+          personId: newPersonId,
+          taskId: newTaskId,
+          day: assignment.day,
+          period: assignment.period,
+          weekStartDate: normalizedWeekStartDate,
+          batchNumber: assignment.batchNumber || "",
+          notes: assignment.notes || "",
+          date: assignment.date || "",
+        });
+      }
+
+      // Refresh all data
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/people"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] }),
+      ]);
+
+      toast({
+        title: "Import successful",
+        description: `Imported ${data.people.length} people, ${data.tasks.length} tasks, and ${data.assignments.length} assignments.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Import failed",
+        description: error instanceof Error ? error.message : "Failed to import schedule",
+        variant: "destructive",
+      });
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const togglePersonFilter = (personId: string) => {
+    const newSet = new Set(filterPersonIds);
+    if (newSet.has(personId)) {
+      newSet.delete(personId);
+    } else {
+      newSet.add(personId);
+    }
+    setFilterPersonIds(newSet);
+  };
+
+  const toggleTaskFilter = (taskId: string) => {
+    const newSet = new Set(filterTaskIds);
+    if (newSet.has(taskId)) {
+      newSet.delete(taskId);
+    } else {
+      newSet.add(taskId);
+    }
+    setFilterTaskIds(newSet);
+  };
+
+  const clearFilters = () => {
+    setFilterPersonIds(new Set());
+    setFilterTaskIds(new Set());
   };
 
   return (
@@ -111,6 +251,79 @@ export default function Scheduler() {
             </Button>
           </div>
 
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={hasActiveFilters ? "default" : "outline"}
+                size="default"
+                data-testid="button-filter"
+              >
+                <Filter className="w-4 h-4" />
+                <span>Filter</span>
+                {hasActiveFilters && (
+                  <span className="ml-1 text-xs">
+                    ({filterPersonIds.size + filterTaskIds.size})
+                  </span>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Filter by Person</DropdownMenuLabel>
+              {people.map(person => (
+                <DropdownMenuCheckboxItem
+                  key={person.id}
+                  checked={filterPersonIds.has(person.id)}
+                  onCheckedChange={() => togglePersonFilter(person.id)}
+                  data-testid={`filter-person-${person.id}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: person.color }}
+                    />
+                    <span>{person.name}</span>
+                  </div>
+                </DropdownMenuCheckboxItem>
+              ))}
+              
+              <DropdownMenuSeparator />
+              
+              <DropdownMenuLabel>Filter by Task</DropdownMenuLabel>
+              {tasks.map(task => (
+                <DropdownMenuCheckboxItem
+                  key={task.id}
+                  checked={filterTaskIds.has(task.id)}
+                  onCheckedChange={() => toggleTaskFilter(task.id)}
+                  data-testid={`filter-task-${task.id}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: task.color }}
+                    />
+                    <span>{task.name}</span>
+                  </div>
+                </DropdownMenuCheckboxItem>
+              ))}
+
+              {hasActiveFilters && (
+                <>
+                  <DropdownMenuSeparator />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={clearFilters}
+                    data-testid="button-clear-filters"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Clear Filters
+                  </Button>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             variant="outline"
             size="default"
@@ -138,6 +351,23 @@ export default function Scheduler() {
             <Download className="w-4 h-4" />
             <span>Export</span>
           </Button>
+          <Button
+            variant="outline"
+            size="default"
+            onClick={() => fileInputRef.current?.click()}
+            data-testid="button-import"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Import</span>
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImport}
+            data-testid="input-import-file"
+          />
         </div>
       </header>
 

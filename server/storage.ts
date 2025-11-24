@@ -4,9 +4,15 @@ import {
   type Task,
   type InsertTask,
   type Assignment,
-  type InsertAssignment
+  type InsertAssignment,
+  people,
+  tasks,
+  assignments,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   getPeople(): Promise<Person[]>;
@@ -216,4 +222,100 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class PostgresStorage implements IStorage {
+  private db;
+
+  constructor() {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("DATABASE_URL environment variable is not set");
+    }
+    const sql = neon(connectionString);
+    this.db = drizzle(sql);
+  }
+
+  async getPeople(): Promise<Person[]> {
+    return await this.db.select().from(people);
+  }
+
+  async getPerson(id: string): Promise<Person | undefined> {
+    const result = await this.db.select().from(people).where(eq(people.id, id));
+    return result[0];
+  }
+
+  async createPerson(insertPerson: InsertPerson): Promise<Person> {
+    const result = await this.db.insert(people).values(insertPerson).returning();
+    return result[0];
+  }
+
+  async deletePerson(id: string): Promise<void> {
+    await this.db.delete(people).where(eq(people.id, id));
+  }
+
+  async getTasks(): Promise<Task[]> {
+    return await this.db.select().from(tasks);
+  }
+
+  async getTask(id: string): Promise<Task | undefined> {
+    const result = await this.db.select().from(tasks).where(eq(tasks.id, id));
+    return result[0];
+  }
+
+  async createTask(insertTask: InsertTask): Promise<Task> {
+    const result = await this.db.insert(tasks).values(insertTask).returning();
+    return result[0];
+  }
+
+  async deleteTask(id: string): Promise<void> {
+    await this.db.delete(tasks).where(eq(tasks.id, id));
+  }
+
+  async getAssignments(): Promise<Assignment[]> {
+    return await this.db.select().from(assignments);
+  }
+
+  async getAssignment(id: string): Promise<Assignment | undefined> {
+    const result = await this.db.select().from(assignments).where(eq(assignments.id, id));
+    return result[0];
+  }
+
+  async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
+    const result = await this.db.insert(assignments).values({
+      ...insertAssignment,
+      batchNumber: insertAssignment.batchNumber || null,
+      notes: insertAssignment.notes || null,
+      date: insertAssignment.date || null,
+    }).returning();
+    return result[0];
+  }
+
+  async updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment> {
+    const existing = await this.getAssignment(id);
+    if (!existing) throw new Error("Assignment not found");
+
+    const next: Partial<Assignment> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value === undefined) continue;
+      if (key === "weekStartDate") {
+        const trimmed = typeof value === "string" ? value.trim() : "";
+        if (!trimmed) continue;
+        next.weekStartDate = trimmed;
+        continue;
+      }
+      next[key as keyof Assignment] = value as Assignment[keyof Assignment];
+    }
+
+    const result = await this.db
+      .update(assignments)
+      .set(next)
+      .where(eq(assignments.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteAssignment(id: string): Promise<void> {
+    await this.db.delete(assignments).where(eq(assignments.id, id));
+  }
+}
+
+export const storage = new PostgresStorage();
