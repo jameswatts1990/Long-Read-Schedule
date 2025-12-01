@@ -22,34 +22,11 @@ export default function Reporting() {
   const weeks = Object.keys(assignmentsByWeek).sort();
 
   // Calculate totals: for each week/task combo, sum batch sizes
-  // For assignments with the same batch number, divide by count to avoid double-counting across days
   const getWeekTotal = (weekDate: string, taskId: string): number => {
     const weekAssignments = assignmentsByWeek[weekDate] || [];
-    const taskAssignments = weekAssignments.filter(a => a.taskId === taskId);
-    
-    if (taskAssignments.length === 0) return 0;
-    
-    // Group by batch number to handle batch size division
-    const batchMap = new Map<string, Assignment[]>();
-    
-    taskAssignments.forEach(assignment => {
-      const batchKey = assignment.batchNumber || `unnamed-${assignment.id}`;
-      if (!batchMap.has(batchKey)) {
-        batchMap.set(batchKey, []);
-      }
-      batchMap.get(batchKey)!.push(assignment);
-    });
-    
-    // Sum: for each batch, take batchSize and divide by number of days it appears
-    let total = 0;
-    batchMap.forEach((assignments) => {
-      const batchSize = assignments[0]?.batchSize || 0;
-      if (batchSize > 0) {
-        total += batchSize / assignments.length;
-      }
-    });
-    
-    return Math.round(total * 100) / 100; // Round to 2 decimal places
+    return weekAssignments
+      .filter(a => a.taskId === taskId)
+      .reduce((sum, a) => sum + (a.batchSize || 0), 0);
   };
 
   // Format date for display (e.g., "Dec 01, 2024")

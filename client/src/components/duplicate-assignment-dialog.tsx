@@ -137,7 +137,7 @@ export function DuplicateAssignmentDialog({
         <DialogHeader>
           <DialogTitle>Duplicate Task</DialogTitle>
           <DialogDescription>
-            Select days to duplicate this task to. The batch number, batch size, notes, and date will be copied. For reporting, batch size is divided by the number of days with the same batch number.
+            Select days to duplicate this task to. The batch number, batch size, notes, and date will be copied.
           </DialogDescription>
         </DialogHeader>
 
