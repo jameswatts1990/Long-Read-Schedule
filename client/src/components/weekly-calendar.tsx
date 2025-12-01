@@ -225,9 +225,10 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                                   <div className="text-xs font-medium text-foreground truncate">
                                     {task.name}
                                   </div>
-                                  {assignment.batchNumber && (
-                                    <div className="text-xs font-mono text-foreground/70 mt-0.5">
-                                      #{assignment.batchNumber}
+                                  {(assignment.batchNumber || assignment.batchSize) && (
+                                    <div className="text-xs font-mono text-foreground/70 mt-0.5 flex gap-2">
+                                      {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
+                                      {assignment.batchSize && <span>({assignment.batchSize})</span>}
                                     </div>
                                   )}
                                 </div>
