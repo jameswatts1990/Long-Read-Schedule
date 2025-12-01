@@ -53,18 +53,18 @@ export default function Reporting() {
         </div>
 
         {/* Table */}
-        <Card className="p-6 overflow-x-auto">
+        <Card className="p-6 overflow-auto max-h-96">
           {weeks.length === 0 ? (
             <p className="text-muted-foreground">No assignments yet</p>
           ) : (
             <table className="w-full border-collapse">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3 font-semibold min-w-32">Week Commencing</th>
+                <tr className="border-b bg-background">
+                  <th className="text-left p-3 font-semibold min-w-32 sticky top-0 left-0 z-20 bg-background">Week Commencing</th>
                   {tasks.map((task) => (
                     <th 
                       key={task.id} 
-                      className="text-left p-3 font-semibold min-w-28"
+                      className="text-left p-3 font-semibold min-w-28 sticky top-0 z-10 bg-background"
                       data-testid={`header-task-${task.id}`}
                     >
                       <div className="flex items-center gap-2">
@@ -81,7 +81,7 @@ export default function Reporting() {
               <tbody>
                 {weeks.map((week) => (
                   <tr key={week} className="border-b hover:bg-muted/50">
-                    <td className="p-3 font-medium" data-testid={`cell-week-${week}`}>
+                    <td className="p-3 font-medium sticky left-0 z-10 bg-background" data-testid={`cell-week-${week}`}>
                       {formatWeekDate(week)}
                     </td>
                     {tasks.map((task) => {
