@@ -49,6 +49,8 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const [conflictData, setConflictData] = useState<{ conflicts: any[], conflictCount: number } | null>(null);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
   const [shouldCloseAfter, setShouldCloseAfter] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -197,7 +199,13 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Task</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select 
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      setSelectedTaskId(value);
+                    }} 
+                    value={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger data-testid="select-task">
                         <SelectValue placeholder="Select a task" />
@@ -222,23 +230,34 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="batchNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Batch Number (Optional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="e.g., B-2024-001"
-                      data-testid="input-batch-number"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="flex gap-4">
+              <FormField
+                control={form.control}
+                name="batchNumber"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel>Batch Number (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="e.g., B-2024-001"
+                        data-testid="input-batch-number"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormItem className="flex-1">
+                <FormLabel>Batch Size</FormLabel>
+                <FormControl>
+                  <div className="px-3 py-2 rounded-md border border-input bg-background text-sm">
+                    {selectedTask?.batchSize ?? "-"}
+                  </div>
+                </FormControl>
+              </FormItem>
+            </div>
 
             <FormField
               control={form.control}
