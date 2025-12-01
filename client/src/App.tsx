@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
+import Reporting from "@/pages/reporting";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -28,6 +29,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Scheduler} />
       <Route path="/admin" component={Admin} />
+      <Route path="/reporting" component={Reporting} />
       <Route component={NotFound} />
     </Switch>
   );

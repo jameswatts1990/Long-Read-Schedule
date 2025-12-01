@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -241,6 +241,12 @@ export default function Admin() {
             </Link>
             <h1 className="text-4xl font-bold">Admin</h1>
           </div>
+          <Link href="/reporting">
+            <Button variant="outline" data-testid="button-reporting">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Reporting
+            </Button>
+          </Link>
         </div>
 
         {/* People and Tasks Grid */}
