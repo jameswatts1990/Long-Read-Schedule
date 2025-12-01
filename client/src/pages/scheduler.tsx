@@ -1,12 +1,10 @@
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Calendar, Users, ListChecks, Download, Upload, ChevronLeft, ChevronRight, Filter, X, Settings, Minimize2, Maximize2, LogOut } from "lucide-react";
+import { Plus, Calendar, Download, Upload, ChevronLeft, ChevronRight, Filter, X, Settings, Minimize2, Maximize2, LogOut } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
-import { AddPersonDialog } from "@/components/add-person-dialog";
-import { AddTaskDialog } from "@/components/add-task-dialog";
 import { type Person, type Task, type Assignment } from "@shared/schema";
 import {
   DropdownMenu,
@@ -48,8 +46,6 @@ function formatWeekDisplay(weekStart: Date): string {
 export default function Scheduler() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getMonday(new Date()));
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
-  const [showAddPerson, setShowAddPerson] = useState(false);
-  const [showAddTask, setShowAddTask] = useState(false);
   const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
   const [isCompactView, setIsCompactView] = useState(false);
@@ -340,28 +336,6 @@ export default function Scheduler() {
             {isCompactView ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
           </Button>
 
-          {!isCompactView && (
-            <>
-              <Button
-                variant="outline"
-                size="default"
-                onClick={() => setShowAddPerson(true)}
-                data-testid="button-add-person"
-              >
-                <Users className="w-4 h-4" />
-                <span>Add Person</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="default"
-                onClick={() => setShowAddTask(true)}
-                data-testid="button-add-task"
-              >
-                <ListChecks className="w-4 h-4" />
-                <span>Add Task</span>
-              </Button>
-            </>
-          )}
           <Button
             variant="outline"
             size="default"
@@ -423,16 +397,6 @@ export default function Scheduler() {
         tasks={tasks}
         open={!!selectedAssignment}
         onClose={() => setSelectedAssignment(null)}
-      />
-
-      <AddPersonDialog
-        open={showAddPerson}
-        onClose={() => setShowAddPerson(false)}
-      />
-
-      <AddTaskDialog
-        open={showAddTask}
-        onClose={() => setShowAddTask(false)}
       />
     </div>
   );
