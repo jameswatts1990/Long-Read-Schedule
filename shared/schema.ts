@@ -43,6 +43,7 @@ export const tasks = pgTable("tasks", {
   color: text("color").notNull(),
   description: text("description"),
   order: integer("order").default(0),
+  batchSize: integer("batch_size").default(1),
 });
 
 export const assignments = pgTable("assignments", {

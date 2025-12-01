@@ -27,6 +27,7 @@ const TASK_COLORS = [
 const formSchema = insertTaskSchema.extend({
   color: z.string().min(1, "Please select a color"),
   description: z.string().optional(),
+  batchSize: z.number().int().positive("Batch size must be a positive integer").default(1),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -41,6 +42,7 @@ export function AddTaskDialog({ open, onClose }: AddTaskDialogProps) {
       name: "",
       color: TASK_COLORS[0],
       description: "",
+      batchSize: 1,
     },
   });
 
@@ -112,6 +114,27 @@ export function AddTaskDialog({ open, onClose }: AddTaskDialogProps) {
                       placeholder="Add a description..."
                       className="resize-none h-20"
                       data-testid="input-task-description"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="batchSize"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Batch Size</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="number"
+                      min="1"
+                      placeholder="Enter batch size"
+                      onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                      data-testid="input-batch-size"
                     />
                   </FormControl>
                   <FormMessage />
