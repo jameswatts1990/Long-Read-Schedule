@@ -53,6 +53,7 @@ export const assignments = pgTable("assignments", {
   day: text("day").notNull(),
   weekStartDate: text("week_start_date").notNull(),
   batchNumber: text("batch_number"),
+  batchSize: integer("batch_size"),
   notes: text("notes"),
   date: text("date"),
 });

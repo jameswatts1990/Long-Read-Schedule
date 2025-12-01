@@ -20,6 +20,7 @@ interface TaskDetailsDrawerProps {
 
 export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: TaskDetailsDrawerProps) {
   const [batchNumber, setBatchNumber] = useState("");
+  const [batchSize, setBatchSize] = useState("");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState("");
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
@@ -27,6 +28,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   useEffect(() => {
     if (assignment) {
       setBatchNumber(assignment.batchNumber || "");
+      setBatchSize(assignment.batchSize ? String(assignment.batchSize) : "");
       setNotes(assignment.notes || "");
       setDate(assignment.date || "");
     }
@@ -58,6 +60,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
     if (!assignment) return;
     updateMutation.mutate({
       batchNumber: batchNumber || undefined,
+      batchSize: batchSize ? parseInt(batchSize, 10) : undefined,
       notes: notes || undefined,
       date: date || undefined,
       weekStartDate: assignment.weekStartDate,
@@ -132,25 +135,35 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Batch Size</Label>
-            <div className="text-sm p-3 rounded-md border">
-              {task?.batchSize ?? "-"}
+          <div className="flex gap-4">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="batch-number" className="text-sm font-medium">
+                Batch Number
+              </Label>
+              <Input
+                id="batch-number"
+                value={batchNumber}
+                onChange={(e) => setBatchNumber(e.target.value)}
+                placeholder="e.g., B2024-001"
+                className="font-mono"
+                data-testid="input-batch-number"
+              />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="batch-number" className="text-sm font-medium">
-              Batch Number
-            </Label>
-            <Input
-              id="batch-number"
-              value={batchNumber}
-              onChange={(e) => setBatchNumber(e.target.value)}
-              placeholder="e.g., B2024-001"
-              className="font-mono"
-              data-testid="input-batch-number"
-            />
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="batch-size" className="text-sm font-medium">
+                Batch Size
+              </Label>
+              <Input
+                id="batch-size"
+                type="number"
+                min="1"
+                value={batchSize}
+                onChange={(e) => setBatchSize(e.target.value)}
+                placeholder="Enter batch size"
+                data-testid="input-batch-size"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

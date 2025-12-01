@@ -38,6 +38,7 @@ interface AddAssignmentDialogProps {
 const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: true, day: true }).extend({
   taskId: z.string().min(1, "Please select a task"),
   batchNumber: z.string().optional(),
+  batchSize: z.number().int().positive().optional(),
   notes: z.string().optional(),
   date: z.string().optional(),
 });
@@ -57,6 +58,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
     defaultValues: {
       taskId: "",
       batchNumber: "",
+      batchSize: undefined,
       notes: "",
       date: "",
     },
@@ -70,6 +72,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         day,
         weekStartDate,
         batchNumber: data.batchNumber || undefined,
+        batchSize: data.batchSize || undefined,
         notes: data.notes || undefined,
         date: data.date || undefined,
         override,
@@ -91,6 +94,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       form.reset({
         taskId: "",
         batchNumber: "",
+        batchSize: undefined,
         notes: "",
         date: "",
       });
@@ -119,6 +123,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       form.reset({
         taskId: "",
         batchNumber: "",
+        batchSize: undefined,
         notes: "",
         date: "",
       });
@@ -166,6 +171,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       form.reset({
         taskId: "",
         batchNumber: "",
+        batchSize: undefined,
         notes: "",
         date: "",
       });
@@ -249,14 +255,26 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                 )}
               />
 
-              <FormItem className="flex-1">
-                <FormLabel>Batch Size</FormLabel>
-                <FormControl>
-                  <div className="px-3 py-2 rounded-md border border-input bg-background text-sm">
-                    {selectedTask?.batchSize ?? "-"}
-                  </div>
-                </FormControl>
-              </FormItem>
+              <FormField
+                control={form.control}
+                name="batchSize"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel>Batch Size (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="number"
+                        min="1"
+                        placeholder="Enter batch size"
+                        onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        data-testid="input-batch-size"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <FormField
