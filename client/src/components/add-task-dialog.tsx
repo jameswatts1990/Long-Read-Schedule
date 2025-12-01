@@ -27,7 +27,7 @@ const TASK_COLORS = [
 const formSchema = insertTaskSchema.extend({
   color: z.string().min(1, "Please select a color"),
   description: z.string().optional(),
-  batchSize: z.number().int().positive("Batch size must be a positive integer").default(1),
+  batchSize: z.number().int().positive("Batch size must be a positive integer").optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -42,7 +42,7 @@ export function AddTaskDialog({ open, onClose }: AddTaskDialogProps) {
       name: "",
       color: TASK_COLORS[0],
       description: "",
-      batchSize: 1,
+      batchSize: undefined,
     },
   });
 

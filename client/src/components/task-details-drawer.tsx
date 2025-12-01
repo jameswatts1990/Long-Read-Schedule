@@ -133,6 +133,13 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
           </div>
 
           <div className="space-y-2">
+            <Label className="text-sm font-medium">Batch Size</Label>
+            <div className="text-sm p-3 rounded-md border">
+              {task?.batchSize ?? "-"}
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="batch-number" className="text-sm font-medium">
               Batch Number
             </Label>
