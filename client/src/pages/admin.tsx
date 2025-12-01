@@ -48,6 +48,7 @@ const taskFormSchema = z.object({
   name: z.string().min(1, "Task name is required"),
   color: z.string().min(1, "Color is required"),
   description: z.string().optional(),
+  isProduction: z.coerce.boolean().default(true),
 });
 
 type PersonFormData = z.infer<typeof personFormSchema>;
@@ -81,6 +82,7 @@ export default function Admin() {
       name: "",
       color: PRESET_COLORS[0],
       description: "",
+      isProduction: true,
     },
   });
 
@@ -225,7 +227,7 @@ export default function Admin() {
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
-    taskForm.reset({ name: task.name, color: task.color, description: task.description || "" });
+    taskForm.reset({ name: task.name, color: task.color, description: task.description || "", isProduction: Boolean((task as any).isProduction) });
   };
 
   return (
@@ -635,6 +637,23 @@ export default function Admin() {
                       />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={taskForm.control}
+                name="isProduction"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-is-production"
+                      />
+                    </FormControl>
+                    <FormLabel className="mb-0 cursor-pointer">Show in reporting (production task)</FormLabel>
                   </FormItem>
                 )}
               />

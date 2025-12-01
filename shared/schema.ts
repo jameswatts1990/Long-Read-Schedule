@@ -44,6 +44,7 @@ export const tasks = pgTable("tasks", {
   description: text("description"),
   order: integer("order").default(0),
   batchSize: integer("batch_size"),
+  isProduction: integer("is_production").default(1),
 });
 
 export const assignments = pgTable("assignments", {

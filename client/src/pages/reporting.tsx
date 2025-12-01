@@ -7,7 +7,10 @@ import { type Assignment, type Task } from "@shared/schema";
 
 export default function Reporting() {
   const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
-  const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: allTasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  
+  // Filter to only production tasks
+  const tasks = allTasks.filter(t => (t as any).isProduction !== 0);
 
   // Group assignments by week
   const assignmentsByWeek = assignments.reduce((acc, assignment) => {
