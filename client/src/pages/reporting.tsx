@@ -21,12 +21,25 @@ export default function Reporting() {
   // Get sorted unique weeks
   const weeks = Object.keys(assignmentsByWeek).sort();
 
-  // Calculate totals: for each week/task combo, sum batch sizes
+  // Calculate totals: for each week/task combo, count unique batch IDs and their sizes
+  // Each batch is counted only once, even if it spans multiple days
   const getWeekTotal = (weekDate: string, taskId: string): number => {
     const weekAssignments = assignmentsByWeek[weekDate] || [];
-    return weekAssignments
-      .filter(a => a.taskId === taskId)
-      .reduce((sum, a) => sum + (a.batchSize || 0), 0);
+    const taskAssignments = weekAssignments.filter(a => a.taskId === taskId);
+    
+    // Group by batch number to count each batch only once
+    const uniqueBatches = new Map<string, number>();
+    
+    taskAssignments.forEach(assignment => {
+      const batchKey = assignment.batchNumber || `unnamed-${assignment.id}`;
+      // Store only if not already seen (first instance of this batch for this task/week)
+      if (!uniqueBatches.has(batchKey) && assignment.batchSize) {
+        uniqueBatches.set(batchKey, assignment.batchSize);
+      }
+    });
+    
+    // Sum all unique batch sizes
+    return Array.from(uniqueBatches.values()).reduce((sum, size) => sum + size, 0);
   };
 
   // Format date for display (e.g., "Dec 01, 2024")
