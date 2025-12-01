@@ -55,6 +55,7 @@ export function DuplicateAssignmentDialog({
         if (assignment.batchNumber) payload.batchNumber = assignment.batchNumber;
         if (assignment.notes) payload.notes = assignment.notes;
         if (assignment.date) payload.date = assignment.date;
+        // Note: batchSize is NOT copied to duplicates - it's only recorded on the original
         
         return apiRequest("POST", "/api/assignments", payload);
       });
@@ -136,7 +137,7 @@ export function DuplicateAssignmentDialog({
         <DialogHeader>
           <DialogTitle>Duplicate Task</DialogTitle>
           <DialogDescription>
-            Select days to duplicate this task to. The task will be copied with the same batch number, notes, and date.
+            Select days to duplicate this task to. The batch number, notes, and date will be copied. Batch size is recorded only on the original assignment for reporting accuracy.
           </DialogDescription>
         </DialogHeader>
 
