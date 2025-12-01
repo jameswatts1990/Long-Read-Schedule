@@ -583,7 +583,13 @@ export default function Admin() {
           </DialogHeader>
 
           <Form {...taskForm}>
-            <form onSubmit={taskForm.handleSubmit((data) => editingTask ? updateTaskMutation.mutate(data) : createTaskMutation.mutate(data))} className="space-y-4">
+            <form onSubmit={taskForm.handleSubmit((data) => {
+              const payload = {
+                ...data,
+                isProduction: data.isProduction ? 1 : 0
+              } as any;
+              editingTask ? updateTaskMutation.mutate(payload) : createTaskMutation.mutate(payload);
+            })} className="space-y-4">
               <FormField
                 control={taskForm.control}
                 name="name"
