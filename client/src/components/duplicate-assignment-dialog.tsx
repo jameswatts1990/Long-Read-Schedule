@@ -133,7 +133,7 @@ export function DuplicateAssignmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto" data-testid="dialog-duplicate-assignment">
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto" data-testid="dialog-duplicate-assignment">
         <DialogHeader>
           <DialogTitle>Duplicate Task</DialogTitle>
           <DialogDescription>
@@ -141,76 +141,8 @@ export function DuplicateAssignmentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {sortedPeople.map((person) => {
-            const isOriginalPerson = person.id === assignment.personId;
-            return (
-            <div 
-              key={person.id} 
-              className={`space-y-2 p-3 rounded-md border transition-colors ${
-                isOriginalPerson 
-                  ? "bg-primary/10 border-primary/50" 
-                  : "border-transparent"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: person.color }}
-                  />
-                  <span className={`font-medium text-sm ${isOriginalPerson ? "font-semibold text-primary" : ""}`}>
-                    {person.name}
-                    {isOriginalPerson && <span className="ml-1 text-xs text-primary font-normal">(Original)</span>}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleSelectPersonWeek(person.id)}
-                  className="text-xs h-6 px-2"
-                  data-testid={`button-select-all-week-${person.id}`}
-                >
-                  All week
-                </Button>
-              </div>
-              <div className="grid grid-cols-5 gap-2 ml-4">
-                {DAYS.map((day) => {
-                  const slotKey = `${person.id}-${day}`;
-                  const isSelected = selectedSlots.has(slotKey);
-                  // Disable if it's the original assignment
-                  const isOriginal =
-                    person.id === assignment.personId &&
-                    day === assignment.day;
-
-                  return (
-                    <div
-                      key={slotKey}
-                      className="flex items-center gap-1.5"
-                    >
-                      <Checkbox
-                        id={slotKey}
-                        checked={isSelected}
-                        disabled={isOriginal}
-                        onCheckedChange={() => toggleSlot(person.id, day)}
-                        data-testid={`checkbox-${slotKey}`}
-                      />
-                      <Label
-                        htmlFor={slotKey}
-                        className="text-xs cursor-pointer"
-                      >
-                        {day.charAt(0)}
-                      </Label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            );
-          })}
-        </div>
-
-        <DialogFooter>
+        {/* Action buttons at top */}
+        <div className="flex gap-2 justify-end">
           <Button variant="outline" onClick={handleClose} data-testid="button-cancel-duplicate">
             Cancel
           </Button>
@@ -222,7 +154,89 @@ export function DuplicateAssignmentDialog({
             <Copy className="w-4 h-4" />
             <span>Duplicate to {selectedSlots.size} slots</span>
           </Button>
-        </DialogFooter>
+        </div>
+
+        {/* Table-like layout */}
+        <div className="border rounded-md overflow-hidden">
+          {/* Header row with days */}
+          <div className="grid gap-0" style={{ gridTemplateColumns: "200px repeat(5, 1fr) 80px" }}>
+            {/* Top-left corner (empty) */}
+            <div className="p-3 border-b border-r font-semibold bg-muted text-sm">Person</div>
+            
+            {/* Day headers */}
+            {DAYS.map((day) => (
+              <div key={`header-${day}`} className="p-3 border-b border-r font-semibold bg-muted text-center text-sm">
+                {day.charAt(0).toUpperCase()}
+              </div>
+            ))}
+            
+            {/* Actions header */}
+            <div className="p-3 border-b font-semibold bg-muted text-center text-sm">Actions</div>
+
+            {/* Data rows */}
+            {sortedPeople.map((person) => {
+              const isOriginalPerson = person.id === assignment.personId;
+              return (
+                <div key={person.id} className="contents">
+                  {/* Person name cell */}
+                  <div
+                    className={`p-3 border-b border-r flex items-center gap-2 ${
+                      isOriginalPerson ? "bg-primary/10" : ""
+                    }`}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: person.color }}
+                    />
+                    <span className={`font-medium text-sm ${isOriginalPerson ? "font-semibold text-primary" : ""}`}>
+                      {person.name}
+                      {isOriginalPerson && <span className="ml-1 text-xs text-primary font-normal">(Original)</span>}
+                    </span>
+                  </div>
+
+                  {/* Day cells */}
+                  {DAYS.map((day) => {
+                    const slotKey = `${person.id}-${day}`;
+                    const isSelected = selectedSlots.has(slotKey);
+                    const isOriginal =
+                      person.id === assignment.personId &&
+                      day === assignment.day;
+
+                    return (
+                      <div
+                        key={slotKey}
+                        className={`p-3 border-b border-r flex justify-center ${
+                          isOriginalPerson ? "bg-primary/10" : ""
+                        } ${isOriginal ? "bg-primary/5" : ""}`}
+                      >
+                        <Checkbox
+                          id={slotKey}
+                          checked={isSelected}
+                          disabled={isOriginal}
+                          onCheckedChange={() => toggleSlot(person.id, day)}
+                          data-testid={`checkbox-${slotKey}`}
+                        />
+                      </div>
+                    );
+                  })}
+
+                  {/* Actions cell */}
+                  <div className={`p-3 border-b flex justify-center ${isOriginalPerson ? "bg-primary/10" : ""}`}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSelectPersonWeek(person.id)}
+                      className="text-xs h-6 px-2"
+                      data-testid={`button-select-all-week-${person.id}`}
+                    >
+                      All
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
