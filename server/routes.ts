@@ -160,6 +160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const assignmentPatchSchema = z.object({
     taskId: insertAssignmentSchema.shape.taskId.optional(),
     batchNumber: insertAssignmentSchema.shape.batchNumber.optional(),
+    batchSize: insertAssignmentSchema.shape.batchSize.optional(),
     notes: insertAssignmentSchema.shape.notes.optional(),
     date: insertAssignmentSchema.shape.date.optional(),
     personId: insertAssignmentSchema.shape.personId.optional(),
