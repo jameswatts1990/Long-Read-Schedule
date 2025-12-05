@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical } from "lucide-react";
+import { Plus, GripVertical, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -106,6 +106,13 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     return today >= startDate && today <= endDate;
   };
 
+  const hasAssignmentEveryDay = (personId: string) => {
+    return DAYS.every(day => {
+      const cellAssignments = getAssignmentsForCell(personId, day);
+      return cellAssignments.length > 0;
+    });
+  };
+
   return (
     <>
       <div className="border rounded-md bg-card h-full flex flex-col">
@@ -179,9 +186,14 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                     style={{ backgroundColor: person.color }}
                     data-testid={`person-indicator-${person.id}`}
                   />
-                  <span className="font-medium text-foreground truncate" data-testid={`person-name-${person.id}`}>
-                    {person.name}
-                  </span>
+                  <div className="flex items-center gap-1 flex-1 min-w-0">
+                    <span className="font-medium text-foreground truncate" data-testid={`person-name-${person.id}`}>
+                      {person.name}
+                    </span>
+                    {hasAssignmentEveryDay(person.id) && (
+                      <CheckCircle className="w-4 h-4 shrink-0 text-green-600 dark:text-green-400" data-testid={`check-icon-${person.id}`} />
+                    )}
+                  </div>
                 </div>
 
                 {/* Day Cells */}
