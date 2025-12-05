@@ -117,32 +117,6 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
               </div>
             ))}
 
-            {/* ALL (Totals) Row */}
-            <div className="contents">
-              <div
-                className="sticky left-0 z-30 border-r border-t bg-muted p-3 flex items-center font-semibold text-foreground"
-                style={{ bottom: "0" }}
-                data-testid="row-totals-all"
-              >
-                ALL
-              </div>
-              {DAYS.map(day => {
-                const dayAssignments = assignments.filter(a => a.day === day);
-                const totalCount = dayAssignments.length;
-                
-                return (
-                  <div
-                    key={`all-${day}`}
-                    className="sticky border-t border-l bg-muted/50 p-3 flex items-center justify-center font-semibold text-foreground"
-                    style={{ bottom: "0" }}
-                    data-testid={`cell-totals-${day.toLowerCase()}`}
-                  >
-                    {totalCount > 0 ? totalCount : "-"}
-                  </div>
-                );
-              })}
-            </div>
-
             {/* Person Rows */}
             {people.map((person, personIndex) => (
               <div key={person.id} className="contents">
