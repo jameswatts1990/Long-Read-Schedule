@@ -29,10 +29,38 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { type Person, type Task } from "@shared/schema";
 
+// 20 unique colors with light, medium, and dark variants (60 colors total)
 const PRESET_COLORS = [
-  "#DBEAFE", "#BAE6FD", "#D1FAE5", "#A7F3D0", "#FEF3C7", "#FEF08A",
-  "#FECDD3", "#FCE7F3", "#E9D5FF", "#F3E8FF", "#C7D2FE", "#E0E7FF",
-  "#FEDBA8", "#FED7AA", "#FECACA", "#DDD6FE",
+  // Blue
+  "#DBEAFE", "#93C5FD", "#1E40AF",
+  "#E0F2FE", "#7DD3FC", "#0369A1",
+  // Green
+  "#D1FAE5", "#6EE7B7", "#065F46",
+  "#DCFCE7", "#86EFAC", "#14532D",
+  // Yellow/Gold
+  "#FEF3C7", "#FCD34D", "#92400E",
+  "#FEFCE8", "#FBBF24", "#78350F",
+  // Orange
+  "#FEEDC3", "#FDBA74", "#9A3412",
+  "#FEF3C7", "#FBA040", "#B45309",
+  // Red
+  "#FEE2E2", "#FCA5A5", "#7F1D1D",
+  "#FECACA", "#EF4444", "#991B1B",
+  // Pink
+  "#FCE7F3", "#F472B6", "#831843",
+  "#FDF2F8", "#EC4899", "#9D174D",
+  // Purple
+  "#E9D5FF", "#C084FC", "#581C87",
+  "#F3E8FF", "#D8B4FE", "#5B21B6",
+  // Teal
+  "#CCFBF1", "#67E8F9", "#0D9488",
+  "#CFFAFE", "#06B6D4", "#0E7490",
+  // Cyan
+  "#CFF2F5", "#4FD1E5", "#0E5E6F",
+  "#D1F4F8", "#22D3EE", "#164E63",
+  // Lime
+  "#ECFDF5", "#BFEF45", "#3F6212",
+  "#F7FEE7", "#84CC16", "#3F6212",
 ];
 
 const PERSON_COLORS = [
@@ -610,18 +638,24 @@ export default function Admin() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Color</FormLabel>
-                    <div className="flex gap-2 flex-wrap">
-                      {PRESET_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          className={`w-8 h-8 rounded border-2 transition-transform ${
-                            field.value === color ? "border-foreground scale-110" : "border-transparent"
-                          }`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => field.onChange(color)}
-                          data-testid={`color-picker-${color}`}
-                        />
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {/* Group colors by base (every 3 colors form a group: light, medium, dark) */}
+                      {[...Array(Math.ceil(PRESET_COLORS.length / 3))].map((_, groupIndex) => (
+                        <div key={groupIndex} className="flex gap-2">
+                          {PRESET_COLORS.slice(groupIndex * 3, groupIndex * 3 + 3).map((color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              className={`flex-1 h-10 rounded border-2 transition-transform ${
+                                field.value === color ? "border-foreground scale-105" : "border-transparent"
+                              }`}
+                              style={{ backgroundColor: color }}
+                              onClick={() => field.onChange(color)}
+                              data-testid={`color-picker-${color}`}
+                              title={color}
+                            />
+                          ))}
+                        </div>
                       ))}
                     </div>
                     <FormMessage />
