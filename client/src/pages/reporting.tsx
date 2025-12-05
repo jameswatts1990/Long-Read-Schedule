@@ -55,11 +55,6 @@ export default function Reporting() {
     });
   };
 
-  // Calculate total across all weeks for a specific task
-  const getGrandTotal = (taskId: string): number => {
-    return weeks.reduce((sum, week) => sum + getWeekTotal(week, taskId), 0);
-  };
-
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -120,25 +115,6 @@ export default function Reporting() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="border-t-2 bg-muted/50 font-semibold sticky bottom-0 z-10">
-                  <td className="p-3 sticky left-0 z-20 bg-muted/50" data-testid="cell-all-label">
-                    ALL
-                  </td>
-                  {tasks.map((task) => {
-                    const grandTotal = getGrandTotal(task.id);
-                    return (
-                      <td 
-                        key={`all-${task.id}`} 
-                        className="p-3"
-                        data-testid={`cell-all-${task.id}`}
-                      >
-                        {grandTotal > 0 ? grandTotal : "-"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              </tfoot>
             </table>
           )}
         </Card>
