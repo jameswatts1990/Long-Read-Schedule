@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { parse, addDays, format } from "date-fns";
+import { parse, addDays, format, isToday, isSameDay } from "date-fns";
 
 interface WeeklyCalendarProps {
   weekStartDate: string;
@@ -89,6 +89,23 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     return format(dayDate, "MMM d");
   };
 
+  const getDateObjectForDay = (dayIndex: number) => {
+    const startDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
+    return addDays(startDate, dayIndex);
+  };
+
+  const isCurrentDay = (dayIndex: number) => {
+    const dayDate = getDateObjectForDay(dayIndex);
+    return isToday(dayDate);
+  };
+
+  const isCurrentWeek = () => {
+    const startDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
+    const endDate = addDays(startDate, 4);
+    const today = new Date();
+    return today >= startDate && today <= endDate;
+  };
+
   return (
     <>
       <div className="border rounded-md bg-card h-full flex flex-col">
@@ -102,20 +119,32 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
               <span className="font-semibold text-foreground" data-testid="header-person">Person</span>
             </div>
             
-            {DAYS.map((day, dayIndex) => (
-              <div 
-                key={day} 
-                className="sticky top-0 z-40 border-b text-center bg-muted p-3"
-                data-testid={`header-day-${day.toLowerCase()}`}
-              >
-                <div className="font-semibold text-foreground">
-                  {day}
+            {DAYS.map((day, dayIndex) => {
+              const isTodayDay = isCurrentDay(dayIndex);
+              return (
+                <div 
+                  key={day} 
+                  className={cn(
+                    "sticky top-0 z-40 border-b text-center p-3",
+                    isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
+                  )}
+                  data-testid={`header-day-${day.toLowerCase()}`}
+                >
+                  <div className={cn(
+                    "font-semibold",
+                    isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
+                  )}>
+                    {day}
+                  </div>
+                  <div className={cn(
+                    "text-xs mt-1",
+                    isTodayDay ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"
+                  )}>
+                    {getDateForDay(dayIndex)}
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {getDateForDay(dayIndex)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Person Rows */}
             {people.map((person, personIndex) => (
@@ -156,17 +185,22 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                 </div>
 
                 {/* Day Cells */}
-                {DAYS.map(day => {
+                {DAYS.map((day, dayIndex) => {
                   const cellAssignments = getAssignmentsForCell(person.id, day);
                   
                   const currentCell = { personId: person.id, day };
                   const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day;
+                  const isTodayDay = isCurrentDay(dayIndex);
+                  const isCurrentWeekDisplay = isCurrentWeek();
 
                   return (
                     <div
                       key={`${person.id}-${day}`}
                       className={cn(
                         "border-b border-l p-2 hover-elevate relative",
+                        isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
+                        (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
+                        (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
                         personIndex % 2 === 0 && "bg-muted/20",
                         isDropTarget && "bg-primary/10 border-2 border-primary"
                       )}
