@@ -241,6 +241,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/premade-filters/:id", isAuthenticated, async (req, res) => {
+    try {
+      const filter = await storage.updatePremadeFilter(req.params.id, req.body);
+      res.json(filter);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update premade filter" });
+    }
+  });
+
   app.delete("/api/premade-filters/:id", isAuthenticated, async (req, res) => {
     try {
       await storage.deletePremadeFilter(req.params.id);

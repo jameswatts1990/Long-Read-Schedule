@@ -66,6 +66,19 @@ export default function Scheduler() {
       queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
     },
   });
+
+  const updateFilterMutation = useMutation({
+    mutationFn: async (data: { id: string; name: string; personIds: string[]; taskIds: string[] }) => {
+      return await apiRequest("PUT", `/api/premade-filters/${data.id}`, {
+        name: data.name,
+        personIds: data.personIds,
+        taskIds: data.taskIds,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+    },
+  });
   
   const weekStartStr = formatDate(currentWeekStart);
   
@@ -250,6 +263,10 @@ export default function Scheduler() {
     deleteFilterMutation.mutate(filterId);
   };
 
+  const editPremadeFilter = (filterId: string, name: string, personIds: string[], taskIds: string[]) => {
+    updateFilterMutation.mutate({ id: filterId, name, personIds, taskIds });
+  };
+
   const clearFilters = () => {
     setFilterPersonIds(new Set());
     setFilterTaskIds(new Set());
@@ -302,6 +319,7 @@ export default function Scheduler() {
             onTaskToggle={toggleTaskFilter}
             onApplyPremadeFilter={applyPremadeFilter}
             onAddPremadeFilter={addPremadeFilter}
+            onEditPremadeFilter={editPremadeFilter}
             onDeletePremadeFilter={deletePremadeFilter}
             onClearFilters={clearFilters}
             hasActiveFilters={hasActiveFilters}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Plus, Trash2, X } from "lucide-react";
+import { ChevronRight, Plus, Trash2, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { type Person, type Task, type PremadeFilter } from "@shared/schema";
@@ -29,6 +29,7 @@ interface FilterMegaMenuProps {
   onTaskToggle: (taskId: string) => void;
   onApplyPremadeFilter: (personIds: string[], taskIds: string[]) => void;
   onAddPremadeFilter: (name: string, personIds: string[], taskIds: string[]) => void;
+  onEditPremadeFilter: (filterId: string, name: string, personIds: string[], taskIds: string[]) => void;
   onDeletePremadeFilter: (filterId: string) => void;
   onClearFilters: () => void;
   hasActiveFilters: boolean;
@@ -45,16 +46,26 @@ export function FilterMegaMenu({
   onTaskToggle,
   onApplyPremadeFilter,
   onAddPremadeFilter,
+  onEditPremadeFilter,
   onDeletePremadeFilter,
   onClearFilters,
   hasActiveFilters,
   filterCount,
 }: FilterMegaMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Create filter state
   const [showCreateFilter, setShowCreateFilter] = useState(false);
   const [newFilterName, setNewFilterName] = useState("");
   const [newFilterPersonIds, setNewFilterPersonIds] = useState<Set<string>>(new Set());
   const [newFilterTaskIds, setNewFilterTaskIds] = useState<Set<string>>(new Set());
+  
+  // Edit filter state (separate from create)
+  const [showEditFilter, setShowEditFilter] = useState(false);
+  const [editingFilter, setEditingFilter] = useState<PremadeFilter | null>(null);
+  const [editFilterName, setEditFilterName] = useState("");
+  const [editFilterPersonIds, setEditFilterPersonIds] = useState<Set<string>>(new Set());
+  const [editFilterTaskIds, setEditFilterTaskIds] = useState<Set<string>>(new Set());
 
   const handleCreateFilter = () => {
     if (!newFilterName.trim()) return;
@@ -88,6 +99,53 @@ export function FilterMegaMenu({
       newSet.add(taskId);
     }
     setNewFilterTaskIds(newSet);
+  };
+
+  // Edit filter toggle functions (separate from create)
+  const toggleEditFilterPerson = (personId: string) => {
+    const newSet = new Set(editFilterPersonIds);
+    if (newSet.has(personId)) {
+      newSet.delete(personId);
+    } else {
+      newSet.add(personId);
+    }
+    setEditFilterPersonIds(newSet);
+  };
+
+  const toggleEditFilterTask = (taskId: string) => {
+    const newSet = new Set(editFilterTaskIds);
+    if (newSet.has(taskId)) {
+      newSet.delete(taskId);
+    } else {
+      newSet.add(taskId);
+    }
+    setEditFilterTaskIds(newSet);
+  };
+
+  const handleEditFilter = (filter: PremadeFilter) => {
+    setEditingFilter(filter);
+    setEditFilterName(filter.name);
+    setEditFilterPersonIds(new Set(filter.personIds || []));
+    setEditFilterTaskIds(new Set(filter.taskIds || []));
+    setShowEditFilter(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingFilter || !editFilterName.trim()) return;
+
+    onEditPremadeFilter(
+      editingFilter.id,
+      editFilterName,
+      Array.from(editFilterPersonIds),
+      Array.from(editFilterTaskIds)
+    );
+    setEditingFilter(null);
+    setShowEditFilter(false);
+  };
+
+  const handleCloseEdit = () => {
+    setEditingFilter(null);
+    setShowEditFilter(false);
   };
 
   return (
@@ -195,18 +253,32 @@ export function FilterMegaMenu({
                         <ChevronRight className="w-3 h-3 text-muted-foreground" />
                         <span>{filter.name}</span>
                       </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-5 w-5 opacity-0 group-hover:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeletePremadeFilter(filter.id);
-                        }}
-                        data-testid={`button-delete-premade-filter-${filter.id}`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditFilter(filter);
+                          }}
+                          data-testid={`button-edit-premade-filter-${filter.id}`}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeletePremadeFilter(filter.id);
+                          }}
+                          data-testid={`button-delete-premade-filter-${filter.id}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -319,6 +391,99 @@ export function FilterMegaMenu({
               data-testid="button-save-filter"
             >
               Create Filter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Premade Filter Dialog */}
+      <Dialog open={showEditFilter} onOpenChange={handleCloseEdit}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Preset Filter</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Filter Name</label>
+              <Input
+                placeholder="e.g., Annual Leave"
+                value={editFilterName}
+                onChange={(e) => setEditFilterName(e.target.value)}
+                data-testid="input-edit-filter-name"
+                autoFocus
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">People</label>
+                <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3">
+                  {people.map((person) => (
+                    <div key={person.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`edit-filter-person-${person.id}`}
+                        checked={editFilterPersonIds.has(person.id)}
+                        onCheckedChange={() => toggleEditFilterPerson(person.id)}
+                        data-testid={`edit-filter-person-${person.id}`}
+                      />
+                      <label
+                        htmlFor={`edit-filter-person-${person.id}`}
+                        className="flex items-center gap-2 cursor-pointer flex-1"
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: person.color }}
+                        />
+                        <span className="text-sm">{person.name}</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">Tasks</label>
+                <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3">
+                  {tasks.map((task) => (
+                    <div key={task.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`edit-filter-task-${task.id}`}
+                        checked={editFilterTaskIds.has(task.id)}
+                        onCheckedChange={() => toggleEditFilterTask(task.id)}
+                        data-testid={`edit-filter-task-${task.id}`}
+                      />
+                      <label
+                        htmlFor={`edit-filter-task-${task.id}`}
+                        className="flex items-center gap-2 cursor-pointer flex-1"
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: task.color }}
+                        />
+                        <span className="text-sm">{task.name}</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCloseEdit}
+              data-testid="button-cancel-edit-filter"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={!editFilterName.trim()}
+              data-testid="button-save-edit-filter"
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

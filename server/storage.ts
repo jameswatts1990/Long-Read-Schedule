@@ -52,6 +52,7 @@ export interface IStorage {
 
   getPremadeFilters(): Promise<PremadeFilter[]>;
   createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter>;
+  updatePremadeFilter(id: string, data: Partial<InsertPremadeFilter>): Promise<PremadeFilter>;
   deletePremadeFilter(id: string): Promise<void>;
 }
 
@@ -413,6 +414,20 @@ export class MemStorage implements IStorage {
     return newFilter;
   }
 
+  async updatePremadeFilter(id: string, data: Partial<InsertPremadeFilter>): Promise<PremadeFilter> {
+    const existing = this.premadeFiltersMap.get(id);
+    if (!existing) throw new Error("Premade filter not found");
+    
+    const updated: PremadeFilter = {
+      ...existing,
+      name: data.name ?? existing.name,
+      personIds: data.personIds ?? existing.personIds,
+      taskIds: data.taskIds ?? existing.taskIds,
+    };
+    this.premadeFiltersMap.set(id, updated);
+    return updated;
+  }
+
   async deletePremadeFilter(id: string): Promise<void> {
     this.premadeFiltersMap.delete(id);
   }
@@ -667,6 +682,22 @@ export class PostgresStorage implements IStorage {
       personIds: filter.personIds || [],
       taskIds: filter.taskIds || [],
     }).returning();
+    return result[0];
+  }
+
+  async updatePremadeFilter(id: string, data: Partial<InsertPremadeFilter>): Promise<PremadeFilter> {
+    const updateData: Partial<InsertPremadeFilter> = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.personIds !== undefined) updateData.personIds = data.personIds;
+    if (data.taskIds !== undefined) updateData.taskIds = data.taskIds;
+    
+    const result = await this.db
+      .update(premadeFilters)
+      .set(updateData)
+      .where(eq(premadeFilters.id, id))
+      .returning();
+    
+    if (result.length === 0) throw new Error("Premade filter not found");
     return result[0];
   }
 
