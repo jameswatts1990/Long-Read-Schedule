@@ -1,19 +1,12 @@
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Calendar, Download, Upload, ChevronLeft, ChevronRight, Filter, X, Settings, Minimize2, Maximize2, LogOut } from "lucide-react";
+import { Plus, Calendar, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
+import { FilterMegaMenu, type PremadeFilter } from "@/components/filter-mega-menu";
 import { type Person, type Task, type Assignment } from "@shared/schema";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -48,6 +41,7 @@ export default function Scheduler() {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
+  const [premadeFilters, setPremadeFilters] = useState<PremadeFilter[]>([]);
   const [isCompactView, setIsCompactView] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -225,6 +219,19 @@ export default function Scheduler() {
     setFilterTaskIds(newSet);
   };
 
+  const applyPremadeFilter = (filter: PremadeFilter) => {
+    setFilterPersonIds(new Set(filter.personIds));
+    setFilterTaskIds(new Set(filter.taskIds));
+  };
+
+  const addPremadeFilter = (filter: PremadeFilter) => {
+    setPremadeFilters([...premadeFilters, filter]);
+  };
+
+  const deletePremadeFilter = (filterId: string) => {
+    setPremadeFilters(premadeFilters.filter(f => f.id !== filterId));
+  };
+
   const clearFilters = () => {
     setFilterPersonIds(new Set());
     setFilterTaskIds(new Set());
@@ -267,78 +274,31 @@ export default function Scheduler() {
             </Button>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant={hasActiveFilters ? "default" : "outline"}
-                size="default"
-                data-testid="button-filter"
-              >
-                <Filter className="w-4 h-4" />
-                <span>Filter</span>
-                {hasActiveFilters && (
-                  <span className="ml-1 text-xs">
-                    ({filterPersonIds.size + filterTaskIds.size})
-                  </span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Filter by Person</DropdownMenuLabel>
-              {people.map(person => (
-                <DropdownMenuCheckboxItem
-                  key={person.id}
-                  checked={filterPersonIds.has(person.id)}
-                  onCheckedChange={() => togglePersonFilter(person.id)}
-                  data-testid={`filter-person-${person.id}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: person.color }}
-                    />
-                    <span>{person.name}</span>
-                  </div>
-                </DropdownMenuCheckboxItem>
-              ))}
-              
-              <DropdownMenuSeparator />
-              
-              <DropdownMenuLabel>Filter by Task</DropdownMenuLabel>
-              {tasks.map(task => (
-                <DropdownMenuCheckboxItem
-                  key={task.id}
-                  checked={filterTaskIds.has(task.id)}
-                  onCheckedChange={() => toggleTaskFilter(task.id)}
-                  data-testid={`filter-task-${task.id}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: task.color }}
-                    />
-                    <span>{task.name}</span>
-                  </div>
-                </DropdownMenuCheckboxItem>
-              ))}
+          <FilterMegaMenu
+            people={people}
+            tasks={tasks}
+            selectedPersonIds={filterPersonIds}
+            selectedTaskIds={filterTaskIds}
+            premadeFilters={premadeFilters}
+            onPersonToggle={togglePersonFilter}
+            onTaskToggle={toggleTaskFilter}
+            onApplyPremadeFilter={applyPremadeFilter}
+            onAddPremadeFilter={addPremadeFilter}
+            onDeletePremadeFilter={deletePremadeFilter}
+            hasActiveFilters={hasActiveFilters}
+            filterCount={filterPersonIds.size + filterTaskIds.size}
+          />
 
-              {hasActiveFilters && (
-                <>
-                  <DropdownMenuSeparator />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={clearFilters}
-                    data-testid="button-clear-filters"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Clear Filters
-                  </Button>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="default"
+              onClick={clearFilters}
+              data-testid="button-clear-filters"
+            >
+              Clear Filters
+            </Button>
+          )}
 
           <Button
             variant="outline"
