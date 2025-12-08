@@ -7,10 +7,13 @@ import {
   type InsertAssignment,
   type User,
   type UpsertUser,
+  type PremadeFilter,
+  type InsertPremadeFilter,
   people,
   tasks,
   assignments,
   users,
+  premadeFilters,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { neon } from "@neondatabase/serverless";
@@ -46,6 +49,10 @@ export interface IStorage {
   updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment>;
   deleteAssignment(id: string): Promise<void>;
   reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]>;
+
+  getPremadeFilters(): Promise<PremadeFilter[]>;
+  createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter>;
+  deletePremadeFilter(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -53,12 +60,14 @@ export class MemStorage implements IStorage {
   private tasks: Map<string, Task>;
   private assignments: Map<string, Assignment>;
   private users: Map<string, User>;
+  private premadeFiltersMap: Map<string, PremadeFilter>;
 
   constructor() {
     this.people = new Map();
     this.tasks = new Map();
     this.assignments = new Map();
     this.users = new Map();
+    this.premadeFiltersMap = new Map();
     
     this.initializeSampleData();
   }
@@ -387,6 +396,26 @@ export class MemStorage implements IStorage {
   async deleteAssignment(id: string): Promise<void> {
     this.assignments.delete(id);
   }
+
+  async getPremadeFilters(): Promise<PremadeFilter[]> {
+    return Array.from(this.premadeFiltersMap.values());
+  }
+
+  async createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter> {
+    const id = randomUUID();
+    const newFilter: PremadeFilter = {
+      id,
+      name: filter.name,
+      personIds: filter.personIds || [],
+      taskIds: filter.taskIds || [],
+    };
+    this.premadeFiltersMap.set(id, newFilter);
+    return newFilter;
+  }
+
+  async deletePremadeFilter(id: string): Promise<void> {
+    this.premadeFiltersMap.delete(id);
+  }
 }
 
 export class PostgresStorage implements IStorage {
@@ -626,6 +655,23 @@ export class PostgresStorage implements IStorage {
       const orderB = (b as any).order ?? 0;
       return orderA - orderB;
     });
+  }
+
+  async getPremadeFilters(): Promise<PremadeFilter[]> {
+    return await this.db.select().from(premadeFilters);
+  }
+
+  async createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter> {
+    const result = await this.db.insert(premadeFilters).values({
+      name: filter.name,
+      personIds: filter.personIds || [],
+      taskIds: filter.taskIds || [],
+    }).returning();
+    return result[0];
+  }
+
+  async deletePremadeFilter(id: string): Promise<void> {
+    await this.db.delete(premadeFilters).where(eq(premadeFilters.id, id));
   }
 }
 

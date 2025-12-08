@@ -60,6 +60,13 @@ export const assignments = pgTable("assignments", {
   order: integer("order").default(0),
 });
 
+export const premadeFilters = pgTable("premade_filters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  personIds: text("person_ids").array().notNull().default([]),
+  taskIds: text("task_ids").array().notNull().default([]),
+});
+
 export const isoDateString = z.string()
   .trim()
   .refine((val) => val.length > 0, { message: "Required" })
@@ -72,6 +79,7 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id:
   day: z.enum(DAYS),
   weekStartDate: isoDateString,
 });
+export const insertPremadeFilterSchema = createInsertSchema(premadeFilters).omit({ id: true });
 
 export type Person = typeof people.$inferSelect;
 export type InsertPerson = z.infer<typeof insertPersonSchema>;
@@ -84,3 +92,6 @@ export type InsertAssignment = z.infer<typeof insertAssignmentSchema>;
 
 export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
+
+export type PremadeFilter = typeof premadeFilters.$inferSelect;
+export type InsertPremadeFilter = z.infer<typeof insertPremadeFilterSchema>;

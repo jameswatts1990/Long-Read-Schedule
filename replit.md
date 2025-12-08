@@ -43,7 +43,8 @@ Preferred communication style: Simple, everyday language.
 - Modal dialogs for creating/editing people, tasks, and assignments
 - Side drawer for detailed assignment editing
 - Conflict detection when assigning multiple tasks to same person/slot
-- Filter system for people and tasks visibility
+- Filter mega menu with 3-column layout (People, Tasks, Presets)
+- Persistent premade filters shared across all users
 - Week navigation with Monday-based week starts
 - Drag-to-delete functionality (drag task onto person name to delete)
 
@@ -76,6 +77,10 @@ POST   /api/assignments     - Create new assignment (with conflict detection)
 PATCH  /api/assignments/:id - Update assignment
 DELETE /api/assignments/:id - Delete assignment
 GET    /api/assignments/conflicts/:personId/:day/:weekStartDate - Check conflicts
+
+GET    /api/premade-filters     - Fetch all premade filters
+POST   /api/premade-filters     - Create new premade filter
+DELETE /api/premade-filters/:id - Delete premade filter
 ```
 
 **Authentication & Authorization:**
@@ -142,6 +147,12 @@ GET    /api/assignments/conflicts/:personId/:day/:weekStartDate - Check conflict
 - `batchNumber` (text, optional)
 - `notes` (text, optional)
 - `date` (text, optional, ISO date format)
+
+**PremadeFilters Table:**
+- `id` (UUID, primary key, auto-generated)
+- `name` (text, required) - Display name for the filter preset
+- `personIds` (text array) - Array of person IDs to filter by
+- `taskIds` (text array) - Array of task IDs to filter by
 
 **Database Initialization:**
 - Sample data seeded on first run if database is empty

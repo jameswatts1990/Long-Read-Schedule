@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronRight, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { type Person, type Task } from "@shared/schema";
+import { type Person, type Task, type PremadeFilter } from "@shared/schema";
 import {
   Popover,
   PopoverContent,
@@ -17,12 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 
-export interface PremadeFilter {
-  id: string;
-  name: string;
-  personIds: Set<string>;
-  taskIds: Set<string>;
-}
+export type { PremadeFilter };
 
 interface FilterMegaMenuProps {
   people: Person[];
@@ -32,8 +27,8 @@ interface FilterMegaMenuProps {
   premadeFilters: PremadeFilter[];
   onPersonToggle: (personId: string) => void;
   onTaskToggle: (taskId: string) => void;
-  onApplyPremadeFilter: (filter: PremadeFilter) => void;
-  onAddPremadeFilter: (filter: PremadeFilter) => void;
+  onApplyPremadeFilter: (personIds: string[], taskIds: string[]) => void;
+  onAddPremadeFilter: (name: string, personIds: string[], taskIds: string[]) => void;
   onDeletePremadeFilter: (filterId: string) => void;
   onClearFilters: () => void;
   hasActiveFilters: boolean;
@@ -64,14 +59,11 @@ export function FilterMegaMenu({
   const handleCreateFilter = () => {
     if (!newFilterName.trim()) return;
 
-    const newFilter: PremadeFilter = {
-      id: Date.now().toString(),
-      name: newFilterName,
-      personIds: new Set(newFilterPersonIds),
-      taskIds: new Set(newFilterTaskIds),
-    };
-
-    onAddPremadeFilter(newFilter);
+    onAddPremadeFilter(
+      newFilterName,
+      Array.from(newFilterPersonIds),
+      Array.from(newFilterTaskIds)
+    );
     setNewFilterName("");
     setNewFilterPersonIds(new Set());
     setNewFilterTaskIds(new Set());
@@ -194,7 +186,7 @@ export function FilterMegaMenu({
                       key={filter.id}
                       className="flex items-center justify-between group hover-elevate p-2 rounded text-sm cursor-pointer"
                       onClick={() => {
-                        onApplyPremadeFilter(filter);
+                        onApplyPremadeFilter(filter.personIds || [], filter.taskIds || []);
                         setIsOpen(false);
                       }}
                       data-testid={`premade-filter-${filter.id}`}

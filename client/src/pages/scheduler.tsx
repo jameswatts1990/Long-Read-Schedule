@@ -1,12 +1,12 @@
 import { useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Calendar, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
-import { FilterMegaMenu, type PremadeFilter } from "@/components/filter-mega-menu";
-import { type Person, type Task, type Assignment } from "@shared/schema";
+import { FilterMegaMenu } from "@/components/filter-mega-menu";
+import { type Person, type Task, type Assignment, type PremadeFilter } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -41,13 +41,31 @@ export default function Scheduler() {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
-  const [premadeFilters, setPremadeFilters] = useState<PremadeFilter[]>([]);
   const [isCompactView, setIsCompactView] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: premadeFilters = [] } = useQuery<PremadeFilter[]>({ queryKey: ["/api/premade-filters"] });
+
+  const createFilterMutation = useMutation({
+    mutationFn: async (data: { name: string; personIds: string[]; taskIds: string[] }) => {
+      return await apiRequest("POST", "/api/premade-filters", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+    },
+  });
+
+  const deleteFilterMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/premade-filters/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+    },
+  });
   
   const weekStartStr = formatDate(currentWeekStart);
   
@@ -219,17 +237,17 @@ export default function Scheduler() {
     setFilterTaskIds(newSet);
   };
 
-  const applyPremadeFilter = (filter: PremadeFilter) => {
-    setFilterPersonIds(new Set(filter.personIds));
-    setFilterTaskIds(new Set(filter.taskIds));
+  const applyPremadeFilter = (personIds: string[], taskIds: string[]) => {
+    setFilterPersonIds(new Set(personIds));
+    setFilterTaskIds(new Set(taskIds));
   };
 
-  const addPremadeFilter = (filter: PremadeFilter) => {
-    setPremadeFilters([...premadeFilters, filter]);
+  const addPremadeFilter = (name: string, personIds: string[], taskIds: string[]) => {
+    createFilterMutation.mutate({ name, personIds, taskIds });
   };
 
   const deletePremadeFilter = (filterId: string) => {
-    setPremadeFilters(premadeFilters.filter(f => f.id !== filterId));
+    deleteFilterMutation.mutate(filterId);
   };
 
   const clearFilters = () => {

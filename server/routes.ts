@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPersonSchema, insertTaskSchema, insertAssignmentSchema, isoDateString } from "@shared/schema";
+import { insertPersonSchema, insertTaskSchema, insertAssignmentSchema, insertPremadeFilterSchema, isoDateString } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 
@@ -218,6 +218,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete assignment" });
+    }
+  });
+
+  // Premade Filters routes
+  app.get("/api/premade-filters", isAuthenticated, async (_req, res) => {
+    try {
+      const filters = await storage.getPremadeFilters();
+      res.json(filters);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch premade filters" });
+    }
+  });
+
+  app.post("/api/premade-filters", isAuthenticated, async (req, res) => {
+    try {
+      const data = insertPremadeFilterSchema.parse(req.body);
+      const filter = await storage.createPremadeFilter(data);
+      res.json(filter);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid filter data" });
+    }
+  });
+
+  app.delete("/api/premade-filters/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deletePremadeFilter(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete premade filter" });
     }
   });
 
