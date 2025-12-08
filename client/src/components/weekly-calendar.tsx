@@ -57,15 +57,24 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
 
   const reorderAssignmentsMutation = useMutation({
     mutationFn: async (data: { personId: string; day: string; assignmentIds: string[] }) => {
-      return apiRequest("POST", `/api/assignments/reorder-cell`, {
+      const res = await apiRequest("POST", `/api/assignments/reorder-cell`, {
         personId: data.personId,
         day: data.day,
         weekStartDate,
         assignmentIds: data.assignmentIds,
       });
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+    },
+    onError: (error) => {
+      console.error("Reorder failed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to reorder tasks",
+        variant: "destructive",
+      });
     },
   });
 
