@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { type Person, type Task } from "@shared/schema";
@@ -35,6 +35,7 @@ interface FilterMegaMenuProps {
   onApplyPremadeFilter: (filter: PremadeFilter) => void;
   onAddPremadeFilter: (filter: PremadeFilter) => void;
   onDeletePremadeFilter: (filterId: string) => void;
+  onClearFilters: () => void;
   hasActiveFilters: boolean;
   filterCount: number;
 }
@@ -50,6 +51,7 @@ export function FilterMegaMenu({
   onApplyPremadeFilter,
   onAddPremadeFilter,
   onDeletePremadeFilter,
+  onClearFilters,
   hasActiveFilters,
   filterCount,
 }: FilterMegaMenuProps) {
@@ -168,7 +170,7 @@ export function FilterMegaMenu({
             </div>
 
             {/* Premade Filters Column */}
-            <div className="p-4 min-w-56">
+            <div className="p-4 min-w-56 flex flex-col">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm text-foreground">Presets</h3>
                 <Button
@@ -181,7 +183,7 @@ export function FilterMegaMenu({
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
-              <div className="space-y-1 max-h-96 overflow-y-auto">
+              <div className="space-y-1 max-h-96 overflow-y-auto flex-1">
                 {premadeFilters.length === 0 ? (
                   <p className="text-xs text-muted-foreground py-2">
                     No presets yet
@@ -217,6 +219,21 @@ export function FilterMegaMenu({
                   ))
                 )}
               </div>
+              {hasActiveFilters && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start mt-3 text-xs"
+                  onClick={() => {
+                    onClearFilters();
+                    setIsOpen(false);
+                  }}
+                  data-testid="button-clear-filters-menu"
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  Clear All
+                </Button>
+              )}
             </div>
           </div>
         </PopoverContent>

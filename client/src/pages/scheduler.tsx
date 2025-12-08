@@ -285,6 +285,7 @@ export default function Scheduler() {
             onApplyPremadeFilter={applyPremadeFilter}
             onAddPremadeFilter={addPremadeFilter}
             onDeletePremadeFilter={deletePremadeFilter}
+            onClearFilters={clearFilters}
             hasActiveFilters={hasActiveFilters}
             filterCount={filterPersonIds.size + filterTaskIds.size}
           />
