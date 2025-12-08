@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CheckCircle } from "lucide-react";
+import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -44,12 +44,13 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
       toast({
         title: "Task moved",
         description: "Assignment updated successfully",
+        variant: "default",
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to move assignment",
+        title: "Failed to move task",
+        description: "Could not update the assignment",
         variant: "destructive",
       });
     },
@@ -71,8 +72,8 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     onError: (error) => {
       console.error("Reorder failed:", error);
       toast({
-        title: "Error",
-        description: "Failed to reorder tasks",
+        title: "Failed to reorder tasks",
+        description: "Could not save the new task order",
         variant: "destructive",
       });
     },
@@ -87,12 +88,13 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
       toast({
         title: "Task deleted",
         description: "Assignment has been removed",
+        variant: "default",
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to delete assignment",
+        title: "Failed to delete task",
+        description: "Could not remove the assignment",
         variant: "destructive",
       });
     },

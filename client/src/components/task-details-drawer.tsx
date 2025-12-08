@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { X, Save, Copy, Trash2 } from "lucide-react";
+import { X, Save, Copy, Trash2, CheckCircle, AlertCircle } from "lucide-react";
 import { type Assignment, type Person, type Task } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +24,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const [batchSize, setBatchSize] = useState("");
   const [notes, setNotes] = useState("");
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (assignment) {
@@ -41,7 +43,19 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       if (assignment) {
         queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${assignment.weekStartDate}`] });
       }
+      toast({
+        title: "Assignment updated",
+        description: "Changes have been saved",
+        variant: "default",
+      });
       onClose();
+    },
+    onError: () => {
+      toast({
+        title: "Failed to update",
+        description: "Could not save your changes",
+        variant: "destructive",
+      });
     },
   });
 
@@ -54,7 +68,19 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       if (assignment) {
         queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${assignment.weekStartDate}`] });
       }
+      toast({
+        title: "Assignment deleted",
+        description: "The task has been removed",
+        variant: "default",
+      });
       onClose();
+    },
+    onError: () => {
+      toast({
+        title: "Failed to delete",
+        description: "Could not remove the assignment",
+        variant: "destructive",
+      });
     },
   });
 

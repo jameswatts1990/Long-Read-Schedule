@@ -122,12 +122,12 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      toast({ title: "Success", description: "Person added successfully" });
+      toast({ title: "Team member added", description: "Person added to the team", variant: "default" });
       personForm.reset();
       setShowAddPerson(false);
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to add person", variant: "destructive" });
+      toast({ title: "Failed to add person", description: "Could not create the team member", variant: "destructive" });
     },
   });
 
@@ -139,12 +139,12 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      toast({ title: "Success", description: "Person updated successfully" });
+      toast({ title: "Team member updated", description: "Changes have been saved", variant: "default" });
       personForm.reset();
       setEditingPerson(null);
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to update person", variant: "destructive" });
+      toast({ title: "Failed to update person", description: "Could not save your changes", variant: "destructive" });
     },
   });
 
@@ -155,12 +155,12 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      toast({ title: "Success", description: "Task added successfully" });
+      toast({ title: "Task added", description: "New task is now available", variant: "default" });
       taskForm.reset();
       setShowAddTask(false);
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to add task", variant: "destructive" });
+      toast({ title: "Failed to add task", description: "Could not create the task", variant: "destructive" });
     },
   });
 
@@ -172,7 +172,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      toast({ title: "Success", description: "Task updated successfully" });
+      toast({ title: "Task updated", description: "Changes have been saved", variant: "default" });
       taskForm.reset();
       setEditingTask(null);
     },

@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { CheckCircle, AlertCircle } from "lucide-react";
 import { insertAssignmentSchema, type Task, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -87,8 +88,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
       toast({
-        title: "Success",
-        description: "Assignment created successfully",
+        title: "Assignment created",
+        description: "Task assigned successfully",
+        variant: "default",
       });
       form.reset({
         taskId: "",
@@ -108,8 +110,8 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         setConflictData({ conflicts: error.conflicts, conflictCount: error.conflictCount });
       } else {
         toast({
-          title: "Error",
-          description: error.message || "Failed to create assignment",
+          title: "Failed to create assignment",
+          description: error.message || "Please check your input and try again",
           variant: "destructive",
         });
       }
@@ -152,8 +154,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         const results = await Promise.all(promises);
         queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
         toast({
-          title: "Success",
-          description: `Assignment created for ${daysArray.length} day(s)`,
+          title: "Assignments created",
+          description: `Task assigned to ${daysArray.length} day(s)`,
+          variant: "default",
         });
         form.reset({
           taskId: "",
@@ -170,8 +173,8 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         }
       } catch (error: any) {
         toast({
-          title: "Error",
-          description: error.message || "Failed to create assignments",
+          title: "Failed to create assignments",
+          description: error.message || "Some or all assignments failed to create",
           variant: "destructive",
         });
       }

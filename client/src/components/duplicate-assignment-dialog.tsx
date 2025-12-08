@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Copy } from "lucide-react";
+import { Copy, AlertCircle } from "lucide-react";
 import { type Assignment, type Person, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,8 @@ export function DuplicateAssignmentDialog({
       queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
       toast({
         title: "Tasks duplicated",
-        description: `Created ${selectedSlots.size} new assignments.`,
+        description: `Created ${selectedSlots.size} new assignment(s)`,
+        variant: "default",
       });
       setSelectedSlots(new Set());
       onClose();
@@ -74,7 +75,7 @@ export function DuplicateAssignmentDialog({
     onError: (error) => {
       toast({
         title: "Failed to duplicate tasks",
-        description: error instanceof Error ? error.message : "An error occurred while duplicating tasks.",
+        description: error instanceof Error ? error.message : "Could not complete the duplication",
         variant: "destructive",
       });
     },
@@ -95,7 +96,7 @@ export function DuplicateAssignmentDialog({
     if (selectedSlots.size === 0) {
       toast({
         title: "No slots selected",
-        description: "Please select at least one day to duplicate to.",
+        description: "Please select at least one day to duplicate to",
         variant: "destructive",
       });
       return;

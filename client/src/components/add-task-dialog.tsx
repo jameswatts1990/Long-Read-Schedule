@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { CheckCircle } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,8 @@ export function AddTaskDialog({ open, onClose }: AddTaskDialogProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       toast({
         title: "Task added",
-        description: `${variables.name} has been added to the task library.`,
+        description: `${variables.name} is now available`,
+        variant: "default",
       });
       form.reset();
       setSelectedColor(TASK_COLORS[0]);

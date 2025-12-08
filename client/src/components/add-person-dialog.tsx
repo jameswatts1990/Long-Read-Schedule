@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { UserPlus } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -49,8 +50,9 @@ export function AddPersonDialog({ open, onClose }: AddPersonDialogProps) {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
       toast({
-        title: "Person added",
-        description: `${variables.name} has been added to the team.`,
+        title: "Team member added",
+        description: `${variables.name} is now part of the team`,
+        variant: "default",
       });
       form.reset();
       setSelectedColor(PERSON_COLORS[0]);
