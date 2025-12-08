@@ -219,7 +219,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                       key={`${person.id}-${day}`}
                       className={cn(
                         "border-b border-l p-1.5 hover-elevate relative",
-                        hasLeave ? "bg-red-100/60 dark:bg-red-950/40" :
+                        hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
                         (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
