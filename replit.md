@@ -71,7 +71,7 @@ GET    /api/tasks           - Fetch all tasks
 POST   /api/tasks           - Create new task
 DELETE /api/tasks/:id       - Delete task
 
-GET    /api/assignments     - Fetch all assignments
+GET    /api/assignments     - Fetch all assignments (supports ?weekStartDate= filter for performance)
 POST   /api/assignments     - Create new assignment (with conflict detection)
 PATCH  /api/assignments/:id - Update assignment
 DELETE /api/assignments/:id - Delete assignment
