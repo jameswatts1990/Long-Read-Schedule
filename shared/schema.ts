@@ -57,6 +57,7 @@ export const assignments = pgTable("assignments", {
   batchSize: integer("batch_size"),
   notes: text("notes"),
   date: text("date"),
+  order: integer("order").default(0),
 });
 
 export const isoDateString = z.string()

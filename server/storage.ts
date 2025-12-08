@@ -44,6 +44,7 @@ export interface IStorage {
   createAssignment(assignment: InsertAssignment): Promise<Assignment>;
   updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment>;
   deleteAssignment(id: string): Promise<void>;
+  reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -289,7 +290,11 @@ export class MemStorage implements IStorage {
   }
 
   async getAssignments(): Promise<Assignment[]> {
-    return Array.from(this.assignments.values());
+    return Array.from(this.assignments.values()).sort((a, b) => {
+      const orderA = (a as any).order ?? 0;
+      const orderB = (b as any).order ?? 0;
+      return orderA - orderB;
+    });
   }
 
   async getAssignment(id: string): Promise<Assignment | undefined> {
@@ -297,24 +302,55 @@ export class MemStorage implements IStorage {
   }
 
   async getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]> {
-    return Array.from(this.assignments.values()).filter(
-      a => a.personId === personId &&
-           a.day === day &&
-           a.weekStartDate === weekStartDate
-    );
+    return Array.from(this.assignments.values())
+      .filter(
+        a => a.personId === personId &&
+             a.day === day &&
+             a.weekStartDate === weekStartDate
+      )
+      .sort((a, b) => {
+        const orderA = (a as any).order ?? 0;
+        const orderB = (b as any).order ?? 0;
+        return orderA - orderB;
+      });
   }
 
   async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
     const id = randomUUID();
+    const cellAssignments = Array.from(this.assignments.values()).filter(
+      a => a.personId === insertAssignment.personId &&
+           a.day === insertAssignment.day &&
+           a.weekStartDate === insertAssignment.weekStartDate
+    );
+    const order = cellAssignments.length;
     const assignment: Assignment = {
       id,
       ...insertAssignment,
       batchNumber: insertAssignment.batchNumber || null,
       notes: insertAssignment.notes || null,
       date: insertAssignment.date || null,
-    };
+      order,
+    } as any;
     this.assignments.set(id, assignment);
     return assignment;
+  }
+
+  async reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]> {
+    const assignments = Array.from(this.assignments.values()).filter(
+      a => a.personId === personId &&
+           a.day === day &&
+           a.weekStartDate === weekStartDate
+    );
+    
+    assignmentIds.forEach((id, index) => {
+      const assignment = assignments.find(a => a.id === id);
+      if (assignment) {
+        const updated = { ...assignment, order: index } as any;
+        this.assignments.set(id, updated);
+      }
+    });
+    
+    return this.getConflictingAssignments(personId, day, weekStartDate);
   }
 
   async updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment> {

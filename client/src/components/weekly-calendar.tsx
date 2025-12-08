@@ -55,6 +55,20 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     },
   });
 
+  const reorderAssignmentsMutation = useMutation({
+    mutationFn: async (data: { personId: string; day: string; assignmentIds: string[] }) => {
+      return apiRequest("POST", `/api/assignments/reorder-cell`, {
+        personId: data.personId,
+        day: data.day,
+        weekStartDate,
+        assignmentIds: data.assignmentIds,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+    },
+  });
+
   const deleteAssignmentMutation = useMutation({
     mutationFn: async (assignmentId: string) => {
       return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
@@ -235,12 +249,28 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                       }}
                       onDragLeave={() => setDropTargetCell(null)}
                       onDrop={() => {
-                        if (draggedAssignment && (draggedAssignment.personId !== person.id || draggedAssignment.day !== day)) {
-                          updateAssignmentMutation.mutate({
-                            assignmentId: draggedAssignment.id,
-                            personId: person.id,
-                            day,
-                          });
+                        if (draggedAssignment) {
+                          if (draggedAssignment.personId !== person.id || draggedAssignment.day !== day) {
+                            // Moving to a different cell
+                            updateAssignmentMutation.mutate({
+                              assignmentId: draggedAssignment.id,
+                              personId: person.id,
+                              day,
+                            });
+                          } else {
+                            // Reordering within the same cell - find the drop position
+                            const reorderedIds = cellAssignments.map(a => a.id);
+                            const draggedIndex = reorderedIds.indexOf(draggedAssignment.id);
+                            if (draggedIndex >= 0) {
+                              reorderedIds.splice(draggedIndex, 1);
+                              reorderedIds.push(draggedAssignment.id);
+                              reorderAssignmentsMutation.mutate({
+                                personId: person.id,
+                                day,
+                                assignmentIds: reorderedIds,
+                              });
+                            }
+                          }
                         }
                         setDropTargetCell(null);
                         setDraggedAssignment(null);

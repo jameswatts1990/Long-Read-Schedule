@@ -190,6 +190,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/assignments/reorder-cell", isAuthenticated, async (req, res) => {
+    try {
+      const { personId, day, weekStartDate, assignmentIds } = req.body;
+      if (!personId || !day || !weekStartDate || !Array.isArray(assignmentIds)) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      const result = await storage.reorderAssignmentsByCell(personId, day, weekStartDate, assignmentIds);
+      res.json(result);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to reorder assignments" });
+    }
+  });
+
   app.delete("/api/assignments/:id", isAuthenticated, async (req, res) => {
     try {
       await storage.deleteAssignment(req.params.id);
