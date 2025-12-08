@@ -165,7 +165,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
         <div className="overflow-auto flex-1">
           <div
             className="grid"
-            style={{ gridTemplateColumns: "120px repeat(5, minmax(120px, 1fr))" }}
+            style={{ gridTemplateColumns: "minmax(150px, 1fr) repeat(5, minmax(120px, 1fr))" }}
           >
             {/* Header Row: Person + Day Names */}
             <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2">
