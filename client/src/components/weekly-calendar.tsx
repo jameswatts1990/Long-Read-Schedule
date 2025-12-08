@@ -157,7 +157,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     const cellAssignments = getAssignmentsForCell(personId, day);
     return cellAssignments.some(assignment => {
       const task = getTaskById(assignment.taskId);
-      return task?.name === "Annual Leave";
+      return task?.name.includes("Annual Leave");
     });
   };
 
