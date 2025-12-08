@@ -199,7 +199,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.reorderAssignmentsByCell(personId, day, weekStartDate, assignmentIds);
       res.json(result);
     } catch (error) {
-      res.status(400).json({ error: "Failed to reorder assignments" });
+      console.error("Reorder error:", error);
+      res.status(400).json({ error: "Failed to reorder assignments", details: String(error) });
     }
   });
 

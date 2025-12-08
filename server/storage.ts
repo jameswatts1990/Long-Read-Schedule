@@ -15,7 +15,7 @@ import {
 import { randomUUID } from "crypto";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -596,10 +596,10 @@ export class PostgresStorage implements IStorage {
       .select()
       .from(assignments)
       .where(
-        (c) => c.and(
-          c.eq(assignments.personId, personId),
-          c.eq(assignments.day, day),
-          c.eq(assignments.weekStartDate, weekStartDate)
+        and(
+          eq(assignments.personId, personId),
+          eq(assignments.day, day),
+          eq(assignments.weekStartDate, weekStartDate)
         )
       );
     return result.sort((a, b) => {
