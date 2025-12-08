@@ -260,7 +260,7 @@ export default function Scheduler() {
       <header className="h-16 border-b flex items-center justify-between px-6 bg-background shrink-0">
         <div className="flex items-center gap-3">
           <Calendar className="w-6 h-6 text-primary" data-testid="icon-logo" />
-          <h1 className="text-2xl font-semibold" data-testid="text-app-title">Lab Scheduler</h1>
+          <h1 className="text-2xl font-semibold" data-testid="text-app-title">LR Lab Scheduler</h1>
         </div>
 
         <div className="flex items-center gap-3">
@@ -371,7 +371,6 @@ export default function Scheduler() {
           </Button>
         </div>
       </header>
-
       <div className={`flex-1 overflow-auto ${isCompactView ? "p-2" : "p-6"}`}>
         <WeeklyCalendar
           weekStartDate={weekStartStr}
@@ -382,7 +381,6 @@ export default function Scheduler() {
           isCompactView={isCompactView}
         />
       </div>
-
       <TaskDetailsDrawer
         assignment={selectedAssignment}
         people={people}
