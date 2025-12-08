@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
 interface AddAssignmentDialogProps {
@@ -50,6 +51,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
   const [shouldCloseAfter, setShouldCloseAfter] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set([day]));
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
   const form = useForm<FormData>({
@@ -122,12 +124,58 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchSize: undefined,
         notes: "",
       });
+      setSelectedDays(new Set([day]));
     }
-  }, [open, form]);
+  }, [open, form, day]);
 
-  const onSubmit = (data: FormData) => {
+  const onSubmit = async (data: FormData) => {
     setPendingFormData(data);
-    createMutation.mutate({ data, override: false });
+    
+    if (selectedDays.size === 1) {
+      // Single day - use normal flow
+      createMutation.mutate({ data, override: false });
+    } else {
+      // Multiple days - create for each selected day
+      const daysArray = Array.from(selectedDays);
+      const promises = daysArray.map((d) =>
+        apiRequest("POST", "/api/assignments", {
+          ...data,
+          personId,
+          day: d,
+          weekStartDate,
+          batchNumber: data.batchNumber || undefined,
+          notes: data.notes || undefined,
+        })
+      );
+
+      try {
+        const results = await Promise.all(promises);
+        queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
+        toast({
+          title: "Success",
+          description: `Assignment created for ${daysArray.length} day(s)`,
+        });
+        form.reset({
+          taskId: "",
+          batchNumber: "",
+          batchSize: undefined,
+          notes: "",
+        });
+        setSelectedDays(new Set([day]));
+        setConflictData(null);
+        setPendingFormData(null);
+        if (shouldCloseAfter) {
+          setShouldCloseAfter(false);
+          onClose();
+        }
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to create assignments",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   const handleConfirmOverride = () => {
@@ -288,6 +336,31 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                 </FormItem>
               )}
             />
+
+            <div className="space-y-2">
+              <FormLabel>Days to Assign</FormLabel>
+              <div className="flex flex-wrap gap-3">
+                {DAYS.map((d) => (
+                  <div key={d} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`day-${d}`}
+                      checked={selectedDays.has(d)}
+                      onCheckedChange={(checked) => {
+                        const newDays = new Set(selectedDays);
+                        if (checked) {
+                          newDays.add(d);
+                        } else {
+                          newDays.delete(d);
+                        }
+                        setSelectedDays(newDays);
+                      }}
+                      data-testid={`checkbox-day-${d.toLowerCase()}`}
+                    />
+                    <label htmlFor={`day-${d}`} className="text-sm cursor-pointer">{d}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div className="flex justify-between gap-2 pt-4">
               <Button
