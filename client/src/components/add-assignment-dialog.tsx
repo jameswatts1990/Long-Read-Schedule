@@ -208,10 +208,11 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
     try {
       const results = await Promise.all(promises);
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
       toast({
-        title: "Success",
-        description: `Assignment created for all 5 days`,
+        title: "Assignments created",
+        description: `Task assigned to all 5 days`,
+        variant: "default",
       });
       form.reset({
         taskId: "",
@@ -224,8 +225,8 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       onClose();
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to create assignments",
+        title: "Failed to create assignments",
+        description: error.message || "Some or all assignments failed to create",
         variant: "destructive",
       });
     }
