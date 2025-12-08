@@ -258,12 +258,12 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                               day,
                             });
                           } else {
-                            // Reordering within the same cell - find the drop position
+                            // Reordering within the same cell - move to top
                             const reorderedIds = cellAssignments.map(a => a.id);
                             const draggedIndex = reorderedIds.indexOf(draggedAssignment.id);
                             if (draggedIndex >= 0) {
                               reorderedIds.splice(draggedIndex, 1);
-                              reorderedIds.push(draggedAssignment.id);
+                              reorderedIds.unshift(draggedAssignment.id);
                               reorderAssignmentsMutation.mutate({
                                 personId: person.id,
                                 day,

@@ -583,6 +583,31 @@ export class PostgresStorage implements IStorage {
   async deleteAssignment(id: string): Promise<void> {
     await this.db.delete(assignments).where(eq(assignments.id, id));
   }
+
+  async reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]> {
+    for (let index = 0; index < assignmentIds.length; index++) {
+      await this.db
+        .update(assignments)
+        .set({ order: index })
+        .where(eq(assignments.id, assignmentIds[index]));
+    }
+    
+    const result = await this.db
+      .select()
+      .from(assignments)
+      .where(
+        (c) => c.and(
+          c.eq(assignments.personId, personId),
+          c.eq(assignments.day, day),
+          c.eq(assignments.weekStartDate, weekStartDate)
+        )
+      );
+    return result.sort((a, b) => {
+      const orderA = (a as any).order ?? 0;
+      const orderB = (b as any).order ?? 0;
+      return orderA - orderB;
+    });
+  }
 }
 
 export const storage = new PostgresStorage();
