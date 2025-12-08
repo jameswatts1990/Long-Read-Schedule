@@ -39,6 +39,7 @@ export interface IStorage {
   reorderTasks(taskIds: string[]): Promise<Task[]>;
 
   getAssignments(): Promise<Assignment[]>;
+  getAssignmentsByWeek(weekStartDate: string): Promise<Assignment[]>;
   getAssignment(id: string): Promise<Assignment | undefined>;
   getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]>;
   createAssignment(assignment: InsertAssignment): Promise<Assignment>;
@@ -297,6 +298,16 @@ export class MemStorage implements IStorage {
     });
   }
 
+  async getAssignmentsByWeek(weekStartDate: string): Promise<Assignment[]> {
+    return Array.from(this.assignments.values())
+      .filter(a => a.weekStartDate === weekStartDate)
+      .sort((a, b) => {
+        const orderA = (a as any).order ?? 0;
+        const orderB = (b as any).order ?? 0;
+        return orderA - orderB;
+      });
+  }
+
   async getAssignment(id: string): Promise<Assignment | undefined> {
     return this.assignments.get(id);
   }
@@ -525,6 +536,14 @@ export class PostgresStorage implements IStorage {
 
   async getAssignments(): Promise<Assignment[]> {
     return await this.db.select().from(assignments);
+  }
+
+  async getAssignmentsByWeek(weekStartDate: string): Promise<Assignment[]> {
+    const result = await this.db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.weekStartDate, weekStartDate));
+    return result.sort((a, b) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
   }
 
   async getAssignment(id: string): Promise<Assignment | undefined> {

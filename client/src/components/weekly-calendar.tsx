@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
       toast({
         title: "Task moved",
         description: "Assignment updated successfully",
@@ -66,7 +66,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
     },
     onError: (error) => {
       console.error("Reorder failed:", error);
@@ -83,7 +83,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
       return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
       toast({
         title: "Task deleted",
         description: "Assignment has been removed",
@@ -98,10 +98,25 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     },
   });
 
+  // Pre-group assignments by person+day for O(1) lookup instead of O(A) per cell
+  const assignmentsByCell = useMemo(() => {
+    const map = new Map<string, Assignment[]>();
+    for (const a of assignments) {
+      const key = `${a.personId}-${a.day}`;
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key)!.push(a);
+    }
+    // Sort each cell's assignments by order
+    map.forEach((arr: Assignment[]) => {
+      arr.sort((x: Assignment, y: Assignment) => ((x as any).order ?? 0) - ((y as any).order ?? 0));
+    });
+    return map;
+  }, [assignments]);
+
   const getAssignmentsForCell = (personId: string, day: string) => {
-    return assignments.filter(
-      a => a.personId === personId && a.day === day
-    );
+    return assignmentsByCell.get(`${personId}-${day}`) || [];
   };
 
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);

@@ -86,7 +86,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
       toast({
         title: "Success",
         description: "Assignment created successfully",

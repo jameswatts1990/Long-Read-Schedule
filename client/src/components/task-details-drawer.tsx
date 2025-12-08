@@ -40,7 +40,9 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       return apiRequest("PATCH", `/api/assignments/${assignment.id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      if (assignment) {
+        queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${assignment.weekStartDate}`] });
+      }
       onClose();
     },
   });
@@ -51,7 +53,9 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       return apiRequest("DELETE", `/api/assignments/${assignment.id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      if (assignment) {
+        queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${assignment.weekStartDate}`] });
+      }
       onClose();
     },
   });

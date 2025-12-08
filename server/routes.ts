@@ -133,8 +133,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/assignments", isAuthenticated, async (_req, res) => {
+  app.get("/api/assignments", isAuthenticated, async (req, res) => {
     try {
+      const { weekStartDate } = req.query;
+      
+      // Use database-level filtering for better performance
+      if (weekStartDate && typeof weekStartDate === 'string') {
+        const filtered = await storage.getAssignmentsByWeek(weekStartDate);
+        return res.json(filtered);
+      }
+      
       const assignments = await storage.getAssignments();
       res.json(assignments);
     } catch (error) {

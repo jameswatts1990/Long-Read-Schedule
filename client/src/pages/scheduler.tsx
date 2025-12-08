@@ -54,10 +54,15 @@ export default function Scheduler() {
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
-  const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
-
+  
   const weekStartStr = formatDate(currentWeekStart);
-  let weekAssignments = assignments.filter(a => a.weekStartDate === weekStartStr);
+  
+  // Fetch assignments filtered by week for better performance
+  const { data: weekAssignmentsData = [] } = useQuery<Assignment[]>({ 
+    queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`] 
+  });
+  
+  let weekAssignments = weekAssignmentsData;
 
   // Apply filters
   if (filterPersonIds.size > 0) {
@@ -90,13 +95,17 @@ export default function Scheduler() {
     setCurrentWeekStart(getMonday(new Date()));
   };
 
-  const handleExport = () => {
-    const data = { people, tasks, assignments };
+  const handleExport = async () => {
+    // Fetch all assignments for complete export (not just current week)
+    const res = await fetch("/api/assignments", { credentials: "include" });
+    const allAssignments = await res.json();
+    
+    const data = { people, tasks, assignments: allAssignments };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `schedule-${weekStartStr}.json`;
+    a.download = `schedule-export.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -167,11 +176,15 @@ export default function Scheduler() {
         });
       }
 
-      // Refresh all data
+      // Refresh all data - use predicate to invalidate any assignment queries
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/people"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }),
-        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] }),
+        queryClient.invalidateQueries({ 
+          predicate: (query) => 
+            typeof query.queryKey[0] === 'string' && 
+            query.queryKey[0].startsWith('/api/assignments')
+        }),
       ]);
 
       toast({
