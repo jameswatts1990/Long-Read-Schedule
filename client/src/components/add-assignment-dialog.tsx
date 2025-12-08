@@ -35,12 +35,11 @@ interface AddAssignmentDialogProps {
   tasks: Task[];
 }
 
-const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: true, day: true }).extend({
+const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: true, day: true, date: true }).extend({
   taskId: z.string().min(1, "Please select a task"),
   batchNumber: z.string().optional(),
   batchSize: z.number().int().positive().optional(),
   notes: z.string().optional(),
-  date: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -60,7 +59,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       batchNumber: "",
       batchSize: undefined,
       notes: "",
-      date: "",
     },
   });
 
@@ -74,7 +72,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchNumber: data.batchNumber || undefined,
         batchSize: data.batchSize || undefined,
         notes: data.notes || undefined,
-        date: data.date || undefined,
         override,
       });
       
@@ -96,7 +93,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchNumber: "",
         batchSize: undefined,
         notes: "",
-        date: "",
       });
       setConflictData(null);
       setPendingFormData(null);
@@ -125,7 +121,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchNumber: "",
         batchSize: undefined,
         notes: "",
-        date: "",
       });
     }
   }, [open, form]);
@@ -157,7 +152,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         weekStartDate,
         batchNumber: data.batchNumber || undefined,
         notes: data.notes || undefined,
-        date: data.date || undefined,
       })
     );
 
@@ -173,7 +167,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchNumber: "",
         batchSize: undefined,
         notes: "",
-        date: "",
       });
       setConflictData(null);
       setPendingFormData(null);
@@ -276,24 +269,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date (Optional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="date"
-                      data-testid="input-date"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

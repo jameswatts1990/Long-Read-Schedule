@@ -22,7 +22,6 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const [batchNumber, setBatchNumber] = useState("");
   const [batchSize, setBatchSize] = useState("");
   const [notes, setNotes] = useState("");
-  const [date, setDate] = useState("");
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
 
   useEffect(() => {
@@ -30,7 +29,6 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       setBatchNumber(assignment.batchNumber || "");
       setBatchSize(assignment.batchSize ? String(assignment.batchSize) : "");
       setNotes(assignment.notes || "");
-      setDate(assignment.date || "");
     }
   }, [assignment]);
 
@@ -66,7 +64,6 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       batchNumber: batchNumber || undefined,
       batchSize: batchSize ? parseInt(batchSize, 10) : undefined,
       notes: notes || undefined,
-      date: date || undefined,
       weekStartDate: assignment.weekStartDate,
     });
   };
@@ -168,19 +165,6 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
                 data-testid="input-batch-size"
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="date" className="text-sm font-medium">
-              Date
-            </Label>
-            <Input
-              id="date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              data-testid="input-date"
-            />
           </div>
 
           <div className="space-y-2">
