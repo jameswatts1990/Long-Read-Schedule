@@ -23,6 +23,24 @@ interface CellData {
   day: string;
 }
 
+// Calculate luminance of a color to determine if text should be white or dark
+const getLuminance = (hexColor: string): number => {
+  const hex = hexColor.replace("#", "");
+  const r = parseInt(hex.substring(0, 2), 16) / 255;
+  const g = parseInt(hex.substring(2, 4), 16) / 255;
+  const b = parseInt(hex.substring(4, 6), 16) / 255;
+  
+  // Apply gamma correction
+  const [rs, gs, bs] = [r, g, b].map(c => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  
+  // Calculate relative luminance
+  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+};
+
+const isDarkColor = (hexColor: string): boolean => {
+  return getLuminance(hexColor) < 0.5;
+};
+
 export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAssignmentClick, isCompactView = false }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -307,6 +325,8 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                         {cellAssignments.map(assignment => {
                           const task = getTaskById(assignment.taskId);
                           if (!task) return null;
+                          
+                          const isTaskDark = isDarkColor(task.color);
 
                           return (
                             <div
@@ -334,11 +354,11 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                               <div className="flex items-start gap-1">
                                 <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50 mt-0.5" />
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-medium text-foreground truncate">
+                                  <div className={cn("text-xs font-medium truncate", isTaskDark ? "text-white" : "text-foreground")}>
                                     {task.name}
                                   </div>
                                   {(assignment.batchNumber || assignment.batchSize) && (
-                                    <div className="text-xs font-mono text-foreground/70 mt-0.5 flex gap-1">
+                                    <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
                                       {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
                                       {assignment.batchSize && <span>({assignment.batchSize})</span>}
                                     </div>
