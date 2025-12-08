@@ -113,6 +113,14 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
     });
   };
 
+  const hasAnnualLeave = (personId: string, day: string) => {
+    const cellAssignments = getAssignmentsForCell(personId, day);
+    return cellAssignments.some(assignment => {
+      const task = getTaskById(assignment.taskId);
+      return task?.name === "Annual Leave";
+    });
+  };
+
   return (
     <>
       <div className="border rounded-md bg-card h-full flex flex-col">
@@ -204,12 +212,14 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                   const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day;
                   const isTodayDay = isCurrentDay(dayIndex);
                   const isCurrentWeekDisplay = isCurrentWeek();
+                  const hasLeave = hasAnnualLeave(person.id, day);
 
                   return (
                     <div
                       key={`${person.id}-${day}`}
                       className={cn(
                         "border-b border-l p-1.5 hover-elevate relative",
+                        hasLeave ? "bg-red-100/60 dark:bg-red-950/40" :
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
                         (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
