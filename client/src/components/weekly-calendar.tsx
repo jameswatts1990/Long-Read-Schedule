@@ -119,11 +119,11 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
         <div className="overflow-auto flex-1">
           <div
             className="grid"
-            style={{ gridTemplateColumns: "200px repeat(5, minmax(180px, 1fr))", minWidth: "max-content" }}
+            style={{ gridTemplateColumns: "120px repeat(5, minmax(120px, 1fr))" }}
           >
             {/* Header Row: Person + Day Names */}
-            <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-3">
-              <span className="font-semibold text-foreground" data-testid="header-person">Person</span>
+            <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2">
+              <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
             </div>
             
             {DAYS.map((day, dayIndex) => {
@@ -132,19 +132,19 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                 <div 
                   key={day} 
                   className={cn(
-                    "sticky top-0 z-40 border-b text-center p-3",
+                    "sticky top-0 z-40 border-b text-center p-2",
                     isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
                   )}
                   data-testid={`header-day-${day.toLowerCase()}`}
                 >
                   <div className={cn(
-                    "font-semibold",
+                    "font-semibold text-sm",
                     isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
                   )}>
-                    {day}
+                    {day.slice(0, 3)}
                   </div>
                   <div className={cn(
-                    "text-xs mt-1",
+                    "text-xs mt-0.5",
                     isTodayDay ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"
                   )}>
                     {getDateForDay(dayIndex)}
@@ -159,11 +159,11 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                 {/* Person Name Cell - Sticky (Drop zone for deletion) */}
                 <div
                   className={cn(
-                    "sticky left-0 z-30 border-r border-b p-3 flex items-center gap-2 bg-card cursor-pointer",
+                    "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 bg-card cursor-pointer min-w-0",
                     personIndex % 2 === 0 && "bg-muted",
                     deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
                   )}
-                  style={{ top: "57px" }}
+                  style={{ top: "49px" }}
                   data-testid={`person-row-${person.id}`}
                   onDragOver={(e) => {
                     if (draggedAssignment) {
@@ -187,11 +187,11 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                     data-testid={`person-indicator-${person.id}`}
                   />
                   <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span className="font-medium text-foreground truncate" data-testid={`person-name-${person.id}`}>
+                    <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
                       {person.name}
                     </span>
                     {hasAssignmentEveryDay(person.id) && (
-                      <CheckCircle className="w-4 h-4 shrink-0 text-green-600 dark:text-green-400" data-testid={`check-icon-${person.id}`} />
+                      <CheckCircle className="w-3 h-3 shrink-0 text-green-600 dark:text-green-400" data-testid={`check-icon-${person.id}`} />
                     )}
                   </div>
                 </div>
@@ -209,7 +209,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                     <div
                       key={`${person.id}-${day}`}
                       className={cn(
-                        "border-b border-l p-2 hover-elevate relative",
+                        "border-b border-l p-1.5 hover-elevate relative",
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
                         (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
@@ -237,7 +237,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                       }}
                       data-testid={`cell-${person.id}-${day.toLowerCase()}`}
                     >
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         {cellAssignments.map(assignment => {
                           const task = getTaskById(assignment.taskId);
                           if (!task) return null;
@@ -246,7 +246,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                             <div
                               key={assignment.id}
                               className={cn(
-                                "rounded-md p-2 cursor-grab active:cursor-grabbing group relative border-2 hover-elevate active-elevate-2",
+                                "rounded-md p-1.5 cursor-grab active:cursor-grabbing group relative border-2 hover-elevate active-elevate-2",
                                 draggedAssignment?.id === assignment.id && "opacity-50"
                               )}
                               style={{ 
@@ -265,14 +265,14 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                               onClick={() => onAssignmentClick(assignment)}
                               data-testid={`assignment-${assignment.id}`}
                             >
-                              <div className="flex items-start gap-1.5">
-                                <GripVertical className="w-3 h-3 shrink-0 opacity-50 mt-0.5" />
+                              <div className="flex items-start gap-1">
+                                <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50 mt-0.5" />
                                 <div className="flex-1 min-w-0">
                                   <div className="text-xs font-medium text-foreground truncate">
                                     {task.name}
                                   </div>
                                   {(assignment.batchNumber || assignment.batchSize) && (
-                                    <div className="text-xs font-mono text-foreground/70 mt-0.5 flex gap-2">
+                                    <div className="text-xs font-mono text-foreground/70 mt-0.5 flex gap-1">
                                       {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
                                       {assignment.batchSize && <span>({assignment.batchSize})</span>}
                                     </div>
@@ -287,7 +287,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-start text-muted-foreground hover:text-foreground"
+                            className="w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1"
                             onClick={() => setSelectedCell({ personId: person.id, day })}
                             data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
                           >
