@@ -162,10 +162,9 @@ export function MonthView({
 
           {/* Person Rows */}
           {people.map((person, personIndex) => (
-            <>
+            <div key={`person-row-${person.id}`} className="contents">
               {/* Person Name Cell */}
               <div
-                key={`person-${person.id}`}
                 className={cn(
                   "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 bg-card min-w-0",
                   personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
@@ -300,7 +299,7 @@ export function MonthView({
                   );
                 });
               })}
-            </>
+            </div>
           ))}
         </div>
       </div>
