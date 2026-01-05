@@ -508,90 +508,94 @@ export default function Scheduler() {
             isCompactView={isCompactView}
           />
         ) : (
-          <div className="flex h-full border rounded-lg overflow-hidden bg-card">
-            {/* Frozen Person Column */}
-            <div className="flex-none w-[200px] border-r flex flex-col z-20 shadow-sm bg-card">
-              <div className="h-[49px] border-b bg-muted p-2 flex items-center shrink-0">
-                <span className="font-semibold text-sm text-foreground">Person</span>
-              </div>
-              <div className="flex-1 overflow-y-auto no-scrollbar" id="person-column-scroll">
-                {people.filter(p => !p.excluded).map((person, personIndex) => (
-                  <div
-                    key={person.id}
-                    className={cn(
-                      "h-[120px] border-b p-2 flex items-center gap-1.5 min-w-0 shrink-0",
-                      personIndex % 2 === 0 ? "bg-muted/50" : "bg-card"
-                    )}
-                  >
-                    <div
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: person.color }}
-                    />
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="font-medium text-sm text-foreground truncate">
-                        {person.name}
-                      </span>
-                      {weekAssignments.some(a => a.personId === person.id) && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Seamless Weekly Scroll */}
+          <div className="flex h-full border rounded-lg overflow-hidden bg-card flex-col">
+            {/* Main scrollable area */}
             <div 
-              className="flex-1 overflow-auto flex flex-col"
+              className="flex-1 overflow-auto flex"
               onScroll={(e) => {
+                const target = e.target as HTMLDivElement;
                 const personScroll = document.getElementById("person-column-scroll");
-                if (personScroll) {
-                  personScroll.scrollTop = (e.target as HTMLDivElement).scrollTop;
-                }
+                const headerScroll = document.getElementById("header-row-scroll");
+                if (personScroll) personScroll.scrollTop = target.scrollTop;
+                if (headerScroll) headerScroll.scrollLeft = target.scrollLeft;
               }}
             >
-              {/* Frozen Date Header Container */}
-              <div className="flex sticky top-0 z-30 bg-card">
-                {weeksInMonth.map((weekStart) => {
-                  const weekStr = formatDate(weekStart);
-                  return (
-                    <div key={`header-${weekStr}`} className="flex-none w-[800px] border-r last:border-r-0">
-                      <WeeklyCalendar
-                        weekStartDate={weekStr}
-                        assignments={[]}
-                        people={[]}
-                        tasks={[]}
-                        onAssignmentClick={() => {}}
-                        hidePersonColumn={true}
-                        showColumnHeader={true}
+              {/* Frozen Person Column */}
+              <div className="flex-none w-[200px] border-r flex flex-col sticky left-0 z-40 bg-card shadow-sm h-fit min-h-full">
+                <div className="h-[49px] border-b bg-muted p-2 flex items-center shrink-0 sticky top-0 z-50">
+                  <span className="font-semibold text-sm text-foreground">Person</span>
+                </div>
+                <div className="flex-1 overflow-hidden" id="person-column-scroll">
+                  {people.filter(p => !p.excluded).map((person, personIndex) => (
+                    <div
+                      key={person.id}
+                      className={cn(
+                        "h-[120px] border-b p-2 flex items-center gap-1.5 min-w-0 shrink-0",
+                        personIndex % 2 === 0 ? "bg-muted/50" : "bg-card"
+                      )}
+                    >
+                      <div
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: person.color }}
                       />
+                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                        <span className="font-medium text-sm text-foreground truncate">
+                          {person.name}
+                        </span>
+                        {weekAssignments.some(a => a.personId === person.id) && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                        )}
+                      </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
 
-              {/* Data Rows */}
-              <div className="flex">
-                {weeksInMonth.map((weekStart) => {
-                  const weekStr = formatDate(weekStart);
-                  const weekAssignmentsForWeek = weekAssignments.filter(
-                    a => a.weekStartDate === weekStr
-                  );
-                  return (
-                    <div key={weekStr} className="flex-none w-[800px] border-r last:border-r-0">
-                      <WeeklyCalendar
-                        weekStartDate={weekStr}
-                        assignments={weekAssignmentsForWeek}
-                        people={displayPeople}
-                        tasks={tasks}
-                        onAssignmentClick={setSelectedAssignment}
-                        isCompactView={isCompactView}
-                        hidePersonColumn={true}
-                        showColumnHeader={false}
-                      />
-                    </div>
-                  );
-                })}
+              {/* Scrollable Schedule Area */}
+              <div className="flex-1 flex flex-col min-w-0">
+                {/* Frozen Date Header Container */}
+                <div className="flex sticky top-0 z-30 bg-card overflow-hidden" id="header-row-scroll">
+                  {weeksInMonth.map((weekStart) => {
+                    const weekStr = formatDate(weekStart);
+                    return (
+                      <div key={`header-${weekStr}`} className="flex-none w-[800px] border-r last:border-r-0">
+                        <WeeklyCalendar
+                          weekStartDate={weekStr}
+                          assignments={[]}
+                          people={[]}
+                          tasks={[]}
+                          onAssignmentClick={() => {}}
+                          hidePersonColumn={true}
+                          showColumnHeader={true}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Data Rows */}
+                <div className="flex">
+                  {weeksInMonth.map((weekStart) => {
+                    const weekStr = formatDate(weekStart);
+                    const weekAssignmentsForWeek = weekAssignments.filter(
+                      a => a.weekStartDate === weekStr
+                    );
+                    return (
+                      <div key={weekStr} className="flex-none w-[800px] border-r last:border-r-0">
+                        <WeeklyCalendar
+                          weekStartDate={weekStr}
+                          assignments={weekAssignmentsForWeek}
+                          people={displayPeople}
+                          tasks={tasks}
+                          onAssignmentClick={setSelectedAssignment}
+                          isCompactView={isCompactView}
+                          hidePersonColumn={true}
+                          showColumnHeader={false}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
