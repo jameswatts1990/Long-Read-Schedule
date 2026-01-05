@@ -37,9 +37,11 @@ export const getQueryFn: <T>(options: {
       if (unauthorizedBehavior === "returnNull") {
         return null;
       }
-      // Global redirect to login if session expired
-      window.location.href = "/api/login";
-      throw new Error("Session expired. Redirecting to login...");
+      // Only redirect if we are NOT on the landing page already
+      if (window.location.pathname !== "/") {
+        window.location.href = "/api/login";
+      }
+      throw new Error("Session expired. Please log in.");
     }
 
     await throwIfResNotOk(res);
