@@ -33,8 +33,13 @@ export const getQueryFn: <T>(options: {
       credentials: "include",
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    if (res.status === 401) {
+      if (unauthorizedBehavior === "returnNull") {
+        return null;
+      }
+      // Global redirect to login if session expired
+      window.location.href = "/api/login";
+      throw new Error("Session expired. Redirecting to login...");
     }
 
     await throwIfResNotOk(res);
