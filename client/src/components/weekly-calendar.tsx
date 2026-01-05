@@ -41,7 +41,25 @@ const isDarkColor = (hexColor: string): boolean => {
   return getLuminance(hexColor) < 0.5;
 };
 
-export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAssignmentClick, isCompactView = false }: WeeklyCalendarProps) {
+interface WeeklyCalendarProps {
+  weekStartDate: string;
+  assignments: Assignment[];
+  people: Person[];
+  tasks: Task[];
+  onAssignmentClick: (assignment: Assignment) => void;
+  isCompactView?: boolean;
+  hidePersonColumn?: boolean;
+}
+
+export function WeeklyCalendar({ 
+  weekStartDate, 
+  assignments, 
+  people, 
+  tasks, 
+  onAssignmentClick, 
+  isCompactView = false,
+  hidePersonColumn = false 
+}: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
   const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
@@ -184,13 +202,19 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
       <div className="border rounded-md bg-card h-full flex flex-col">
         <div className="overflow-auto flex-1">
           <div
-            className="grid"
-            style={{ gridTemplateColumns: "minmax(150px, 1fr) repeat(5, minmax(120px, 1fr))" }}
+            className="grid h-full"
+            style={{ 
+              gridTemplateColumns: hidePersonColumn 
+                ? "repeat(5, minmax(120px, 1fr))" 
+                : "minmax(150px, 1fr) repeat(5, minmax(120px, 1fr))" 
+            }}
           >
             {/* Header Row: Person + Day Names */}
-            <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2">
-              <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
-            </div>
+            {!hidePersonColumn && (
+              <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2">
+                <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
+              </div>
+            )}
             
             {DAYS.map((day, dayIndex) => {
               const isTodayDay = isCurrentDay(dayIndex);
@@ -223,44 +247,46 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
             {people.map((person, personIndex) => (
               <div key={person.id} className="contents">
                 {/* Person Name Cell - Sticky (Drop zone for deletion) */}
-                <div
-                  className={cn(
-                    "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 bg-card cursor-pointer min-w-0",
-                    personIndex % 2 === 0 && "bg-muted",
-                    deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
-                  )}
-                  style={{ top: "49px" }}
-                  data-testid={`person-row-${person.id}`}
-                  onDragOver={(e) => {
-                    if (draggedAssignment) {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                      setDeleteDragTarget(person.id);
-                    }
-                  }}
-                  onDragLeave={() => setDeleteDragTarget(null)}
-                  onDrop={() => {
-                    if (draggedAssignment) {
-                      deleteAssignmentMutation.mutate(draggedAssignment.id);
-                    }
-                    setDeleteDragTarget(null);
-                    setDraggedAssignment(null);
-                  }}
-                >
+                {!hidePersonColumn && (
                   <div
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: person.color }}
-                    data-testid={`person-indicator-${person.id}`}
-                  />
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
-                      {person.name}
-                    </span>
-                    {hasAssignmentEveryDay(person.id) && (
-                      <CheckCircle className="w-3 h-3 shrink-0 text-green-600 dark:text-green-400" data-testid={`check-icon-${person.id}`} />
+                    className={cn(
+                      "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 bg-card cursor-pointer min-w-0",
+                      personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
+                      deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
                     )}
+                    style={{ top: "49px" }}
+                    data-testid={`person-row-${person.id}`}
+                    onDragOver={(e) => {
+                      if (draggedAssignment) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        setDeleteDragTarget(person.id);
+                      }
+                    }}
+                    onDragLeave={() => setDeleteDragTarget(null)}
+                    onDrop={() => {
+                      if (draggedAssignment) {
+                        deleteAssignmentMutation.mutate(draggedAssignment.id);
+                      }
+                      setDeleteDragTarget(null);
+                      setDraggedAssignment(null);
+                    }}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: person.color }}
+                      data-testid={`person-indicator-${person.id}`}
+                    />
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
+                        {person.name}
+                      </span>
+                      {assignments.some(a => a.personId === person.id) && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Day Cells */}
                 {DAYS.map((day, dayIndex) => {
@@ -276,7 +302,7 @@ export function WeeklyCalendar({ weekStartDate, assignments, people, tasks, onAs
                     <div
                       key={`${person.id}-${day}`}
                       className={cn(
-                        "border-b border-l p-1.5 hover-elevate relative",
+                        "border-b border-l p-1.5 hover-elevate relative h-[120px] overflow-y-auto",
                         hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :

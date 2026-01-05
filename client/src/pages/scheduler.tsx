@@ -507,28 +507,60 @@ export default function Scheduler() {
             isCompactView={isCompactView}
           />
         ) : (
-          <div className="flex gap-6 overflow-x-auto pb-6 h-full items-start">
-            {weeksInMonth.map((weekStart) => {
-              const weekStr = formatDate(weekStart);
-              const weekAssignmentsForWeek = weekAssignments.filter(
-                a => a.weekStartDate === weekStr
-              );
-              return (
-                <div key={weekStr} className="border rounded-lg p-4 bg-card shrink-0 w-[800px]">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-4">
-                    Week of {formatWeekDisplay(weekStart)}
-                  </h3>
-                  <WeeklyCalendar
-                    weekStartDate={weekStr}
-                    assignments={weekAssignmentsForWeek}
-                    people={displayPeople}
-                    tasks={tasks}
-                    onAssignmentClick={setSelectedAssignment}
-                    isCompactView={isCompactView}
-                  />
-                </div>
-              );
-            })}
+          <div className="flex h-full border rounded-lg overflow-hidden bg-card">
+            {/* Frozen Person Column */}
+            <div className="flex-none w-[200px] border-r flex flex-col z-20 shadow-sm bg-card">
+              <div className="h-[49px] border-b bg-muted p-2 flex items-center">
+                <span className="font-semibold text-sm text-foreground">Person</span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                {people.filter(p => !p.excluded).map((person, personIndex) => (
+                  <div
+                    key={person.id}
+                    className={cn(
+                      "h-[120px] border-b p-2 flex items-center gap-1.5 min-w-0",
+                      personIndex % 2 === 0 ? "bg-muted/50" : "bg-card"
+                    )}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: person.color }}
+                    />
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <span className="font-medium text-sm text-foreground truncate">
+                        {person.name}
+                      </span>
+                      {weekAssignments.some(a => a.personId === person.id) && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Seamless Weekly Scroll */}
+            <div className="flex-1 overflow-x-auto flex pb-2">
+              {weeksInMonth.map((weekStart) => {
+                const weekStr = formatDate(weekStart);
+                const weekAssignmentsForWeek = weekAssignments.filter(
+                  a => a.weekStartDate === weekStr
+                );
+                return (
+                  <div key={weekStr} className="flex-none w-[800px] border-r last:border-r-0">
+                    <WeeklyCalendar
+                      weekStartDate={weekStr}
+                      assignments={weekAssignmentsForWeek}
+                      people={displayPeople}
+                      tasks={tasks}
+                      onAssignmentClick={setSelectedAssignment}
+                      isCompactView={isCompactView}
+                      hidePersonColumn={true}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
