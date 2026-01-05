@@ -18,7 +18,7 @@ import {
 import { randomUUID } from "crypto";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -43,6 +43,7 @@ export interface IStorage {
 
   getAssignments(): Promise<Assignment[]>;
   getAssignmentsByWeek(weekStartDate: string): Promise<Assignment[]>;
+  getAssignmentsByDateRange(startDate: string, endDate: string): Promise<Assignment[]>;
   getAssignment(id: string): Promise<Assignment | undefined>;
   getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]>;
   createAssignment(assignment: InsertAssignment): Promise<Assignment>;
@@ -311,6 +312,16 @@ export class MemStorage implements IStorage {
   async getAssignmentsByWeek(weekStartDate: string): Promise<Assignment[]> {
     return Array.from(this.assignments.values())
       .filter(a => a.weekStartDate === weekStartDate)
+      .sort((a, b) => {
+        const orderA = (a as any).order ?? 0;
+        const orderB = (b as any).order ?? 0;
+        return orderA - orderB;
+      });
+  }
+
+  async getAssignmentsByDateRange(startDate: string, endDate: string): Promise<Assignment[]> {
+    return Array.from(this.assignments.values())
+      .filter(a => a.weekStartDate >= startDate && a.weekStartDate <= endDate)
       .sort((a, b) => {
         const orderA = (a as any).order ?? 0;
         const orderB = (b as any).order ?? 0;
@@ -587,6 +598,19 @@ export class PostgresStorage implements IStorage {
       .select()
       .from(assignments)
       .where(eq(assignments.weekStartDate, weekStartDate));
+    return result.sort((a, b) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
+  }
+
+  async getAssignmentsByDateRange(startDate: string, endDate: string): Promise<Assignment[]> {
+    const result = await this.db
+      .select()
+      .from(assignments)
+      .where(
+        and(
+          gte(assignments.weekStartDate, startDate),
+          lte(assignments.weekStartDate, endDate)
+        )
+      );
     return result.sort((a, b) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
   }
 

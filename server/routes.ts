@@ -135,9 +135,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/assignments", isAuthenticated, async (req, res) => {
     try {
-      const { weekStartDate } = req.query;
+      const { weekStartDate, startDate, endDate } = req.query;
       
-      // Use database-level filtering for better performance
+      // Date range query for month view
+      if (startDate && endDate && typeof startDate === 'string' && typeof endDate === 'string') {
+        const filtered = await storage.getAssignmentsByDateRange(startDate, endDate);
+        return res.json(filtered);
+      }
+      
+      // Single week query
       if (weekStartDate && typeof weekStartDate === 'string') {
         const filtered = await storage.getAssignmentsByWeek(weekStartDate);
         return res.json(filtered);
