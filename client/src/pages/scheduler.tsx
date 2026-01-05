@@ -511,15 +511,15 @@ export default function Scheduler() {
           <div className="flex h-full border rounded-lg overflow-hidden bg-card">
             {/* Frozen Person Column */}
             <div className="flex-none w-[200px] border-r flex flex-col z-20 shadow-sm bg-card">
-              <div className="h-[49px] border-b bg-muted p-2 flex items-center">
+              <div className="h-[49px] border-b bg-muted p-2 flex items-center shrink-0">
                 <span className="font-semibold text-sm text-foreground">Person</span>
               </div>
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto no-scrollbar" id="person-column-scroll">
                 {people.filter(p => !p.excluded).map((person, personIndex) => (
                   <div
                     key={person.id}
                     className={cn(
-                      "h-[120px] border-b p-2 flex items-center gap-1.5 min-w-0",
+                      "h-[120px] border-b p-2 flex items-center gap-1.5 min-w-0 shrink-0",
                       personIndex % 2 === 0 ? "bg-muted/50" : "bg-card"
                     )}
                   >
@@ -541,26 +541,58 @@ export default function Scheduler() {
             </div>
 
             {/* Seamless Weekly Scroll */}
-            <div className="flex-1 overflow-x-auto flex pb-2">
-              {weeksInMonth.map((weekStart) => {
-                const weekStr = formatDate(weekStart);
-                const weekAssignmentsForWeek = weekAssignments.filter(
-                  a => a.weekStartDate === weekStr
-                );
-                return (
-                  <div key={weekStr} className="flex-none w-[800px] border-r last:border-r-0">
-                    <WeeklyCalendar
-                      weekStartDate={weekStr}
-                      assignments={weekAssignmentsForWeek}
-                      people={displayPeople}
-                      tasks={tasks}
-                      onAssignmentClick={setSelectedAssignment}
-                      isCompactView={isCompactView}
-                      hidePersonColumn={true}
-                    />
-                  </div>
-                );
-              })}
+            <div 
+              className="flex-1 overflow-auto flex flex-col"
+              onScroll={(e) => {
+                const personScroll = document.getElementById("person-column-scroll");
+                if (personScroll) {
+                  personScroll.scrollTop = (e.target as HTMLDivElement).scrollTop;
+                }
+              }}
+            >
+              {/* Frozen Date Header Container */}
+              <div className="flex sticky top-0 z-30 bg-card">
+                {weeksInMonth.map((weekStart) => {
+                  const weekStr = formatDate(weekStart);
+                  return (
+                    <div key={`header-${weekStr}`} className="flex-none w-[800px] border-r last:border-r-0">
+                      <WeeklyCalendar
+                        weekStartDate={weekStr}
+                        assignments={[]}
+                        people={[]}
+                        tasks={[]}
+                        onAssignmentClick={() => {}}
+                        hidePersonColumn={true}
+                        showColumnHeader={true}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Data Rows */}
+              <div className="flex">
+                {weeksInMonth.map((weekStart) => {
+                  const weekStr = formatDate(weekStart);
+                  const weekAssignmentsForWeek = weekAssignments.filter(
+                    a => a.weekStartDate === weekStr
+                  );
+                  return (
+                    <div key={weekStr} className="flex-none w-[800px] border-r last:border-r-0">
+                      <WeeklyCalendar
+                        weekStartDate={weekStr}
+                        assignments={weekAssignmentsForWeek}
+                        people={displayPeople}
+                        tasks={tasks}
+                        onAssignmentClick={setSelectedAssignment}
+                        isCompactView={isCompactView}
+                        hidePersonColumn={true}
+                        showColumnHeader={false}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

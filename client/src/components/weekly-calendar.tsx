@@ -49,6 +49,7 @@ interface WeeklyCalendarProps {
   onAssignmentClick: (assignment: Assignment) => void;
   isCompactView?: boolean;
   hidePersonColumn?: boolean;
+  showColumnHeader?: boolean;
 }
 
 export function WeeklyCalendar({ 
@@ -58,7 +59,8 @@ export function WeeklyCalendar({
   tasks, 
   onAssignmentClick, 
   isCompactView = false,
-  hidePersonColumn = false 
+  hidePersonColumn = false,
+  showColumnHeader = true
 }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -210,13 +212,13 @@ export function WeeklyCalendar({
             }}
           >
             {/* Header Row: Person + Day Names */}
-            {!hidePersonColumn && (
+            {showColumnHeader && !hidePersonColumn && (
               <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2">
                 <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
               </div>
             )}
             
-            {DAYS.map((day, dayIndex) => {
+            {showColumnHeader && DAYS.map((day, dayIndex) => {
               const isTodayDay = isCurrentDay(dayIndex);
               return (
                 <div 
@@ -302,7 +304,7 @@ export function WeeklyCalendar({
                     <div
                       key={`${person.id}-${day}`}
                       className={cn(
-                        "border-b border-l p-1.5 hover-elevate relative h-[120px] overflow-y-auto",
+                        "border-b border-l p-1.5 hover-elevate relative h-[120px]",
                         hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
@@ -358,7 +360,7 @@ export function WeeklyCalendar({
                             <div
                               key={assignment.id}
                               className={cn(
-                                "rounded-md p-1.5 cursor-grab active:cursor-grabbing group relative border-2 hover-elevate active-elevate-2",
+                                "rounded-md p-1 min-h-6 cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
                                 draggedAssignment?.id === assignment.id && "opacity-50"
                               )}
                               style={{ 
