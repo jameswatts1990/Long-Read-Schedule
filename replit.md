@@ -46,6 +46,9 @@ Preferred communication style: Simple, everyday language.
 - Filter mega menu with 3-column layout (People, Tasks, Presets)
 - Persistent premade filters shared across all users
 - Week navigation with Monday-based week starts
+- Calendar popover for quick date navigation (click date display to open calendar picker)
+- Month view mode showing multiple weeks in continuous scroll
+- View mode toggle between single week and month views
 - Drag-to-delete functionality (drag task onto person name to delete)
 
 ### Backend Architecture
@@ -72,7 +75,7 @@ GET    /api/tasks           - Fetch all tasks
 POST   /api/tasks           - Create new task
 DELETE /api/tasks/:id       - Delete task
 
-GET    /api/assignments     - Fetch all assignments (supports ?weekStartDate= filter for performance)
+GET    /api/assignments     - Fetch all assignments (supports ?weekStartDate= for single week, or ?startDate=&endDate= for date range)
 POST   /api/assignments     - Create new assignment (with conflict detection)
 PATCH  /api/assignments/:id - Update assignment
 DELETE /api/assignments/:id - Delete assignment
