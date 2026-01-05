@@ -26,7 +26,9 @@ interface FilterMegaMenuProps {
   selectedTaskIds: Set<string>;
   premadeFilters: PremadeFilter[];
   onPersonToggle: (personId: string) => void;
+  onPersonSelectAll: (personIds: string[]) => void;
   onTaskToggle: (taskId: string) => void;
+  onTaskSelectAll: (taskIds: string[]) => void;
   onApplyPremadeFilter: (personIds: string[], taskIds: string[]) => void;
   onAddPremadeFilter: (name: string, personIds: string[], taskIds: string[]) => void;
   onEditPremadeFilter: (filterId: string, name: string, personIds: string[], taskIds: string[]) => void;
@@ -43,7 +45,9 @@ export function FilterMegaMenu({
   selectedTaskIds,
   premadeFilters,
   onPersonToggle,
+  onPersonSelectAll,
   onTaskToggle,
+  onTaskSelectAll,
   onApplyPremadeFilter,
   onAddPremadeFilter,
   onEditPremadeFilter,
@@ -167,7 +171,18 @@ export function FilterMegaMenu({
           <div className="flex bg-background rounded-lg border shadow-lg">
             {/* People Column */}
             <div className="border-r p-4 min-w-56">
-              <h3 className="font-semibold text-sm mb-3 text-foreground">People</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-sm text-foreground">People</h3>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 px-2 text-xs"
+                  onClick={() => onPersonSelectAll(people.map(p => p.id))}
+                  data-testid="button-select-all-people"
+                >
+                  Select All
+                </Button>
+              </div>
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {people.map((person) => (
                   <div key={person.id} className="flex items-center gap-2">
@@ -194,7 +209,18 @@ export function FilterMegaMenu({
 
             {/* Tasks Column */}
             <div className="border-r p-4 min-w-56">
-              <h3 className="font-semibold text-sm mb-3 text-foreground">Tasks</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-sm text-foreground">Tasks</h3>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 px-2 text-xs"
+                  onClick={() => onTaskSelectAll(tasks.map(t => t.id))}
+                  data-testid="button-select-all-tasks"
+                >
+                  Select All
+                </Button>
+              </div>
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {tasks.map((task) => (
                   <div key={task.id} className="flex items-center gap-2">

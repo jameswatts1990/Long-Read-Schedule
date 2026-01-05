@@ -250,6 +250,14 @@ export default function Scheduler() {
     setFilterTaskIds(newSet);
   };
 
+  const selectAllPeople = (personIds: string[]) => {
+    setFilterPersonIds(new Set(personIds));
+  };
+
+  const selectAllTasks = (taskIds: string[]) => {
+    setFilterTaskIds(new Set(taskIds));
+  };
+
   const applyPremadeFilter = (personIds: string[], taskIds: string[]) => {
     setFilterPersonIds(new Set(personIds));
     setFilterTaskIds(new Set(taskIds));
@@ -316,7 +324,9 @@ export default function Scheduler() {
             selectedTaskIds={filterTaskIds}
             premadeFilters={premadeFilters}
             onPersonToggle={togglePersonFilter}
+            onPersonSelectAll={selectAllPeople}
             onTaskToggle={toggleTaskFilter}
+            onTaskSelectAll={selectAllTasks}
             onApplyPremadeFilter={applyPremadeFilter}
             onAddPremadeFilter={addPremadeFilter}
             onEditPremadeFilter={editPremadeFilter}
