@@ -118,15 +118,19 @@ export function MonthView({
 
   return (
     <>
-      <div className="border rounded-md bg-card h-full overflow-auto">
+      <div className="border rounded-md bg-card h-full overflow-auto relative">
         <div 
-          className="grid"
+          className="grid relative"
           style={{ 
             gridTemplateColumns: `200px repeat(${totalColumns}, minmax(140px, 1fr))`,
+            width: "max-content"
           }}
         >
           {/* Header Row */}
-          <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2 flex items-center">
+          <div 
+            className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2 flex items-center shadow-[2px_2px_0_0_hsl(var(--muted))]"
+            style={{ width: '200px', left: 0 }}
+          >
             <span className="font-semibold text-sm text-foreground">Person</span>
           </div>
           
@@ -166,10 +170,11 @@ export function MonthView({
               {/* Person Name Cell */}
               <div
                 className={cn(
-                  "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 min-w-0 h-full",
+                  "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 min-w-[200px] h-full",
                   personIndex % 2 === 0 ? "bg-muted shadow-[2px_0_0_0_hsl(var(--muted))]" : "bg-card shadow-[2px_0_0_0_hsl(var(--card))]",
                   deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
                 )}
+                style={{ width: '200px', left: 0 }}
                 onDragOver={(e) => {
                   if (draggedAssignment) {
                     e.preventDefault();
