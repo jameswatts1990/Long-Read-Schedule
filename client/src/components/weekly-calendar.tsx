@@ -201,8 +201,8 @@ export function WeeklyCalendar({
 
   return (
     <>
-      <div className="border rounded-md bg-card h-full flex flex-col">
-        <div className="overflow-auto flex-1">
+      <div className={cn("h-full flex flex-col", !hidePersonColumn && "border rounded-md bg-card")}>
+        <div className="overflow-visible flex-1">
           <div
             className="grid h-full"
             style={{ 
