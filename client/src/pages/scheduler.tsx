@@ -507,14 +507,14 @@ export default function Scheduler() {
             isCompactView={isCompactView}
           />
         ) : (
-          <div className="space-y-8">
+          <div className="flex gap-6 overflow-x-auto pb-6 h-full items-start">
             {weeksInMonth.map((weekStart) => {
               const weekStr = formatDate(weekStart);
               const weekAssignmentsForWeek = weekAssignments.filter(
                 a => a.weekStartDate === weekStr
               );
               return (
-                <div key={weekStr} className="border rounded-lg p-4 bg-card">
+                <div key={weekStr} className="border rounded-lg p-4 bg-card shrink-0 w-[800px]">
                   <h3 className="text-sm font-medium text-muted-foreground mb-4">
                     Week of {formatWeekDisplay(weekStart)}
                   </h3>
