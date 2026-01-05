@@ -1,8 +1,10 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Calendar, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
 import { FilterMegaMenu } from "@/components/filter-mega-menu";
@@ -36,12 +38,34 @@ function formatWeekDisplay(weekStart: Date): string {
   return `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
 }
 
+type ViewMode = "week" | "month";
+
+function getWeeksInMonth(date: Date): Date[] {
+  const weeks: Date[] = [];
+  const firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const lastOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  
+  let current = getMonday(firstOfMonth);
+  while (current <= lastOfMonth) {
+    weeks.push(new Date(current));
+    current = new Date(current);
+    current.setDate(current.getDate() + 7);
+  }
+  return weeks;
+}
+
+function formatMonthDisplay(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
 export default function Scheduler() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getMonday(new Date()));
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
   const [isCompactView, setIsCompactView] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("week");
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -82,12 +106,24 @@ export default function Scheduler() {
   
   const weekStartStr = formatDate(currentWeekStart);
   
-  // Fetch assignments filtered by week for better performance
+  // Calculate month range for month view
+  const weeksInMonth = getWeeksInMonth(currentWeekStart);
+  const monthStartStr = weeksInMonth.length > 0 ? formatDate(weeksInMonth[0]) : weekStartStr;
+  const monthEndStr = weeksInMonth.length > 0 ? formatDate(weeksInMonth[weeksInMonth.length - 1]) : weekStartStr;
+  
+  // Fetch assignments filtered by week for week view
   const { data: weekAssignmentsData = [] } = useQuery<Assignment[]>({ 
-    queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`] 
+    queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`],
+    enabled: viewMode === "week"
   });
   
-  let weekAssignments = weekAssignmentsData;
+  // Fetch assignments for entire month range for month view
+  const { data: monthAssignmentsData = [] } = useQuery<Assignment[]>({ 
+    queryKey: [`/api/assignments?startDate=${monthStartStr}&endDate=${monthEndStr}`],
+    enabled: viewMode === "month"
+  });
+  
+  let weekAssignments = viewMode === "week" ? weekAssignmentsData : monthAssignmentsData;
 
   // Apply filters
   if (filterPersonIds.size > 0) {
@@ -118,6 +154,29 @@ export default function Scheduler() {
 
   const goToCurrentWeek = () => {
     setCurrentWeekStart(getMonday(new Date()));
+  };
+
+  const goToPreviousMonth = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setMonth(newDate.getMonth() - 1);
+    setCurrentWeekStart(getMonday(newDate));
+  };
+
+  const goToNextMonth = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setMonth(newDate.getMonth() + 1);
+    setCurrentWeekStart(getMonday(newDate));
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      setCurrentWeekStart(getMonday(date));
+      setCalendarOpen(false);
+    }
+  };
+
+  const toggleViewMode = () => {
+    setViewMode(viewMode === "week" ? "month" : "week");
   };
 
   const handleExport = async () => {
@@ -284,38 +343,76 @@ export default function Scheduler() {
     <div className="flex flex-col h-screen w-full bg-background">
       <header className="h-16 border-b flex items-center justify-between px-6 bg-background shrink-0">
         <div className="flex items-center gap-3">
-          <Calendar className="w-6 h-6 text-primary" data-testid="icon-logo" />
+          <CalendarIcon className="w-6 h-6 text-primary" data-testid="icon-logo" />
           <h1 className="text-2xl font-semibold" data-testid="text-app-title">LR Lab Scheduler</h1>
         </div>
 
         <div className="flex items-center gap-3">
+          {/* View Mode Toggle */}
+          <Button
+            variant={viewMode === "month" ? "default" : "outline"}
+            size="default"
+            onClick={toggleViewMode}
+            data-testid="button-toggle-view-mode"
+          >
+            <CalendarDays className="w-4 h-4" />
+            <span>{viewMode === "week" ? "Month View" : "Week View"}</span>
+          </Button>
+
+          {/* Navigation Controls */}
           <div className="flex items-center gap-2 border rounded-md">
             <Button
               variant="ghost"
               size="icon"
-              onClick={goToPreviousWeek}
-              data-testid="button-previous-week"
+              onClick={viewMode === "week" ? goToPreviousWeek : goToPreviousMonth}
+              data-testid="button-previous"
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="default"
-              onClick={goToCurrentWeek}
-              data-testid="button-current-week"
-              className="min-w-32"
-            >
-              {formatWeekDisplay(currentWeekStart)}
-            </Button>
+            
+            {/* Date Display with Calendar Popover */}
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="default"
+                  data-testid="button-date-picker"
+                  className="min-w-36"
+                >
+                  {viewMode === "week" 
+                    ? formatWeekDisplay(currentWeekStart) 
+                    : formatMonthDisplay(currentWeekStart)}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="center">
+                <Calendar
+                  mode="single"
+                  selected={currentWeekStart}
+                  onSelect={handleDateSelect}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            
             <Button
               variant="ghost"
               size="icon"
-              onClick={goToNextWeek}
-              data-testid="button-next-week"
+              onClick={viewMode === "week" ? goToNextWeek : goToNextMonth}
+              data-testid="button-next"
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
+          
+          {/* Today Button */}
+          <Button
+            variant="outline"
+            size="default"
+            onClick={goToCurrentWeek}
+            data-testid="button-today"
+          >
+            Today
+          </Button>
 
           <FilterMegaMenu
             people={people}
@@ -400,14 +497,40 @@ export default function Scheduler() {
         </div>
       </header>
       <div className={`flex-1 overflow-auto ${isCompactView ? "p-2" : "p-6"}`}>
-        <WeeklyCalendar
-          weekStartDate={weekStartStr}
-          assignments={weekAssignments}
-          people={displayPeople}
-          tasks={tasks}
-          onAssignmentClick={setSelectedAssignment}
-          isCompactView={isCompactView}
-        />
+        {viewMode === "week" ? (
+          <WeeklyCalendar
+            weekStartDate={weekStartStr}
+            assignments={weekAssignments}
+            people={displayPeople}
+            tasks={tasks}
+            onAssignmentClick={setSelectedAssignment}
+            isCompactView={isCompactView}
+          />
+        ) : (
+          <div className="space-y-8">
+            {weeksInMonth.map((weekStart) => {
+              const weekStr = formatDate(weekStart);
+              const weekAssignmentsForWeek = weekAssignments.filter(
+                a => a.weekStartDate === weekStr
+              );
+              return (
+                <div key={weekStr} className="border rounded-lg p-4 bg-card">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-4">
+                    Week of {formatWeekDisplay(weekStart)}
+                  </h3>
+                  <WeeklyCalendar
+                    weekStartDate={weekStr}
+                    assignments={weekAssignmentsForWeek}
+                    people={displayPeople}
+                    tasks={tasks}
+                    onAssignmentClick={setSelectedAssignment}
+                    isCompactView={isCompactView}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       <TaskDetailsDrawer
         assignment={selectedAssignment}
