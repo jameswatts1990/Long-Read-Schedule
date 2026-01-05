@@ -1,10 +1,11 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays } from "lucide-react";
-import { Link } from "wouter";
+import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, MoreVertical } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
 import { FilterMegaMenu } from "@/components/filter-mega-menu";
@@ -453,24 +454,38 @@ export default function Scheduler() {
             {isCompactView ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
           </Button>
 
-          <Button
-            variant="outline"
-            size="default"
-            onClick={handleExport}
-            data-testid="button-export"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="default"
-            onClick={() => fileInputRef.current?.click()}
-            data-testid="button-import"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Import</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" data-testid="button-more-actions">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={handleExport} data-testid="menu-item-export">
+                <Download className="mr-2 h-4 w-4" />
+                <span>Export</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => fileInputRef.current?.click()} data-testid="menu-item-import">
+                <Upload className="mr-2 h-4 w-4" />
+                <span>Import</span>
+              </DropdownMenuItem>
+              <Link href="/admin">
+                <DropdownMenuItem data-testid="menu-item-admin">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Admin</span>
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuItem 
+                onClick={() => window.location.href = "/api/logout"}
+                className="text-destructive focus:text-destructive"
+                data-testid="menu-item-logout"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Logout</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <input
             ref={fileInputRef}
             type="file"
@@ -479,21 +494,6 @@ export default function Scheduler() {
             onChange={handleImport}
             data-testid="input-import-file"
           />
-          <Link href="/admin">
-            <Button variant="outline" size="default" data-testid="button-admin">
-              <Settings className="w-4 h-4" />
-              <span>Admin</span>
-            </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="default"
-            onClick={() => window.location.href = "/api/logout"}
-            data-testid="button-logout"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Logout</span>
-          </Button>
         </div>
       </header>
       <div className={`flex-1 overflow-auto ${isCompactView ? "p-2" : "p-6"}`}>
