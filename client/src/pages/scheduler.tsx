@@ -554,11 +554,11 @@ export default function Scheduler() {
               {/* Scrollable Schedule Area */}
               <div className="flex-1 flex flex-col min-w-0">
                 {/* Frozen Date Header Container */}
-                <div className="flex sticky top-0 z-30 bg-card overflow-hidden" id="header-row-scroll">
+                <div className="flex sticky top-0 z-30 bg-card overflow-hidden h-[49px]" id="header-row-scroll">
                   {weeksInMonth.map((weekStart) => {
                     const weekStr = formatDate(weekStart);
                     return (
-                      <div key={`header-${weekStr}`} className="flex-none w-[800px] border-r last:border-r-0">
+                      <div key={`header-${weekStr}`} className="flex-none w-[800px] border-r last:border-r-0 h-[49px]">
                         <WeeklyCalendar
                           weekStartDate={weekStr}
                           assignments={[]}

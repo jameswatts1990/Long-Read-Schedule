@@ -224,7 +224,7 @@ export function WeeklyCalendar({
                 <div 
                   key={day} 
                   className={cn(
-                    "sticky top-0 z-40 border-b text-center p-2",
+                    "sticky top-0 z-40 border-b text-center p-2 min-h-[49px] flex flex-col justify-center",
                     isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
                   )}
                   data-testid={`header-day-${day.toLowerCase()}`}
