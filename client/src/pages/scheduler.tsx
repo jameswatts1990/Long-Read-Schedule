@@ -509,43 +509,28 @@ export default function Scheduler() {
           />
         ) : (
           <div className="flex h-full border rounded-lg overflow-hidden bg-card flex-col">
-            <div className="flex-1 overflow-auto">
-              <div 
-                className="grid"
-                style={{ 
-                  gridTemplateColumns: `200px repeat(${weeksInMonth.length * 5}, minmax(120px, 1fr))` 
-                }}
-              >
-                {/* Fixed Top-Left Corner */}
-                <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2 h-[49px] flex items-center">
+            {/* Main scrollable area */}
+            <div 
+              className="flex-1 overflow-auto flex"
+              onScroll={(e) => {
+                const target = e.target as HTMLDivElement;
+                const personScroll = document.getElementById("person-column-scroll");
+                const headerScroll = document.getElementById("header-row-scroll");
+                if (personScroll) personScroll.scrollTop = target.scrollTop;
+                if (headerScroll) headerScroll.scrollLeft = target.scrollLeft;
+              }}
+            >
+              {/* Frozen Person Column */}
+              <div className="flex-none w-[200px] border-r flex flex-col sticky left-0 z-40 bg-card shadow-sm h-fit min-h-full">
+                <div className="h-[49px] border-b bg-muted p-2 flex items-center shrink-0 sticky top-0 z-50">
                   <span className="font-semibold text-sm text-foreground">Person</span>
                 </div>
-
-                {/* Sticky Top Header (Dates) */}
-                {weeksInMonth.map((weekStart) => {
-                  const weekStr = formatDate(weekStart);
-                  return (
-                    <div key={`header-row-${weekStr}`} className="contents">
-                      <WeeklyCalendar
-                        weekStartDate={weekStr}
-                        assignments={[]}
-                        people={[]}
-                        tasks={[]}
-                        onAssignmentClick={() => {}}
-                        hidePersonColumn={true}
-                        showColumnHeader={true}
-                      />
-                    </div>
-                  );
-                })}
-
-                {/* Data Rows */}
-                {people.filter(p => !p.excluded).map((person, personIndex) => (
-                  <div key={person.id} className="contents">
-                    {/* Sticky Left Column (Names) */}
+                <div className="flex-1 overflow-hidden" id="person-column-scroll">
+                  {people.filter(p => !p.excluded).map((person, personIndex) => (
                     <div
+                      key={person.id}
                       className={cn(
-                        "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 min-w-0 h-[120px] shrink-0",
+                        "h-[120px] border-b p-2 flex items-center gap-1.5 min-w-0 shrink-0",
                         personIndex % 2 === 0 ? "bg-muted/50" : "bg-card"
                       )}
                     >
@@ -562,30 +547,55 @@ export default function Scheduler() {
                         )}
                       </div>
                     </div>
+                  ))}
+                </div>
+              </div>
 
-                    {/* Weekly Data Cells */}
-                    {weeksInMonth.map((weekStart) => {
-                      const weekStr = formatDate(weekStart);
-                      const weekAssignmentsForWeek = weekAssignments.filter(
-                        a => a.weekStartDate === weekStr
-                      );
-                      return (
-                        <div key={`data-${person.id}-${weekStr}`} className="contents">
-                          <WeeklyCalendar
-                            weekStartDate={weekStr}
-                            assignments={weekAssignmentsForWeek}
-                            people={[person]}
-                            tasks={tasks}
-                            onAssignmentClick={setSelectedAssignment}
-                            isCompactView={isCompactView}
-                            hidePersonColumn={true}
-                            showColumnHeader={false}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+              {/* Scrollable Schedule Area */}
+              <div className="flex-1 flex flex-col min-w-0">
+                {/* Frozen Date Header Container */}
+                <div className="flex sticky top-0 z-30 bg-card overflow-hidden" id="header-row-scroll">
+                  {weeksInMonth.map((weekStart) => {
+                    const weekStr = formatDate(weekStart);
+                    return (
+                      <div key={`header-${weekStr}`} className="flex-none w-[800px] border-r last:border-r-0">
+                        <WeeklyCalendar
+                          weekStartDate={weekStr}
+                          assignments={[]}
+                          people={[]}
+                          tasks={[]}
+                          onAssignmentClick={() => {}}
+                          hidePersonColumn={true}
+                          showColumnHeader={true}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Data Rows */}
+                <div className="flex">
+                  {weeksInMonth.map((weekStart) => {
+                    const weekStr = formatDate(weekStart);
+                    const weekAssignmentsForWeek = weekAssignments.filter(
+                      a => a.weekStartDate === weekStr
+                    );
+                    return (
+                      <div key={weekStr} className="flex-none w-[800px] border-r last:border-r-0">
+                        <WeeklyCalendar
+                          weekStartDate={weekStr}
+                          assignments={weekAssignmentsForWeek}
+                          people={displayPeople}
+                          tasks={tasks}
+                          onAssignmentClick={setSelectedAssignment}
+                          isCompactView={isCompactView}
+                          hidePersonColumn={true}
+                          showColumnHeader={false}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

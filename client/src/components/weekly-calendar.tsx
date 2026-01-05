@@ -201,8 +201,8 @@ export function WeeklyCalendar({
 
   return (
     <>
-      <div className={cn("h-full flex flex-col", !hidePersonColumn && "border rounded-md bg-card")}>
-        <div className="overflow-visible flex-1">
+      <div className="border rounded-md bg-card h-full flex flex-col">
+        <div className="overflow-auto flex-1">
           <div
             className="grid h-full"
             style={{ 
@@ -224,7 +224,7 @@ export function WeeklyCalendar({
                 <div 
                   key={day} 
                   className={cn(
-                    "sticky top-0 z-40 border-b text-center p-2 min-h-[49px] flex flex-col justify-center",
+                    "sticky top-0 z-40 border-b text-center p-2",
                     isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
                   )}
                   data-testid={`header-day-${day.toLowerCase()}`}
