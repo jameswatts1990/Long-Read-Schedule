@@ -166,8 +166,8 @@ export function MonthView({
               {/* Person Name Cell */}
               <div
                 className={cn(
-                  "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 bg-card min-w-0",
-                  personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
+                  "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 min-w-0 h-full",
+                  personIndex % 2 === 0 ? "bg-muted shadow-[2px_0_0_0_hsl(var(--muted))]" : "bg-card shadow-[2px_0_0_0_hsl(var(--card))]",
                   deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
                 )}
                 onDragOver={(e) => {
