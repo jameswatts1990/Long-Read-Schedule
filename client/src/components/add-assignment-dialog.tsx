@@ -449,7 +449,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
           {isMonthMode && (
             <div className="space-y-2">
-              <FormLabel>Select Dates</FormLabel>
+              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Select Dates</label>
               <div className="border rounded-md p-1 shadow-sm bg-background">
                 <Calendar
                   mode="multiple"
