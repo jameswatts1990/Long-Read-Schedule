@@ -353,6 +353,7 @@ export function MonthView({
         personId={selectedCell?.personId || ""}
         day={selectedCell?.day || ""}
         tasks={tasks}
+        isMonthMode={true}
       />
     </>
   );

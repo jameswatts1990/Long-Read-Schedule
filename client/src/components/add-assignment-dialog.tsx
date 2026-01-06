@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,6 +7,7 @@ import { CheckCircle, AlertCircle } from "lucide-react";
 import { insertAssignmentSchema, type Task, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -27,6 +28,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { startOfWeek, addDays, format, parse, isToday, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface AddAssignmentDialogProps {
   open: boolean;
@@ -35,6 +38,7 @@ interface AddAssignmentDialogProps {
   personId: string;
   day: string;
   tasks: Task[];
+  isMonthMode?: boolean;
 }
 
 const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: true, day: true, date: true }).extend({
@@ -46,14 +50,22 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
 
 type FormData = z.infer<typeof formSchema>;
 
-export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, day, tasks }: AddAssignmentDialogProps) {
+export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, day, tasks, isMonthMode = false }: AddAssignmentDialogProps) {
   const { toast } = useToast();
   const [conflictData, setConflictData] = useState<{ conflicts: any[], conflictCount: number } | null>(null);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
   const [shouldCloseAfter, setShouldCloseAfter] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set([day]));
-  const selectedTask = tasks.find(t => t.id === selectedTaskId);
+  const [selectedDates, setSelectedDates] = useState<Date[]>([]);
+  
+  const currentMonth = useMemo(() => {
+    try {
+      return parse(weekStartDate, "yyyy-MM-dd", new Date());
+    } catch (e) {
+      return new Date();
+    }
+  }, [weekStartDate]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -67,6 +79,32 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
   const createMutation = useMutation({
     mutationFn: async ({ data, override = false }: { data: FormData, override?: boolean }) => {
+      // In month mode, we might be creating for multiple dates
+      if (isMonthMode && selectedDates.length > 0) {
+        const promises = selectedDates.map(date => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const dayName = format(date, "EEEE");
+          // Calculate week start date (Monday)
+          const weekStart = startOfWeek(date, { weekStartsOn: 1 });
+          const weekStartStr = format(weekStart, "yyyy-MM-dd");
+          
+          return apiRequest("POST", "/api/assignments", {
+            ...data,
+            personId,
+            day: dayName,
+            weekStartDate: weekStartStr,
+            date: dateStr,
+            batchNumber: data.batchNumber || undefined,
+            batchSize: data.batchSize || undefined,
+            notes: data.notes || undefined,
+            override,
+          });
+        });
+        
+        const results = await Promise.all(promises);
+        return results[0].json();
+      }
+
       const res = await apiRequest("POST", "/api/assignments", {
         ...data,
         personId,
@@ -86,7 +124,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
       toast({
         title: "Assignment created",
         description: "Task assigned successfully",
@@ -100,6 +138,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       });
       setConflictData(null);
       setPendingFormData(null);
+      setSelectedDates([]);
       if (shouldCloseAfter) {
         setShouldCloseAfter(false);
         onClose();
@@ -127,17 +166,23 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         notes: "",
       });
       setSelectedDays(new Set([day]));
+      // Initialize with current date if in month mode
+      if (isMonthMode) {
+        try {
+          const initialDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
+          setSelectedDates([initialDate]);
+        } catch (e) {
+          setSelectedDates([new Date()]);
+        }
+      }
     }
-  }, [open, form, day]);
+  }, [open, form, day, isMonthMode, weekStartDate]);
 
   const onSubmit = async (data: FormData) => {
     setPendingFormData(data);
     
-    if (selectedDays.size === 1) {
-      // Single day - use normal flow
-      createMutation.mutate({ data, override: false });
-    } else {
-      // Multiple days - create for each selected day
+    if (!isMonthMode && selectedDays.size > 1) {
+      // Multiple days in week mode
       const daysArray = Array.from(selectedDays);
       const promises = daysArray.map((d) =>
         apiRequest("POST", "/api/assignments", {
@@ -151,33 +196,25 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       );
 
       try {
-        const results = await Promise.all(promises);
-        queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
+        await Promise.all(promises);
+        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
         toast({
           title: "Assignments created",
           description: `Task assigned to ${daysArray.length} day(s)`,
           variant: "default",
         });
-        form.reset({
-          taskId: "",
-          batchNumber: "",
-          batchSize: undefined,
-          notes: "",
-        });
+        form.reset();
         setSelectedDays(new Set([day]));
-        setConflictData(null);
-        setPendingFormData(null);
-        if (shouldCloseAfter) {
-          setShouldCloseAfter(false);
-          onClose();
-        }
+        if (shouldCloseAfter) onClose();
       } catch (error: any) {
         toast({
           title: "Failed to create assignments",
-          description: error.message || "Some or all assignments failed to create",
+          description: error.message,
           variant: "destructive",
         });
       }
+    } else {
+      createMutation.mutate({ data, override: false });
     }
   };
 
@@ -193,8 +230,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   };
 
   const handleCreateAllWeek = async (data: FormData) => {
-    setPendingFormData(data);
-    
     const promises = DAYS.map((d) =>
       apiRequest("POST", "/api/assignments", {
         ...data,
@@ -207,26 +242,19 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
     );
 
     try {
-      const results = await Promise.all(promises);
-      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
+      await Promise.all(promises);
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
       toast({
         title: "Assignments created",
         description: `Task assigned to all 5 days`,
         variant: "default",
       });
-      form.reset({
-        taskId: "",
-        batchNumber: "",
-        batchSize: undefined,
-        notes: "",
-      });
-      setConflictData(null);
-      setPendingFormData(null);
+      form.reset();
       onClose();
     } catch (error: any) {
       toast({
         title: "Failed to create assignments",
-        description: error.message || "Some or all assignments failed to create",
+        description: error.message,
         variant: "destructive",
       });
     }
@@ -234,65 +262,107 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl" data-testid="dialog-add-assignment">
+      <DialogContent className={cn("max-w-xl", isMonthMode && "max-w-3xl")} data-testid="dialog-add-assignment">
         <DialogHeader>
           <DialogTitle>Add Task Assignment</DialogTitle>
           <DialogDescription>
-            Assign a task for {day}
+            {isMonthMode ? "Assign tasks across the month" : `Assign a task for ${day}`}
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="taskId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Task</FormLabel>
-                  <Select 
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      setSelectedTaskId(value);
-                    }} 
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger data-testid="select-task">
-                        <SelectValue placeholder="Select a task" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {tasks.map((task) => (
-                        <SelectItem key={task.id} value={task.id} data-testid={`task-option-${task.id}`}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3 h-3 rounded"
-                              style={{ backgroundColor: task.color }}
-                            />
-                            {task.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex gap-4">
+        <div className={cn("grid gap-6", isMonthMode && "grid-cols-[1fr_300px]")}>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="batchNumber"
+                name="taskId"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>Batch Number (Optional)</FormLabel>
+                  <FormItem>
+                    <FormLabel>Task</FormLabel>
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        setSelectedTaskId(value);
+                      }} 
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-task">
+                          <SelectValue placeholder="Select a task" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {tasks.map((task) => (
+                          <SelectItem key={task.id} value={task.id} data-testid={`task-option-${task.id}`}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded"
+                                style={{ backgroundColor: task.color }}
+                              />
+                              {task.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex gap-4">
+                <FormField
+                  control={form.control}
+                  name="batchNumber"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>Batch Number (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="e.g., B-2024-001"
+                          data-testid="input-batch-number"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="batchSize"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>Batch Size (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          min="1"
+                          placeholder="Enter batch size"
+                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                          data-testid="input-batch-size"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes (Optional)</FormLabel>
                     <FormControl>
-                      <Input
+                      <Textarea
                         {...field}
-                        placeholder="e.g., B-2024-001"
-                        data-testid="input-batch-number"
+                        placeholder="Additional notes..."
+                        rows={3}
+                        data-testid="input-notes"
                       />
                     </FormControl>
                     <FormMessage />
@@ -300,119 +370,124 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="batchSize"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>Batch Size (Optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        min="1"
-                        placeholder="Enter batch size"
-                        onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                        data-testid="input-batch-size"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      placeholder="Additional notes..."
-                      rows={3}
-                      data-testid="input-notes"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="space-y-2">
-              <FormLabel>Days to Assign</FormLabel>
-              <div className="flex flex-wrap gap-3">
-                {DAYS.map((d) => (
-                  <div key={d} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`day-${d}`}
-                      checked={selectedDays.has(d)}
-                      onCheckedChange={(checked) => {
-                        const newDays = new Set(selectedDays);
-                        if (checked) {
-                          newDays.add(d);
-                        } else {
-                          newDays.delete(d);
-                        }
-                        setSelectedDays(newDays);
-                      }}
-                      data-testid={`checkbox-day-${d.toLowerCase()}`}
-                    />
-                    <label htmlFor={`day-${d}`} className="text-sm cursor-pointer">{d}</label>
+              {!isMonthMode && (
+                <div className="space-y-2">
+                  <FormLabel>Days to Assign</FormLabel>
+                  <div className="flex flex-wrap gap-3">
+                    {DAYS.map((d) => (
+                      <div key={d} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`day-${d}`}
+                          checked={selectedDays.has(d)}
+                          onCheckedChange={(checked) => {
+                            const newDays = new Set(selectedDays);
+                            if (checked) {
+                              newDays.add(d);
+                            } else {
+                              newDays.delete(d);
+                            }
+                            setSelectedDays(newDays);
+                          }}
+                          data-testid={`checkbox-day-${d.toLowerCase()}`}
+                        />
+                        <label htmlFor={`day-${d}`} className="text-sm cursor-pointer">{d}</label>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              )}
 
-            <div className="flex justify-between gap-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                data-testid="button-close"
-              >
-                Close
-              </Button>
-              <div className="flex gap-2">
+              <div className="flex justify-between gap-2 pt-4">
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={createMutation.isPending || !form.getValues("taskId")}
-                  data-testid="button-all-week"
-                  onClick={() => {
-                    const data = form.getValues();
-                    handleCreateAllWeek(data);
-                  }}
+                  onClick={onClose}
+                  data-testid="button-close"
                 >
-                  All Week
+                  Close
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={createMutation.isPending}
-                  data-testid="button-submit-and-add-another"
+                <div className="flex gap-2">
+                  {!isMonthMode && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={createMutation.isPending || !form.getValues("taskId")}
+                      data-testid="button-all-week"
+                      onClick={() => {
+                        const data = form.getValues();
+                        handleCreateAllWeek(data);
+                      }}
+                    >
+                      All Week
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={createMutation.isPending}
+                    data-testid="button-submit-and-add-another"
+                    onClick={() => {
+                      form.handleSubmit(onSubmit)();
+                    }}
+                  >
+                    {createMutation.isPending ? "Creating..." : "Create & Add Another"}
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={createMutation.isPending}
+                    data-testid="button-submit-and-close"
+                    onClick={() => {
+                      setShouldCloseAfter(true);
+                    }}
+                  >
+                    {createMutation.isPending ? "Creating..." : "Create & Close"}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </Form>
+
+          {isMonthMode && (
+            <div className="space-y-2">
+              <FormLabel>Select Dates</FormLabel>
+              <div className="border rounded-md p-1 shadow-sm bg-background">
+                <Calendar
+                  mode="multiple"
+                  selected={selectedDates}
+                  onSelect={(dates) => setSelectedDates(dates || [])}
+                  initialFocus
+                  className="rounded-md"
+                />
+              </div>
+              <div className="flex gap-2 mt-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1 text-xs"
                   onClick={() => {
-                    form.handleSubmit(onSubmit)();
+                    const start = startOfMonth(currentMonth);
+                    const end = endOfMonth(currentMonth);
+                    const days = eachDayOfInterval({ start, end }).filter(date => {
+                      const dayName = format(date, "EEEE");
+                      return dayName !== "Saturday" && dayName !== "Sunday";
+                    });
+                    setSelectedDates(days);
                   }}
                 >
-                  {createMutation.isPending ? "Creating..." : "Create & Add Another"}
+                  Select All Workdays
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  data-testid="button-submit-and-close"
-                  onClick={() => {
-                    setShouldCloseAfter(true);
-                  }}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1 text-xs"
+                  onClick={() => setSelectedDates([])}
                 >
-                  {createMutation.isPending ? "Creating..." : "Create & Close"}
+                  Clear
                 </Button>
               </div>
             </div>
-          </form>
-        </Form>
+          )}
+        </div>
       </DialogContent>
 
       {/* Conflict Confirmation Dialog */}
