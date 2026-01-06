@@ -350,7 +350,17 @@ export function FilterMegaMenu({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium mb-2 block">People</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">People</label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setNewFilterPersonIds(new Set(people.map(p => p.id)))}
+                  >
+                    Select All
+                  </Button>
+                </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3">
                   {people.map((person) => (
                     <div key={person.id} className="flex items-center gap-2">
@@ -376,7 +386,17 @@ export function FilterMegaMenu({
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-2 block">Tasks</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">Tasks</label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setNewFilterTaskIds(new Set(tasks.map(t => t.id)))}
+                  >
+                    Select All
+                  </Button>
+                </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3">
                   {tasks.map((task) => (
                     <div key={task.id} className="flex items-center gap-2">
@@ -443,7 +463,17 @@ export function FilterMegaMenu({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium mb-2 block">People</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">People</label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setEditFilterPersonIds(new Set(people.map(p => p.id)))}
+                  >
+                    Select All
+                  </Button>
+                </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3">
                   {people.map((person) => (
                     <div key={person.id} className="flex items-center gap-2">
@@ -469,7 +499,17 @@ export function FilterMegaMenu({
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-2 block">Tasks</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">Tasks</label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setEditFilterTaskIds(new Set(tasks.map(t => t.id)))}
+                  >
+                    Select All
+                  </Button>
+                </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3">
                   {tasks.map((task) => (
                     <div key={task.id} className="flex items-center gap-2">

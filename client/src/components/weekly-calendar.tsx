@@ -9,6 +9,14 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { parse, addDays, format, isToday, isSameDay } from "date-fns";
 
+import { Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 interface WeeklyCalendarProps {
   weekStartDate: string;
   assignments: Assignment[];
@@ -382,8 +390,39 @@ export function WeeklyCalendar({
                               <div className="flex items-start gap-1">
                                 <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50 mt-0.5" />
                                 <div className="flex-1 min-w-0">
-                                  <div className={cn("text-xs font-medium truncate", isTaskDark ? "text-white" : "text-foreground")}>
-                                    {task.name}
+                                  <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
+                                    <span className="truncate">{task.name}</span>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <div className="p-0.5 hover:bg-black/10 rounded cursor-help">
+                                            <Info className="w-3 h-3 opacity-70" />
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="p-3 max-w-xs">
+                                          <div className="space-y-2">
+                                            <div>
+                                              <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
+                                              <p className="text-sm font-medium">{task.name}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>
+                                              <p className="text-sm">{person.name}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-xs font-bold text-muted-foreground uppercase">Time Slot</p>
+                                              <p className="text-sm">{day}, {getDateForDay(dayIndex)}</p>
+                                            </div>
+                                            {assignment.notes && (
+                                              <div>
+                                                <p className="text-xs font-bold text-muted-foreground uppercase">Notes</p>
+                                                <p className="text-sm italic">{assignment.notes}</p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   </div>
                                   {(assignment.batchNumber || assignment.batchSize) && (
                                     <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
