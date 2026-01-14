@@ -289,37 +289,17 @@
   /* Cross-hatch pattern for empty calendar cells */
   .empty-cell-pattern {
     background-image: 
-      repeating-linear-gradient(
-        45deg,
-        transparent,
-        transparent 8px,
-        hsl(var(--muted-foreground) / 0.12) 8px,
-        hsl(var(--muted-foreground) / 0.12) 9px
-      ),
-      repeating-linear-gradient(
-        -45deg,
-        transparent,
-        transparent 8px,
-        hsl(var(--muted-foreground) / 0.12) 8px,
-        hsl(var(--muted-foreground) / 0.12) 9px
-      );
+      radial-gradient(hsl(var(--muted-foreground) / 0.4) 1px, transparent 1px),
+      radial-gradient(hsl(var(--muted-foreground) / 0.4) 1px, transparent 1px);
+    background-position: 0 0, 4px 4px;
+    background-size: 8px 8px;
   }
 
   .dark .empty-cell-pattern {
     background-image: 
-      repeating-linear-gradient(
-        45deg,
-        transparent,
-        transparent 8px,
-        hsl(var(--muted-foreground) / 0.15) 8px,
-        hsl(var(--muted-foreground) / 0.15) 9px
-      ),
-      repeating-linear-gradient(
-        -45deg,
-        transparent,
-        transparent 8px,
-        hsl(var(--muted-foreground) / 0.15) 8px,
-        hsl(var(--muted-foreground) / 0.15) 9px
-      );
+      radial-gradient(hsl(var(--muted-foreground) / 0.5) 1px, transparent 1px),
+      radial-gradient(hsl(var(--muted-foreground) / 0.5) 1px, transparent 1px);
+    background-position: 0 0, 4px 4px;
+    background-size: 8px 8px;
   }
 }
