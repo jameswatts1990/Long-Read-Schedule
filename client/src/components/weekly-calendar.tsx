@@ -312,7 +312,8 @@ export function WeeklyCalendar({
                     <div
                       key={`${person.id}-${day}`}
                       className={cn(
-                        "border-b border-l p-1.5 hover-elevate relative h-[120px]",
+                        "border-b border-l hover-elevate relative",
+                        isCompactView ? "p-0.5 h-[80px]" : "p-1.5 h-[120px]",
                         hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
@@ -357,7 +358,7 @@ export function WeeklyCalendar({
                       }}
                       data-testid={`cell-${person.id}-${day.toLowerCase()}`}
                     >
-                      <div className="space-y-1">
+                      <div className={cn("space-y-1", isCompactView && "space-y-0.5")}>
                         {cellAssignments.map(assignment => {
                           const task = getTaskById(assignment.taskId);
                           if (!task) return null;
@@ -368,7 +369,8 @@ export function WeeklyCalendar({
                             <div
                               key={assignment.id}
                               className={cn(
-                                "rounded-md p-1 min-h-6 cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
+                                "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
+                                isCompactView ? "p-0.5 min-h-4" : "p-1 min-h-6",
                                 draggedAssignment?.id === assignment.id && "opacity-50"
                               )}
                               style={{ 
@@ -387,44 +389,46 @@ export function WeeklyCalendar({
                               onClick={() => onAssignmentClick(assignment)}
                               data-testid={`assignment-${assignment.id}`}
                             >
-                              <div className="flex items-start gap-1">
-                                <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50 mt-0.5" />
+                              <div className={cn("flex items-start", isCompactView ? "gap-0.5" : "gap-1")}>
+                                <GripVertical className={cn("shrink-0 opacity-50", isCompactView ? "w-2 h-2 mt-0" : "w-2.5 h-2.5 mt-0.5")} />
                                 <div className="flex-1 min-w-0">
-                                  <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
+                                  <div className={cn("font-medium truncate flex items-center justify-between", isCompactView ? "text-[10px] gap-0.5" : "text-xs gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                     <span className="truncate">{task.name}</span>
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <div className="p-0.5 hover:bg-black/10 rounded cursor-help">
-                                            <Info className="w-3 h-3 opacity-70" />
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent className="p-3 max-w-xs">
-                                          <div className="space-y-2">
-                                            <div>
-                                              <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
-                                              <p className="text-sm font-medium">{task.name}</p>
+                                    {!isCompactView && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="p-0.5 hover:bg-black/10 rounded cursor-help">
+                                              <Info className="w-3 h-3 opacity-70" />
                                             </div>
-                                            <div>
-                                              <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>
-                                              <p className="text-sm">{person.name}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs font-bold text-muted-foreground uppercase">Time Slot</p>
-                                              <p className="text-sm">{day}, {getDateForDay(dayIndex)}</p>
-                                            </div>
-                                            {assignment.notes && (
+                                          </TooltipTrigger>
+                                          <TooltipContent className="p-3 max-w-xs">
+                                            <div className="space-y-2">
                                               <div>
-                                                <p className="text-xs font-bold text-muted-foreground uppercase">Notes</p>
-                                                <p className="text-sm italic">{assignment.notes}</p>
+                                                <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
+                                                <p className="text-sm font-medium">{task.name}</p>
                                               </div>
-                                            )}
-                                          </div>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
+                                              <div>
+                                                <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>
+                                                <p className="text-sm">{person.name}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-xs font-bold text-muted-foreground uppercase">Time Slot</p>
+                                                <p className="text-sm">{day}, {getDateForDay(dayIndex)}</p>
+                                              </div>
+                                              {assignment.notes && (
+                                                <div>
+                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Notes</p>
+                                                  <p className="text-sm italic">{assignment.notes}</p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
                                   </div>
-                                  {(assignment.batchNumber || assignment.batchSize) && (
+                                  {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
                                     <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
                                       {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
                                       {assignment.batchSize && <span>({assignment.batchSize})</span>}
