@@ -222,7 +222,7 @@ export function MonthView({
                       key={`${weekStr}-${person.id}-${day}`}
                       className={cn(
                         "border-b hover-elevate relative",
-                        isCompactView ? "p-0.5 min-h-[60px]" : "p-1.5 min-h-[100px]",
+                        isCompactView ? "p-0.5" : "p-1.5 min-h-[100px]",
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         personIndex % 2 === 0 ? "bg-muted/20" : "",
                         isDropTarget && "bg-primary/10 border-2 border-primary",
@@ -260,7 +260,7 @@ export function MonthView({
                               key={assignment.id}
                               className={cn(
                                 "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
-                                isCompactView ? "p-0.5 min-h-4" : "p-1 min-h-6",
+                                isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
                                 draggedAssignment?.id === assignment.id && "opacity-50"
                               )}
                               style={{ 
@@ -278,10 +278,10 @@ export function MonthView({
                               }}
                               onClick={() => onAssignmentClick(assignment)}
                             >
-                              <div className={cn("flex items-start", isCompactView ? "gap-0.5" : "gap-1")}>
-                                <GripVertical className={cn("shrink-0 opacity-50", isCompactView ? "w-2 h-2 mt-0" : "w-2.5 h-2.5 mt-0.5")} />
+                              <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
+                                {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
                                 <div className="flex-1 min-w-0">
-                                  <div className={cn("font-medium truncate flex items-center justify-between", isCompactView ? "text-[10px] gap-0.5" : "text-xs gap-1", isTaskDark ? "text-white" : "text-foreground")}>
+                                  <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                     <span className="truncate">{task.name}</span>
                                     {!isCompactView && (
                                       <TooltipProvider>
