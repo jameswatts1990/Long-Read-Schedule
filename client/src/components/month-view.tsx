@@ -226,7 +226,8 @@ export function MonthView({
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         personIndex % 2 === 0 ? "bg-muted/20" : "",
                         isDropTarget && "bg-primary/10 border-2 border-primary",
-                        dayIndex === 0 && "border-l-2 border-l-border"
+                        dayIndex === 0 && "border-l-2 border-l-border",
+                        cellAssignments.length === 0 && "empty-cell-pattern"
                       )}
                       onDragOver={(e) => {
                         if (draggedAssignment) {

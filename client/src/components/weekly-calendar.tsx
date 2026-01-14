@@ -319,7 +319,8 @@ export function WeeklyCalendar({
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
                         (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
                         personIndex % 2 === 0 && "bg-muted/20",
-                        isDropTarget && "bg-primary/10 border-2 border-primary"
+                        isDropTarget && "bg-primary/10 border-2 border-primary",
+                        cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
                       )}
                       onDragOver={(e) => {
                         if (draggedAssignment) {

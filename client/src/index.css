@@ -285,4 +285,41 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+
+  /* Cross-hatch pattern for empty calendar cells */
+  .empty-cell-pattern {
+    background-image: 
+      repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 8px,
+        hsl(var(--muted-foreground) / 0.12) 8px,
+        hsl(var(--muted-foreground) / 0.12) 9px
+      ),
+      repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 8px,
+        hsl(var(--muted-foreground) / 0.12) 8px,
+        hsl(var(--muted-foreground) / 0.12) 9px
+      );
+  }
+
+  .dark .empty-cell-pattern {
+    background-image: 
+      repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 8px,
+        hsl(var(--muted-foreground) / 0.15) 8px,
+        hsl(var(--muted-foreground) / 0.15) 9px
+      ),
+      repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 8px,
+        hsl(var(--muted-foreground) / 0.15) 8px,
+        hsl(var(--muted-foreground) / 0.15) 9px
+      );
+  }
 }
