@@ -313,7 +313,7 @@ export function WeeklyCalendar({
                       key={`${person.id}-${day}`}
                       className={cn(
                         "border-b border-l hover-elevate relative",
-                        isCompactView ? "p-0.5" : "p-1.5 h-[120px]",
+                        isCompactView ? "p-0.5" : "p-1.5 min-h-[120px]",
                         hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
