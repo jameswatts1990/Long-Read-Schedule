@@ -63,7 +63,9 @@ export function DuplicateAssignmentDialog({
       return Promise.all(promises);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Tasks duplicated",
         description: `Created ${selectedSlots.size} new assignment(s)`,

@@ -86,7 +86,9 @@ export function WeeklyCalendar({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Task moved",
         description: "Assignment updated successfully",
@@ -113,7 +115,9 @@ export function WeeklyCalendar({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
     },
     onError: (error) => {
       console.error("Reorder failed:", error);
@@ -130,7 +134,9 @@ export function WeeklyCalendar({
       return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${weekStartDate}`] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Task deleted",
         description: "Assignment has been removed",

@@ -124,7 +124,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Assignment created",
         description: "Task assigned successfully",
@@ -197,7 +199,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
       try {
         await Promise.all(promises);
-        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+        queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
         toast({
           title: "Assignments created",
           description: `Task assigned to ${daysArray.length} day(s)`,
@@ -243,7 +247,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
     try {
       await Promise.all(promises);
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Assignments created",
         description: `Task assigned to all 5 days`,

@@ -41,7 +41,9 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
     },
     onSuccess: () => {
       if (assignment) {
-        queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${assignment.weekStartDate}`] });
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+        });
       }
       toast({
         title: "Assignment updated",
@@ -66,7 +68,9 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
     },
     onSuccess: () => {
       if (assignment) {
-        queryClient.invalidateQueries({ queryKey: [`/api/assignments?weekStartDate=${assignment.weekStartDate}`] });
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+        });
       }
       toast({
         title: "Assignment deleted",
