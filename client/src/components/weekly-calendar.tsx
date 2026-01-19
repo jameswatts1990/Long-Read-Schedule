@@ -213,64 +213,74 @@ export function WeeklyCalendar({
     });
   };
 
+  const gridColumnsStyle = hidePersonColumn 
+    ? "repeat(5, minmax(120px, 1fr))" 
+    : "minmax(150px, 1fr) repeat(5, minmax(120px, 1fr))";
+
   return (
     <>
       <div className="border rounded-md bg-card h-full flex flex-col">
         <div className="overflow-auto flex-1">
-          <div
-            className="grid h-full"
-            style={{ 
-              gridTemplateColumns: hidePersonColumn 
-                ? "repeat(5, minmax(120px, 1fr))" 
-                : "minmax(150px, 1fr) repeat(5, minmax(120px, 1fr))" 
-            }}
-          >
-            {/* Header Row: Person + Day Names */}
-            {showColumnHeader && !hidePersonColumn && (
-              <div className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2">
-                <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
+          <div className="flex flex-col min-w-fit">
+            {/* Header Row */}
+            {showColumnHeader && (
+              <div 
+                className="grid sticky top-0 z-50"
+                style={{ gridTemplateColumns: gridColumnsStyle }}
+              >
+                {!hidePersonColumn && (
+                  <div className="border-b border-r bg-muted p-2">
+                    <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
+                  </div>
+                )}
+                
+                {DAYS.map((day, dayIndex) => {
+                  const isTodayDay = isCurrentDay(dayIndex);
+                  return (
+                    <div 
+                      key={day} 
+                      className={cn(
+                        "border-b text-center p-2",
+                        isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
+                      )}
+                      data-testid={`header-day-${day.toLowerCase()}`}
+                    >
+                      <div className={cn(
+                        "font-semibold text-sm",
+                        isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
+                      )}>
+                        {day.slice(0, 3)}
+                      </div>
+                      <div className={cn(
+                        "text-xs mt-0.5",
+                        isTodayDay ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"
+                      )}>
+                        {getDateForDay(dayIndex)}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
-            
-            {showColumnHeader && DAYS.map((day, dayIndex) => {
-              const isTodayDay = isCurrentDay(dayIndex);
-              return (
-                <div 
-                  key={day} 
-                  className={cn(
-                    "sticky top-0 z-40 border-b text-center p-2",
-                    isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
-                  )}
-                  data-testid={`header-day-${day.toLowerCase()}`}
-                >
-                  <div className={cn(
-                    "font-semibold text-sm",
-                    isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
-                  )}>
-                    {day.slice(0, 3)}
-                  </div>
-                  <div className={cn(
-                    "text-xs mt-0.5",
-                    isTodayDay ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"
-                  )}>
-                    {getDateForDay(dayIndex)}
-                  </div>
-                </div>
-              );
-            })}
 
-            {/* Person Rows */}
+            {/* Person Rows - each row is its own grid for proper height calculation */}
             {people.map((person, personIndex) => (
-              <div key={person.id} className="contents">
+              <div 
+                key={person.id} 
+                className="grid"
+                style={{ 
+                  gridTemplateColumns: gridColumnsStyle,
+                  minHeight: isCompactView ? undefined : "120px"
+                }}
+              >
                 {/* Person Name Cell - Sticky (Drop zone for deletion) */}
                 {!hidePersonColumn && (
                   <div
                     className={cn(
-                      "sticky left-0 z-30 border-r border-b p-2 flex items-start gap-1.5 bg-card cursor-pointer min-w-0",
+                      "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 cursor-pointer min-w-0",
                       personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
                       deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
                     )}
-                    style={{ top: "49px", minHeight: "120px" }}
                     data-testid={`person-row-${person.id}`}
                     onDragOver={(e) => {
                       if (draggedAssignment) {
@@ -328,7 +338,6 @@ export function WeeklyCalendar({
                         isDropTarget && "bg-primary/10 border-2 border-primary",
                         cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
                       )}
-                      style={{ minHeight: isCompactView ? undefined : "120px" }}
                       onDragOver={(e) => {
                         if (draggedAssignment) {
                           e.preventDefault();
