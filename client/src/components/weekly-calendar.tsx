@@ -213,269 +213,273 @@ export function WeeklyCalendar({
     });
   };
 
-  const gridColumnsStyle = hidePersonColumn 
-    ? "repeat(5, minmax(120px, 1fr))" 
-    : "minmax(150px, 1fr) repeat(5, minmax(120px, 1fr))";
+  // Number of columns: 1 for person (when shown) + 5 for days
+  const numCols = hidePersonColumn ? 5 : 6;
 
   return (
     <>
       <div className="border rounded-md bg-card h-full flex flex-col">
         <div className="overflow-auto flex-1">
-          <div className="flex flex-col min-w-fit">
+          <table className="w-full border-collapse min-w-fit" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              {!hidePersonColumn && <col style={{ width: '150px', minWidth: '150px' }} />}
+              {DAYS.map((day) => (
+                <col key={day} style={{ width: '120px', minWidth: '120px' }} />
+              ))}
+            </colgroup>
+            
             {/* Header Row */}
             {showColumnHeader && (
-              <div 
-                className="grid sticky top-0 z-50"
-                style={{ gridTemplateColumns: gridColumnsStyle }}
-              >
-                {!hidePersonColumn && (
-                  <div className="border-b border-r bg-muted p-2">
-                    <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
-                  </div>
-                )}
-                
-                {DAYS.map((day, dayIndex) => {
-                  const isTodayDay = isCurrentDay(dayIndex);
-                  return (
-                    <div 
-                      key={day} 
-                      className={cn(
-                        "border-b text-center p-2",
-                        isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
-                      )}
-                      data-testid={`header-day-${day.toLowerCase()}`}
-                    >
-                      <div className={cn(
-                        "font-semibold text-sm",
-                        isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
-                      )}>
-                        {day.slice(0, 3)}
-                      </div>
-                      <div className={cn(
-                        "text-xs mt-0.5",
-                        isTodayDay ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"
-                      )}>
-                        {getDateForDay(dayIndex)}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <thead>
+                <tr>
+                  {!hidePersonColumn && (
+                    <th className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2 text-left">
+                      <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
+                    </th>
+                  )}
+                  {DAYS.map((day, dayIndex) => {
+                    const isTodayDay = isCurrentDay(dayIndex);
+                    return (
+                      <th 
+                        key={day} 
+                        className={cn(
+                          "sticky top-0 z-40 border-b text-center p-2",
+                          isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
+                        )}
+                        data-testid={`header-day-${day.toLowerCase()}`}
+                      >
+                        <div className={cn(
+                          "font-semibold text-sm",
+                          isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
+                        )}>
+                          {day.slice(0, 3)}
+                        </div>
+                        <div className={cn(
+                          "text-xs mt-0.5",
+                          isTodayDay ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"
+                        )}>
+                          {getDateForDay(dayIndex)}
+                        </div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
             )}
 
-            {/* Person Rows - each row is its own grid for proper height calculation */}
-            {people.map((person, personIndex) => (
-              <div 
-                key={person.id} 
-                className="grid"
-                style={{ 
-                  gridTemplateColumns: gridColumnsStyle,
-                  minHeight: isCompactView ? undefined : "120px"
-                }}
-              >
-                {/* Person Name Cell - Sticky (Drop zone for deletion) */}
-                {!hidePersonColumn && (
-                  <div
-                    className={cn(
-                      "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 cursor-pointer min-w-0",
-                      personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
-                      deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
-                    )}
-                    data-testid={`person-row-${person.id}`}
-                    onDragOver={(e) => {
-                      if (draggedAssignment) {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "move";
-                        setDeleteDragTarget(person.id);
-                      }
-                    }}
-                    onDragLeave={() => setDeleteDragTarget(null)}
-                    onDrop={() => {
-                      if (draggedAssignment) {
-                        deleteAssignmentMutation.mutate(draggedAssignment.id);
-                      }
-                      setDeleteDragTarget(null);
-                      setDraggedAssignment(null);
-                    }}
-                  >
-                    <div
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: person.color }}
-                      data-testid={`person-indicator-${person.id}`}
-                    />
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
-                        {person.name}
-                      </span>
-                      {assignments.some(a => a.personId === person.id) && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Day Cells */}
-                {DAYS.map((day, dayIndex) => {
-                  const cellAssignments = getAssignmentsForCell(person.id, day);
-                  
-                  const currentCell = { personId: person.id, day };
-                  const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day;
-                  const isTodayDay = isCurrentDay(dayIndex);
-                  const isCurrentWeekDisplay = isCurrentWeek();
-                  const hasLeave = hasAnnualLeave(person.id, day);
-
-                  return (
-                    <div
-                      key={`${person.id}-${day}`}
+            {/* Person Rows */}
+            <tbody>
+              {people.map((person, personIndex) => (
+                <tr 
+                  key={person.id}
+                  style={{ minHeight: isCompactView ? undefined : '120px' }}
+                >
+                  {/* Person Name Cell - Sticky (Drop zone for deletion) */}
+                  {!hidePersonColumn && (
+                    <td
                       className={cn(
-                        "border-b border-l hover-elevate relative",
-                        isCompactView ? "p-0.5" : "p-1.5",
-                        hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
-                        isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
-                        (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
-                        (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
-                        personIndex % 2 === 0 && "bg-muted/20",
-                        isDropTarget && "bg-primary/10 border-2 border-primary",
-                        cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
+                        "sticky left-0 z-30 border-r border-b p-2 align-middle cursor-pointer min-w-0",
+                        personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
+                        deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
                       )}
+                      style={{ minHeight: isCompactView ? undefined : '120px' }}
+                      data-testid={`person-row-${person.id}`}
                       onDragOver={(e) => {
                         if (draggedAssignment) {
                           e.preventDefault();
                           e.dataTransfer.dropEffect = "move";
-                          setDropTargetCell(currentCell);
+                          setDeleteDragTarget(person.id);
                         }
                       }}
-                      onDragLeave={() => setDropTargetCell(null)}
+                      onDragLeave={() => setDeleteDragTarget(null)}
                       onDrop={() => {
                         if (draggedAssignment) {
-                          if (draggedAssignment.personId !== person.id || draggedAssignment.day !== day) {
-                            // Moving to a different cell
-                            updateAssignmentMutation.mutate({
-                              assignmentId: draggedAssignment.id,
-                              personId: person.id,
-                              day,
-                            });
-                          } else {
-                            // Reordering within the same cell - move to top
-                            const reorderedIds = cellAssignments.map(a => a.id);
-                            const draggedIndex = reorderedIds.indexOf(draggedAssignment.id);
-                            if (draggedIndex >= 0) {
-                              reorderedIds.splice(draggedIndex, 1);
-                              reorderedIds.unshift(draggedAssignment.id);
-                              reorderAssignmentsMutation.mutate({
-                                personId: person.id,
-                                day,
-                                assignmentIds: reorderedIds,
-                              });
-                            }
-                          }
+                          deleteAssignmentMutation.mutate(draggedAssignment.id);
                         }
-                        setDropTargetCell(null);
+                        setDeleteDragTarget(null);
                         setDraggedAssignment(null);
                       }}
-                      data-testid={`cell-${person.id}-${day.toLowerCase()}`}
                     >
-                      <div className={cn("space-y-1", isCompactView && "space-y-0.5")}>
-                        {cellAssignments.map(assignment => {
-                          const task = getTaskById(assignment.taskId);
-                          if (!task) return null;
-                          
-                          const isTaskDark = isDarkColor(task.color);
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: person.color }}
+                          data-testid={`person-indicator-${person.id}`}
+                        />
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
+                            {person.name}
+                          </span>
+                          {assignments.some(a => a.personId === person.id) && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  )}
 
-                          return (
-                            <div
-                              key={assignment.id}
-                              className={cn(
-                                "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
-                                isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
-                                draggedAssignment?.id === assignment.id && "opacity-50"
-                              )}
-                              style={{ 
-                                backgroundColor: task.color,
-                                borderColor: person.color,
-                              }}
-                              draggable
-                              onDragStart={(e) => {
-                                setDraggedAssignment(assignment);
-                                e.dataTransfer.effectAllowed = "move";
-                              }}
-                              onDragEnd={() => {
-                                setDraggedAssignment(null);
-                                setDeleteDragTarget(null);
-                              }}
-                              onClick={() => onAssignmentClick(assignment)}
-                              data-testid={`assignment-${assignment.id}`}
-                            >
-                              <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
-                                {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
-                                <div className="flex-1 min-w-0">
-                                  <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
-                                    <span className="truncate">{task.name}</span>
-                                    {!isCompactView && (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <div className="p-0.5 hover:bg-black/10 rounded cursor-help">
-                                              <Info className="w-3 h-3 opacity-70" />
-                                            </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="p-3 max-w-xs">
-                                            <div className="space-y-2">
-                                              <div>
-                                                <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
-                                                <p className="text-sm font-medium">{task.name}</p>
+                  {/* Day Cells */}
+                  {DAYS.map((day, dayIndex) => {
+                    const cellAssignments = getAssignmentsForCell(person.id, day);
+                    
+                    const currentCell = { personId: person.id, day };
+                    const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day;
+                    const isTodayDay = isCurrentDay(dayIndex);
+                    const isCurrentWeekDisplay = isCurrentWeek();
+                    const hasLeave = hasAnnualLeave(person.id, day);
+
+                    return (
+                      <td
+                        key={`${person.id}-${day}`}
+                        className={cn(
+                          "border-b border-l hover-elevate relative align-top",
+                          isCompactView ? "p-0.5" : "p-1.5",
+                          hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
+                          isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
+                          (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
+                          (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
+                          personIndex % 2 === 0 && "bg-muted/20",
+                          isDropTarget && "bg-primary/10 border-2 border-primary",
+                          cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
+                        )}
+                        style={{ minHeight: isCompactView ? undefined : '120px' }}
+                        onDragOver={(e) => {
+                          if (draggedAssignment) {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            setDropTargetCell(currentCell);
+                          }
+                        }}
+                        onDragLeave={() => setDropTargetCell(null)}
+                        onDrop={() => {
+                          if (draggedAssignment) {
+                            if (draggedAssignment.personId !== person.id || draggedAssignment.day !== day) {
+                              updateAssignmentMutation.mutate({
+                                assignmentId: draggedAssignment.id,
+                                personId: person.id,
+                                day,
+                              });
+                            } else {
+                              const reorderedIds = cellAssignments.map(a => a.id);
+                              const draggedIndex = reorderedIds.indexOf(draggedAssignment.id);
+                              if (draggedIndex >= 0) {
+                                reorderedIds.splice(draggedIndex, 1);
+                                reorderedIds.unshift(draggedAssignment.id);
+                                reorderAssignmentsMutation.mutate({
+                                  personId: person.id,
+                                  day,
+                                  assignmentIds: reorderedIds,
+                                });
+                              }
+                            }
+                          }
+                          setDropTargetCell(null);
+                          setDraggedAssignment(null);
+                        }}
+                        data-testid={`cell-${person.id}-${day.toLowerCase()}`}
+                      >
+                        <div className={cn("space-y-1", isCompactView && "space-y-0.5")}>
+                          {cellAssignments.map(assignment => {
+                            const task = getTaskById(assignment.taskId);
+                            if (!task) return null;
+                            
+                            const isTaskDark = isDarkColor(task.color);
+
+                            return (
+                              <div
+                                key={assignment.id}
+                                className={cn(
+                                  "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
+                                  isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
+                                  draggedAssignment?.id === assignment.id && "opacity-50"
+                                )}
+                                style={{ 
+                                  backgroundColor: task.color,
+                                  borderColor: person.color,
+                                }}
+                                draggable
+                                onDragStart={(e) => {
+                                  setDraggedAssignment(assignment);
+                                  e.dataTransfer.effectAllowed = "move";
+                                }}
+                                onDragEnd={() => {
+                                  setDraggedAssignment(null);
+                                  setDeleteDragTarget(null);
+                                }}
+                                onClick={() => onAssignmentClick(assignment)}
+                                data-testid={`assignment-${assignment.id}`}
+                              >
+                                <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
+                                  {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
+                                  <div className="flex-1 min-w-0">
+                                    <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
+                                      <span className="truncate">{task.name}</span>
+                                      {!isCompactView && (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className="p-0.5 hover:bg-black/10 rounded cursor-help">
+                                                <Info className="w-3 h-3 opacity-70" />
                                               </div>
-                                              <div>
-                                                <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>
-                                                <p className="text-sm">{person.name}</p>
-                                              </div>
-                                              <div>
-                                                <p className="text-xs font-bold text-muted-foreground uppercase">Time Slot</p>
-                                                <p className="text-sm">{day}, {getDateForDay(dayIndex)}</p>
-                                              </div>
-                                              {assignment.notes && (
+                                            </TooltipTrigger>
+                                            <TooltipContent className="p-3 max-w-xs">
+                                              <div className="space-y-2">
                                                 <div>
-                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Notes</p>
-                                                  <p className="text-sm italic">{assignment.notes}</p>
+                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
+                                                  <p className="text-sm font-medium">{task.name}</p>
                                                 </div>
-                                              )}
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
+                                                <div>
+                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>
+                                                  <p className="text-sm">{person.name}</p>
+                                                </div>
+                                                <div>
+                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Time Slot</p>
+                                                  <p className="text-sm">{day}, {getDateForDay(dayIndex)}</p>
+                                                </div>
+                                                {assignment.notes && (
+                                                  <div>
+                                                    <p className="text-xs font-bold text-muted-foreground uppercase">Notes</p>
+                                                    <p className="text-sm italic">{assignment.notes}</p>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      )}
+                                    </div>
+                                    {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
+                                      <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
+                                        {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
+                                        {assignment.batchSize && <span>({assignment.batchSize})</span>}
+                                      </div>
                                     )}
                                   </div>
-                                  {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
-                                    <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
-                                      {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
-                                      {assignment.batchSize && <span>({assignment.batchSize})</span>}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
 
-                        {!isCompactView && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1"
-                            onClick={() => setSelectedCell({ personId: person.id, day })}
-                            data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
-                          >
-                            <Plus className="w-3 h-3 mr-1" />
-                            <span className="text-xs">Add</span>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+                          {!isCompactView && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1"
+                              onClick={() => setSelectedCell({ personId: person.id, day })}
+                              data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              <span className="text-xs">Add</span>
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
