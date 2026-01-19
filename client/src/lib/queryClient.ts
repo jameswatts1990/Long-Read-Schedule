@@ -19,6 +19,12 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  // Handle 401 on mutations - force auth state update and UI refresh
+  if (res.status === 401) {
+    queryClient.setQueryData(["/api/auth/user"], null);
+    queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+  }
+
   await throwIfResNotOk(res);
   return res;
 }
@@ -34,12 +40,15 @@ export const getQueryFn: <T>(options: {
     });
 
     if (res.status === 401) {
+      // Always invalidate auth state on any 401
+      if (queryKey[0] !== "/api/auth/user") {
+        // Force auth re-check immediately when any API returns 401
+        queryClient.setQueryData(["/api/auth/user"], null);
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      }
+      
       if (unauthorizedBehavior === "returnNull") {
         return null;
-      }
-      // Only redirect if we are NOT on the landing page already
-      if (window.location.pathname !== "/") {
-        window.location.href = "/api/login";
       }
       throw new Error("Session expired. Please log in.");
     }
