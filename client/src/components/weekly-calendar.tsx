@@ -413,7 +413,7 @@ export function WeeklyCalendar({
                                   {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
                                   <div className="flex-1 min-w-0">
                                     <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
-                                      <span className="truncate">{task.name}</span>
+                                      <span className="truncate">{assignment.customName || task.name}</span>
                                       {!isCompactView && (
                                         <TooltipProvider>
                                           <Tooltip>
@@ -426,7 +426,7 @@ export function WeeklyCalendar({
                                               <div className="space-y-2">
                                                 <div>
                                                   <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
-                                                  <p className="text-sm font-medium">{task.name}</p>
+                                                  <p className="text-sm font-medium">{assignment.customName || task.name}</p>
                                                 </div>
                                                 <div>
                                                   <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>

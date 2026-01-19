@@ -58,6 +58,7 @@ export const assignments = pgTable("assignments", {
   notes: text("notes"),
   date: text("date"),
   order: integer("order").default(0),
+  customName: text("custom_name"),
 });
 
 export const premadeFilters = pgTable("premade_filters", {

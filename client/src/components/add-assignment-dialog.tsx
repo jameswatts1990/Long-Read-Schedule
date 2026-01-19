@@ -46,6 +46,7 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
   batchNumber: z.string().optional(),
   batchSize: z.number().int().positive().optional(),
   notes: z.string().optional(),
+  customName: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -74,8 +75,12 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       batchNumber: "",
       batchSize: undefined,
       notes: "",
+      customName: "",
     },
   });
+
+  const selectedTask = tasks.find(t => t.id === selectedTaskId);
+  const isCustomTask = selectedTask?.name.toLowerCase() === "custom task";
 
   const createMutation = useMutation({
     mutationFn: async ({ data, override = false }: { data: FormData, override?: boolean }) => {
@@ -97,6 +102,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
             batchNumber: data.batchNumber || undefined,
             batchSize: data.batchSize || undefined,
             notes: data.notes || undefined,
+            customName: data.customName || undefined,
             override,
           });
         });
@@ -113,6 +119,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchNumber: data.batchNumber || undefined,
         batchSize: data.batchSize || undefined,
         notes: data.notes || undefined,
+        customName: data.customName || undefined,
         override,
       });
       
@@ -137,7 +144,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchNumber: "",
         batchSize: undefined,
         notes: "",
+        customName: "",
       });
+      setSelectedTaskId("");
       setConflictData(null);
       setPendingFormData(null);
       setSelectedDates([]);
@@ -166,7 +175,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchNumber: "",
         batchSize: undefined,
         notes: "",
+        customName: "",
       });
+      setSelectedTaskId("");
       setSelectedDays(new Set([day]));
       // Initialize with current date if in month mode
       if (isMonthMode) {
@@ -194,6 +205,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           weekStartDate,
           batchNumber: data.batchNumber || undefined,
           notes: data.notes || undefined,
+          customName: data.customName || undefined,
         })
       );
 
@@ -242,6 +254,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         weekStartDate,
         batchNumber: data.batchNumber || undefined,
         notes: data.notes || undefined,
+        customName: data.customName || undefined,
       })
     );
 
@@ -315,6 +328,26 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   </FormItem>
                 )}
               />
+
+              {isCustomTask && (
+                <FormField
+                  control={form.control}
+                  name="customName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Custom Task Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Enter a name for this custom task"
+                          data-testid="input-custom-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div className="flex gap-4">
                 <FormField

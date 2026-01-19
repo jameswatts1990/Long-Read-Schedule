@@ -23,6 +23,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const [batchNumber, setBatchNumber] = useState("");
   const [batchSize, setBatchSize] = useState("");
   const [notes, setNotes] = useState("");
+  const [customName, setCustomName] = useState("");
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const { toast } = useToast();
 
@@ -31,6 +32,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       setBatchNumber(assignment.batchNumber || "");
       setBatchSize(assignment.batchSize ? String(assignment.batchSize) : "");
       setNotes(assignment.notes || "");
+      setCustomName(assignment.customName || "");
     }
   }, [assignment]);
 
@@ -94,6 +96,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       batchNumber: batchNumber || undefined,
       batchSize: batchSize ? parseInt(batchSize, 10) : undefined,
       notes: notes || undefined,
+      customName: customName || undefined,
       weekStartDate: assignment.weekStartDate,
     });
   };
@@ -109,6 +112,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
 
   const person = people.find((p) => p.id === assignment.personId);
   const task = tasks.find((t) => t.id === assignment.taskId);
+  const isCustomTask = task?.name.toLowerCase() === "custom task";
 
   return (
     <div
@@ -141,12 +145,27 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
                 borderLeftColor: task?.color,
               }}
             >
-              <div className="text-sm font-medium">{task?.name}</div>
+              <div className="text-sm font-medium">{assignment.customName || task?.name}</div>
               {task?.description && (
                 <div className="text-xs text-muted-foreground mt-1">{task.description}</div>
               )}
             </div>
           </div>
+
+          {isCustomTask && (
+            <div className="space-y-2">
+              <Label htmlFor="custom-name" className="text-sm font-medium">
+                Custom Task Name
+              </Label>
+              <Input
+                id="custom-name"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="Enter a custom name"
+                data-testid="input-custom-name"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-sm font-medium">Assigned To</Label>
