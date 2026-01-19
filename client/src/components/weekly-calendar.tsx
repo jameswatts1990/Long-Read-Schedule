@@ -266,11 +266,11 @@ export function WeeklyCalendar({
                 {!hidePersonColumn && (
                   <div
                     className={cn(
-                      "sticky left-0 z-30 border-r border-b p-2 flex items-center gap-1.5 bg-card cursor-pointer min-w-0",
+                      "sticky left-0 z-30 border-r border-b p-2 flex items-start gap-1.5 bg-card cursor-pointer min-w-0",
                       personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
                       deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
                     )}
-                    style={{ top: "49px" }}
+                    style={{ top: "49px", minHeight: "120px" }}
                     data-testid={`person-row-${person.id}`}
                     onDragOver={(e) => {
                       if (draggedAssignment) {
@@ -319,7 +319,7 @@ export function WeeklyCalendar({
                       key={`${person.id}-${day}`}
                       className={cn(
                         "border-b border-l hover-elevate relative",
-                        isCompactView ? "p-0.5" : "p-1.5 min-h-[120px]",
+                        isCompactView ? "p-0.5" : "p-1.5",
                         hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
@@ -328,6 +328,7 @@ export function WeeklyCalendar({
                         isDropTarget && "bg-primary/10 border-2 border-primary",
                         cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
                       )}
+                      style={{ minHeight: isCompactView ? undefined : "120px" }}
                       onDragOver={(e) => {
                         if (draggedAssignment) {
                           e.preventDefault();
