@@ -11,6 +11,7 @@ import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { MonthView } from "@/components/month-view";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
 import { FilterMegaMenu } from "@/components/filter-mega-menu";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { type Person, type Task, type Assignment, type PremadeFilter } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -344,6 +345,7 @@ export default function Scheduler() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-background">
+      <LoadingOverlay />
       <header className="h-16 border-b flex items-center justify-between px-6 bg-background shrink-0">
         <div className="flex items-center gap-3">
           <CalendarIcon className="w-6 h-6 text-primary" data-testid="icon-logo" />
