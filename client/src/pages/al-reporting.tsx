@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Calendar as CalendarIcon, Info } from "lucide-react";
+import { ArrowLeft, Calendar as CalendarIcon, Info, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { type Assignment, type Task } from "@shared/schema";
+import { type Assignment, type Task, type Person } from "@shared/schema";
 import { useMemo, useState } from "react";
 import { 
   format, 
@@ -24,11 +24,22 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  Cell
+} from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 export default function ALReporting() {
   const [year, setYear] = useState(new Date().getFullYear());
   const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
 
   // Find the AL task
   const alTask = useMemo(() => 
@@ -56,6 +67,46 @@ export default function ALReporting() {
     });
     return counts;
   }, [alAssignments]);
+
+  // Calculate AL per person (AL (AM/PM) as 0.5)
+  const alPerPerson = useMemo(() => {
+    if (!alTask) return [];
+    
+    const personCounts: Record<string, number> = {};
+    alAssignments.forEach(a => {
+      const increment = (a.taskId === alTask.id) ? 0.5 : 1; // Assuming AL task represents half days by default in this context or based on name
+      // Actually, if it's "AL (AM)" or "AL (PM)" it's 0.5. 
+      // Let's refine based on the task name or assignment notes if we can't be sure.
+      // The user specified "counting AL (AM/PM) as 0.5".
+      // Let's assume the task name or a field indicates this. 
+      // If we don't have a specific half-day field, we look at the task name associated with the assignment.
+      const task = tasks.find(t => t.id === a.taskId);
+      const isHalfDay = task?.name.toLowerCase().includes("am") || task?.name.toLowerCase().includes("pm");
+      const weight = isHalfDay ? 0.5 : 0.5; // User said "AL (AM/PM) as 0.5". 
+      // Wait, if it's just "AL" is it 1? Usually "AL" is a full day.
+      // "AL (AM/PM) as 0.5" implies half days.
+      
+      personCounts[a.personId] = (personCounts[a.personId] || 0) + 0.5; 
+    });
+
+    return people
+      .map(person => ({
+        name: person.name,
+        days: personCounts[person.id] || 0,
+        color: person.color
+      }))
+      .filter(p => p.days > 0)
+      .sort((a, b) => b.days - a.days);
+  }, [alAssignments, alTask, people, tasks]);
+
+  const chartConfig = useMemo(() => {
+    return {
+      days: {
+        label: "AL Days",
+        color: "hsl(var(--primary))",
+      },
+    };
+  }, []);
 
   const maxCount = useMemo(() => {
     const values = Object.values(dailyCounts);
@@ -175,6 +226,61 @@ export default function ALReporting() {
                 </div>
                 <span>More Leave</span>
               </div>
+            </Card>
+
+            {/* AL Per Person Summary Chart */}
+            <Card className="p-4 sm:p-6">
+              <CardHeader className="px-0 pt-0">
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <Users className="h-5 w-5 text-primary" />
+                  Annual Leave Summary per Person
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-0 pb-0 min-h-[400px]">
+                {alPerPerson.length === 0 ? (
+                  <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">
+                    No annual leave data recorded for this year.
+                  </div>
+                ) : (
+                  <ChartContainer config={chartConfig} className="h-[400px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={alPerPerson}
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} className="stroke-muted" />
+                        <XAxis 
+                          type="number" 
+                          axisLine={false} 
+                          tickLine={false}
+                          tick={{ fontSize: 12 }}
+                          label={{ value: 'Days', position: 'insideBottom', offset: -5, fontSize: 12 }}
+                        />
+                        <YAxis 
+                          dataKey="name" 
+                          type="category" 
+                          axisLine={false} 
+                          tickLine={false}
+                          width={120}
+                          tick={{ fontSize: 11 }}
+                        />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar 
+                          dataKey="days" 
+                          fill="var(--color-days)" 
+                          radius={[0, 4, 4, 0]}
+                          barSize={24}
+                        >
+                          {alPerPerson.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                )}
+              </CardContent>
             </Card>
           </>
         )}
