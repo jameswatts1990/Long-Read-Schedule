@@ -151,7 +151,10 @@ export default function MyDay() {
     return days;
   }, [selectedDate]);
 
-  const listContainerRef = useState<HTMLDivElement | null>(null)[0];
+  const hasAssignmentsOnDate = (date: Date) => {
+    return assignmentsByDate.has(formatDateStr(date));
+  };
+
   const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
