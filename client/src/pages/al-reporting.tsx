@@ -315,6 +315,7 @@ export default function ALReporting() {
                           tickLine={false}
                           width={120}
                           tick={{ fontSize: 11 }}
+                          interval={0}
                         />
                         <ChartTooltip content={<ChartTooltipContent />} />
                         <Bar 
