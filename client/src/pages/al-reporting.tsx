@@ -122,17 +122,19 @@ export default function ALReporting() {
               {months.map((month) => (
                 <Card key={month.name} className="p-3">
                   <h3 className="text-sm font-semibold mb-2 text-center">{month.name}</h3>
-                  <div className="grid grid-cols-7 gap-1">
-                    {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+                  <div className="grid grid-cols-5 gap-1">
+                    {["M", "T", "W", "T", "F"].map((d, i) => (
                       <div key={i} className="text-[10px] text-muted-foreground text-center font-medium">
                         {d}
                       </div>
                     ))}
                     {/* Padding for first day of month (Monday start) */}
-                    {Array.from({ length: (getDay(month.days[0]) + 6) % 7 }).map((_, i) => (
-                      <div key={`pad-${i}`} />
-                    ))}
+                    {Array.from({ length: (getDay(month.days[0]) + 6) % 7 }).map((_, i) => {
+                      if (i >= 5) return null; // Skip weekend padding slots
+                      return <div key={`pad-${i}`} />;
+                    })}
                     {month.days.map((day) => {
+                      if (isWeekend(day)) return null;
                       const dateKey = format(day, "yyyy-MM-dd");
                       const count = dailyCounts[dateKey] || 0;
                       return (
@@ -142,8 +144,7 @@ export default function ALReporting() {
                               <div
                                 className={cn(
                                   "aspect-square rounded-sm transition-colors flex items-center justify-center text-[10px] font-bold select-none",
-                                  getColorClass(count),
-                                  isWeekend(day) && count === 0 ? "opacity-30" : ""
+                                  getColorClass(count)
                                 )}
                               >
                                 {count > 0 && count}
