@@ -27,7 +27,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { type Person, type Task } from "@shared/schema";
+import { type Person, type Task, type User } from "@shared/schema";
 
 // 20 unique colors with light, medium, and dark variants (60 colors total)
 const PRESET_COLORS = [
@@ -96,6 +96,7 @@ export default function Admin() {
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: allUsers = [] } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
 
   const personForm = useForm<PersonFormData>({
     resolver: zodResolver(personFormSchema),
@@ -362,6 +363,11 @@ export default function Admin() {
                         style={{ backgroundColor: person.color }}
                       />
                       <span>{person.name}</span>
+                      {allUsers.find(u => u.email === person.name || u.firstName + " " + u.lastName === person.name) && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          (Last login: {new Date(allUsers.find(u => u.email === person.name || u.firstName + " " + u.lastName === person.name)!.updatedAt!).toLocaleDateString()})
+                        </span>
+                      )}
                     </div>
                     <div className="flex gap-1">
                       <Button

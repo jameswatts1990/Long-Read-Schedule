@@ -55,6 +55,7 @@ export interface IStorage {
   createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter>;
   updatePremadeFilter(id: string, data: Partial<InsertPremadeFilter>): Promise<PremadeFilter>;
   deletePremadeFilter(id: string): Promise<void>;
+  getUsers(): Promise<User[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -406,7 +407,7 @@ export class MemStorage implements IStorage {
         next.weekStartDate = trimmed;
         continue;
       }
-      next[key as keyof Assignment] = value as Assignment[keyof Assignment];
+      (next as any)[key] = value as any;
     }
 
     this.assignments.set(id, next);
@@ -449,6 +450,12 @@ export class MemStorage implements IStorage {
 
   async deletePremadeFilter(id: string): Promise<void> {
     this.premadeFiltersMap.delete(id);
+  }
+
+  async getUsers(): Promise<User[]> {
+    return Array.from(this.users.values()).sort((a, b) => 
+      (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0)
+    );
   }
 }
 
@@ -667,7 +674,7 @@ export class PostgresStorage implements IStorage {
         next.weekStartDate = trimmed;
         continue;
       }
-      next[key as keyof Assignment] = value as Assignment[keyof Assignment];
+      (next as any)[key] = value as any;
     }
 
     const result = await this.db
@@ -738,6 +745,10 @@ export class PostgresStorage implements IStorage {
 
   async deletePremadeFilter(id: string): Promise<void> {
     await this.db.delete(premadeFilters).where(eq(premadeFilters.id, id));
+  }
+
+  async getUsers(): Promise<User[]> {
+    return await this.db.select().from(users).orderBy(users.createdAt);
   }
 }
 
