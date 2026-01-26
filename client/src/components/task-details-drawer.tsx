@@ -262,9 +262,13 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
             </div>
 
             <div className="flex-1 space-y-2">
-              <Label htmlFor="batch-size" className="text-sm font-medium">
-                Batch Size
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="batch-size" className="text-sm font-medium">
+                  Batch Size
+                </Label>
+                {/* Empty placeholder div to match Batch Number's header height */}
+                <div className="h-6" />
+              </div>
               <Input
                 id="batch-size"
                 type="number"

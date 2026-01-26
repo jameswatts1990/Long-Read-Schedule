@@ -592,7 +592,11 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   name="batchSize"
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel>Batch Size (Optional)</FormLabel>
+                      <div className="flex items-center justify-between">
+                        <FormLabel>Batch Size (Optional)</FormLabel>
+                        {/* Empty placeholder div to match Batch Number's header height */}
+                        <div className="h-6" />
+                      </div>
                       <FormControl>
                         <Input
                           {...field}
