@@ -339,19 +339,6 @@ export default function ALReporting() {
                           interval={0}
                         />
                         <ChartTooltip content={<ChartTooltipContent />} />
-                        <ReferenceLine 
-                          x={targetLeave} 
-                          stroke="hsl(var(--primary))" 
-                          strokeDasharray="3 3"
-                          strokeWidth={2}
-                        >
-                          <Label 
-                            value={`Target: ${targetLeave.toFixed(1)}`} 
-                            position="top" 
-                            fontSize={10} 
-                            fill="hsl(var(--muted-foreground))"
-                          />
-                        </ReferenceLine>
                         <Bar 
                           dataKey="days" 
                           fill="var(--color-days)" 
@@ -362,6 +349,20 @@ export default function ALReporting() {
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Bar>
+                        <ReferenceLine 
+                          x={targetLeave} 
+                          stroke="hsl(var(--primary))" 
+                          strokeDasharray="3 3"
+                          strokeWidth={2}
+                          alwaysShow
+                        >
+                          <Label 
+                            value={`Target: ${targetLeave.toFixed(1)}`} 
+                            position="top" 
+                            fontSize={10} 
+                            fill="hsl(var(--muted-foreground))"
+                          />
+                        </ReferenceLine>
                       </BarChart>
                     </ResponsiveContainer>
                   </ChartContainer>
