@@ -7,6 +7,7 @@ import { type Assignment, type Task, type Person } from "@shared/schema";
 import { useMemo, useState } from "react";
 import { 
   format, 
+  parse,
   startOfYear, 
   endOfYear, 
   eachDayOfInterval, 
