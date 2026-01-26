@@ -44,17 +44,35 @@ export default function MyDay() {
     if (!user || !people.length) return null;
     const userEmail = (user as any).email?.toLowerCase();
     const userName = `${(user as any).firstName || ''} ${(user as any).lastName || ''}`.trim().toLowerCase();
+    const firstName = (user as any).firstName?.toLowerCase();
+    
+    // Log for debugging
+    console.log("Matching user:", { userEmail, userName, firstName });
     
     return people.find(p => {
       const personName = p.name.toLowerCase();
-      if (userEmail && personName.includes(userEmail.split('@')[0])) return true;
+      // Heuristic 1: Exact name match
       if (userName && personName === userName) return true;
-      if (userName && personName.includes(userName.split(' ')[0])) return true;
+      // Heuristic 2: Email local part
+      if (userEmail && personName.includes(userEmail.split('@')[0])) return true;
+      // Heuristic 3: First name match
+      if (firstName && personName.includes(firstName)) return true;
+      // Heuristic 4: Reverse name check (lastName firstName)
+      if ((user as any).lastName && (user as any).firstName) {
+        const reverseName = `${(user as any).lastName} ${(user as any).firstName}`.toLowerCase();
+        if (personName === reverseName) return true;
+      }
       return false;
     });
   }, [user, people]);
 
-  const startDate = useMemo(() => formatDateStr(getMonday(new Date())), []);
+  const startDate = useMemo(() => {
+    const today = new Date();
+    // Go back 14 days to catch any recent past assignments the user might want to see
+    const pastDate = new Date(today);
+    pastDate.setDate(today.getDate() - 14);
+    return formatDateStr(getMonday(pastDate));
+  }, []);
   const endDate = useMemo(() => {
     const end = new Date();
     end.setDate(end.getDate() + 90);
