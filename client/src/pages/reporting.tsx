@@ -83,7 +83,9 @@ export default function Reporting() {
     const uniqueBatches = new Map<string, number>();
     
     taskAssignments.forEach(assignment => {
-      const batchKey = assignment.batchNumber || `unnamed-${assignment.id}`;
+      // If batchNumber is provided, use it as key to count capacity once per week per batch
+      // If no batchNumber, treat as unique to ensure capacity is still counted
+      const batchKey = assignment.batchNumber ? `batch-${assignment.batchNumber}` : `assignment-${assignment.id}`;
       if (!uniqueBatches.has(batchKey) && assignment.batchSize) {
         uniqueBatches.set(batchKey, assignment.batchSize);
       }
