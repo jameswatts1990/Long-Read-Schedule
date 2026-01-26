@@ -21,6 +21,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/users/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch user" });
+    }
+  });
+
   // All API routes below require authentication
   app.get("/api/people", isAuthenticated, async (_req, res) => {
     try {
@@ -156,13 +166,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assignments", isAuthenticated, async (req, res) => {
+  app.post("/api/assignments", isAuthenticated, async (req: any, res) => {
     try {
       const { override, ...bodyData } = req.body;
       const data = insertAssignmentSchema.parse(bodyData);
+      const userId = req.user.claims.sub;
       
       // Multiple tasks allowed per time slot - just create the assignment
-      const assignment = await storage.createAssignment(data);
+      const assignment = await storage.createAssignment(data, userId);
       res.json(assignment);
     } catch (error) {
       console.error("Assignment validation error:", error);

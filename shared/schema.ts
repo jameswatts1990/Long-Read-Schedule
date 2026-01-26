@@ -59,6 +59,9 @@ export const assignments = pgTable("assignments", {
   date: text("date"),
   order: integer("order").default(0),
   customName: text("custom_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdById: varchar("created_by_id"),
 });
 
 export const premadeFilters = pgTable("premade_filters", {

@@ -114,6 +114,17 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const task = tasks.find((t) => t.id === assignment.taskId);
   const isCustomTask = task?.name.toLowerCase() === "custom task";
 
+  const { data: creator } = useQuery<User>({
+    queryKey: [`/api/users/${assignment.createdById}`],
+    enabled: !!assignment.createdById,
+  });
+
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return "N/A";
+    const d = typeof date === "string" ? new Date(date) : date;
+    return d.toLocaleString();
+  };
+
   return (
     <div
       className={cn(
@@ -228,6 +239,23 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
               className="h-32 resize-none"
               data-testid="input-notes"
             />
+          </div>
+
+          <div className="pt-6 border-t space-y-4">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span className="font-medium">Created</span>
+              <span>{formatDate(assignment.createdAt)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span className="font-medium">Last Updated</span>
+              <span>{formatDate(assignment.updatedAt)}</span>
+            </div>
+            {creator && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span className="font-medium">Created By</span>
+                <span>{creator.firstName} {creator.lastName}</span>
+              </div>
+            )}
           </div>
         </div>
 

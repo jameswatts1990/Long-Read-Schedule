@@ -347,7 +347,7 @@ export class MemStorage implements IStorage {
       });
   }
 
-  async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
+  async createAssignment(insertAssignment: InsertAssignment, createdById?: string): Promise<Assignment> {
     const id = randomUUID();
     const cellAssignments = Array.from(this.assignments.values()).filter(
       a => a.personId === insertAssignment.personId &&
@@ -355,6 +355,7 @@ export class MemStorage implements IStorage {
            a.weekStartDate === insertAssignment.weekStartDate
     );
     const order = cellAssignments.length;
+    const now = new Date();
     const assignment: Assignment = {
       id,
       ...insertAssignment,
@@ -362,6 +363,9 @@ export class MemStorage implements IStorage {
       notes: insertAssignment.notes || null,
       date: insertAssignment.date || null,
       order,
+      createdAt: now,
+      updatedAt: now,
+      createdById: createdById || null,
     } as any;
     this.assignments.set(id, assignment);
     return assignment;
@@ -389,7 +393,11 @@ export class MemStorage implements IStorage {
     const existing = this.assignments.get(id);
     if (!existing) throw new Error("Assignment not found");
 
-    const next: Assignment = { ...existing };
+    const now = new Date();
+    const next: Assignment = { 
+      ...existing,
+      updatedAt: now
+    };
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
       if (key === "weekStartDate") {
@@ -633,12 +641,13 @@ export class PostgresStorage implements IStorage {
     );
   }
 
-  async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
+  async createAssignment(insertAssignment: InsertAssignment, createdById?: string): Promise<Assignment> {
     const result = await this.db.insert(assignments).values({
       ...insertAssignment,
       batchNumber: insertAssignment.batchNumber || null,
       notes: insertAssignment.notes || null,
       date: insertAssignment.date || null,
+      createdById: createdById || null,
     }).returning();
     return result[0];
   }
@@ -647,7 +656,9 @@ export class PostgresStorage implements IStorage {
     const existing = await this.getAssignment(id);
     if (!existing) throw new Error("Assignment not found");
 
-    const next: Partial<Assignment> = {};
+    const next: Partial<Assignment> = {
+      updatedAt: new Date(),
+    };
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
       if (key === "weekStartDate") {
