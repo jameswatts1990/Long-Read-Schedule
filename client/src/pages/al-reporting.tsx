@@ -74,19 +74,15 @@ export default function ALReporting() {
     
     const personCounts: Record<string, number> = {};
     alAssignments.forEach(a => {
-      const increment = (a.taskId === alTask.id) ? 0.5 : 1; // Assuming AL task represents half days by default in this context or based on name
-      // Actually, if it's "AL (AM)" or "AL (PM)" it's 0.5. 
-      // Let's refine based on the task name or assignment notes if we can't be sure.
-      // The user specified "counting AL (AM/PM) as 0.5".
-      // Let's assume the task name or a field indicates this. 
-      // If we don't have a specific half-day field, we look at the task name associated with the assignment.
-      const task = tasks.find(t => t.id === a.taskId);
-      const isHalfDay = task?.name.toLowerCase().includes("am") || task?.name.toLowerCase().includes("pm");
-      const weight = isHalfDay ? 0.5 : 0.5; // User said "AL (AM/PM) as 0.5". 
-      // Wait, if it's just "AL" is it 1? Usually "AL" is a full day.
-      // "AL (AM/PM) as 0.5" implies half days.
+      // In the lab scheduler, assignments for multiple days (like "Add to all week")
+      // are often created as individual records for each day of that week.
+      // However, the "Add to all week" button in the dialog creates 5 separate 
+      // assignments (Mon-Fri) via individual API calls.
       
-      personCounts[a.personId] = (personCounts[a.personId] || 0) + 0.5; 
+      // The user wants AL (AM/PM) to count as 0.5.
+      // If we assume each AL assignment record represents a half-day slot (AM or PM),
+      // then we should add 0.5 for every single assignment record found.
+      personCounts[a.personId] = (personCounts[a.personId] || 0) + 0.5;
     });
 
     return people
@@ -97,7 +93,7 @@ export default function ALReporting() {
       }))
       .filter(p => p.days > 0)
       .sort((a, b) => b.days - a.days);
-  }, [alAssignments, alTask, people, tasks]);
+  }, [alAssignments, alTask, people]);
 
   const chartConfig = useMemo(() => {
     return {
