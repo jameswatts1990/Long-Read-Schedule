@@ -50,12 +50,34 @@ export default function ALReporting() {
   // Filter assignments for the selected year and AL task
   const alAssignments = useMemo(() => {
     if (!alTask) return [];
+    // The scheduler usually creates assignments based on weekStartDate.
+    // For a year view, we should include the last week of the previous year 
+    // if it overlaps with January 1st, and the first week of the next year.
     const yearStart = startOfYear(new Date(year, 0, 1));
     const yearEnd = endOfYear(new Date(year, 0, 1));
     
+    // Buffer the range to catch week-based assignments that might start in late Dec
+    const bufferStart = addDays(yearStart, -7);
+    const bufferEnd = addDays(yearEnd, 7);
+    
     return assignments.filter(a => {
-      const date = new Date(a.date || a.weekStartDate); // Use date if available, fallback to weekStartDate
-      return a.taskId === alTask.id && date >= yearStart && date <= yearEnd;
+      // If specific date is available, use it for precise filtering
+      if (a.date) {
+        const date = new Date(a.date);
+        return a.taskId === alTask.id && date >= yearStart && date <= yearEnd;
+      }
+      
+      // Fallback to week-based calculation
+      const weekStart = new Date(a.weekStartDate);
+      const daysInWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+      const dayOffset = daysInWeek.indexOf(a.day);
+      
+      if (dayOffset !== -1) {
+        const actualDate = addDays(weekStart, dayOffset);
+        return a.taskId === alTask.id && actualDate >= yearStart && actualDate <= yearEnd;
+      }
+      
+      return false;
     });
   }, [assignments, alTask, year]);
 
