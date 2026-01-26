@@ -126,6 +126,20 @@ export function DuplicateAssignmentDialog({
     setSelectedSlots(newSet);
   };
 
+  const handleSelectDayAllStaff = (day: string) => {
+    if (!assignment) return;
+    
+    const newSet = new Set(selectedSlots);
+    people.forEach((person) => {
+      // Don't select the original assignment slot
+      if (!(person.id === assignment.personId && day === assignment.day)) {
+        const slotKey = `${person.id}-${day}`;
+        newSet.add(slotKey);
+      }
+    });
+    setSelectedSlots(newSet);
+  };
+
   if (!assignment) return null;
 
   // Sort people: original person first, then others
@@ -169,8 +183,17 @@ export function DuplicateAssignmentDialog({
             
             {/* Day headers */}
             {DAYS.map((day) => (
-              <div key={`header-${day}`} className="p-3 border-b border-r font-semibold bg-muted text-center text-sm">
-                {day.charAt(0).toUpperCase()}
+              <div key={`header-${day}`} className="p-3 border-b border-r font-semibold bg-muted text-center text-sm space-y-2">
+                <div>{day.charAt(0).toUpperCase()}</div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSelectDayAllStaff(day)}
+                  className="text-[10px] h-5 px-1.5 opacity-50 hover:opacity-100"
+                  data-testid={`button-select-all-day-${day}`}
+                >
+                  All
+                </Button>
               </div>
             ))}
             
