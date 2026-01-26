@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3 } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -276,12 +276,12 @@ export default function Admin() {
             <Link href="/reporting">
               <Button variant="outline" data-testid="button-reporting">
                 <BarChart3 className="h-4 w-4 mr-2" />
-                Reporting
+                Capacity Reporting
               </Button>
             </Link>
             <Link href="/al-reporting">
               <Button variant="outline" data-testid="button-al-reporting">
-                <BarChart3 className="h-4 w-4 mr-2" />
+                <Sun className="h-4 w-4 mr-2" />
                 AL Reporting
               </Button>
             </Link>

@@ -284,7 +284,7 @@ export default function ALReporting() {
               <CardHeader className="px-0 pt-0">
                 <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                   <Users className="h-5 w-5 text-primary" />
-                  Annual Leave Summary per Person
+                  Annual Leave Summary per Person ({year})
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-0 pb-0 min-h-[400px]">
