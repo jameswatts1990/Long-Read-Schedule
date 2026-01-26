@@ -106,7 +106,7 @@ export default function ALReporting() {
     return counts;
   }, [alAssignments]);
 
-  // Calculate AL per person (AL (AM/PM) as 0.5)
+  // Calculate AL per person (AL (AM/PM) as 0.5, Annual Leave as 1.0)
   const alPerPerson = useMemo(() => {
     const personCounts: Record<string, number> = {};
     
@@ -115,13 +115,19 @@ export default function ALReporting() {
       personCounts[person.id] = 0;
     });
 
-    if (alTask) {
-      alAssignments.forEach(a => {
-        // Every AL assignment record counts as 0.5 days.
-        // For "Add to all week", the dialog creates 5 separate records.
-        personCounts[a.personId] = (personCounts[a.personId] || 0) + 0.5;
-      });
-    }
+    alAssignments.forEach(a => {
+      const task = tasks.find(t => t.id === a.taskId);
+      const taskName = task?.name.toLowerCase() || "";
+      
+      // AL (AM) and AL (PM) count as 0.5
+      // "Annual Leave" (or any other variation not containing AM/PM) counts as 1.0
+      let weight = 1.0;
+      if (taskName.includes("(am)") || taskName.includes("(pm)")) {
+        weight = 0.5;
+      }
+      
+      personCounts[a.personId] = (personCounts[a.personId] || 0) + weight;
+    });
 
     return people
       .map(person => ({
@@ -130,7 +136,7 @@ export default function ALReporting() {
         color: person.color
       }))
       .sort((a, b) => b.days - a.days);
-  }, [alAssignments, alTask, people]);
+  }, [alAssignments, tasks, people]);
 
   const chartConfig = useMemo(() => {
     return {
