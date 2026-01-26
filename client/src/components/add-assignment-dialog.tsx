@@ -86,29 +86,44 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
     mutationFn: async ({ data, override = false }: { data: FormData, override?: boolean }) => {
       // In month mode, we might be creating for multiple dates
       if (isMonthMode && selectedDates.length > 0) {
-        const promises = selectedDates.map(date => {
-          const dateStr = format(date, "yyyy-MM-dd");
-          const dayName = format(date, "EEEE");
-          // Calculate week start date (Monday)
-          const weekStart = startOfWeek(date, { weekStartsOn: 1 });
-          const weekStartStr = format(weekStart, "yyyy-MM-dd");
-          
-          return apiRequest("POST", "/api/assignments", {
-            ...data,
-            personId,
-            day: dayName,
-            weekStartDate: weekStartStr,
-            date: dateStr,
-            batchNumber: data.batchNumber || undefined,
-            batchSize: data.batchSize || undefined,
-            notes: data.notes || undefined,
-            customName: data.customName || undefined,
-            override,
-          });
-        });
+        // Chunk requests to avoid overwhelming the server or hitting rate limits
+        const CHUNK_SIZE = 5;
+        const results = [];
         
-        const results = await Promise.all(promises);
-        return results[0].json();
+        for (let i = 0; i < selectedDates.length; i += CHUNK_SIZE) {
+          const chunk = selectedDates.slice(i, i + CHUNK_SIZE);
+          const chunkPromises = chunk.map(date => {
+            const dateStr = format(date, "yyyy-MM-dd");
+            const dayName = format(date, "EEEE");
+            // Calculate week start date (Monday)
+            const weekStart = startOfWeek(date, { weekStartsOn: 1 });
+            const weekStartStr = format(weekStart, "yyyy-MM-dd");
+            
+            return apiRequest("POST", "/api/assignments", {
+              ...data,
+              personId,
+              day: dayName,
+              weekStartDate: weekStartStr,
+              date: dateStr,
+              batchNumber: data.batchNumber || undefined,
+              batchSize: data.batchSize || undefined,
+              notes: data.notes || undefined,
+              customName: data.customName || undefined,
+              override,
+            });
+          });
+          
+          const chunkResults = await Promise.all(chunkPromises);
+          results.push(...chunkResults);
+          
+          // Small delay between chunks to be safe
+          if (i + CHUNK_SIZE < selectedDates.length) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
+        
+        const firstRes = results[0];
+        return firstRes.json();
       }
 
       const res = await apiRequest("POST", "/api/assignments", {
