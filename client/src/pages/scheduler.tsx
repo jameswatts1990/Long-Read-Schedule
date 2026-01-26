@@ -394,6 +394,7 @@ export default function Scheduler() {
                   mode="single"
                   selected={currentWeekStart}
                   onSelect={handleDateSelect}
+                  weekStartsOn={1}
                   initialFocus
                 />
               </PopoverContent>

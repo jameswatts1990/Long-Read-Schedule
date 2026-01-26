@@ -494,6 +494,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   mode="multiple"
                   selected={selectedDates}
                   onSelect={(dates) => setSelectedDates(dates || [])}
+                  weekStartsOn={1}
                   initialFocus
                   className="rounded-md"
                 />
