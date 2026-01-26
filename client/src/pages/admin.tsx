@@ -363,11 +363,19 @@ export default function Admin() {
                         style={{ backgroundColor: person.color }}
                       />
                       <span>{person.name}</span>
-                      {allUsers.find(u => u.email === person.name || u.firstName + " " + u.lastName === person.name) && (
-                        <span className="text-xs text-muted-foreground ml-2">
-                          (Last login: {new Date(allUsers.find(u => u.email === person.name || u.firstName + " " + u.lastName === person.name)!.updatedAt!).toLocaleDateString()})
-                        </span>
-                      )}
+                      {(() => {
+                        const user = allUsers.find(u => {
+                          const userFullName = `${u.firstName} ${u.lastName}`.trim().toLowerCase();
+                          const personName = person.name.trim().toLowerCase();
+                          const userEmail = u.email?.toLowerCase();
+                          return userFullName === personName || userEmail === personName;
+                        });
+                        return user && (
+                          <span className="text-xs text-muted-foreground ml-2">
+                            (Last login: {new Date(user.updatedAt!).toLocaleDateString()})
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="flex gap-1">
                       <Button
