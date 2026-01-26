@@ -47,39 +47,40 @@ export default function ALReporting() {
     tasks.find(t => t.name.toLowerCase().includes("al") || t.name.toLowerCase().includes("annual leave")), 
   [tasks]);
 
+  // Map day names to offsets from week start (Monday = 0)
+  const dayOffsetMap: Record<string, number> = {
+    "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4
+  };
+
   // Filter assignments for the selected year and AL task
   const alAssignments = useMemo(() => {
     if (!alTask) return [];
-    // The scheduler usually creates assignments based on weekStartDate.
-    // For a year view, we should include the last week of the previous year 
-    // if it overlaps with January 1st, and the first week of the next year.
     const yearStart = startOfYear(new Date(year, 0, 1));
     const yearEnd = endOfYear(new Date(year, 0, 1));
     
-    // Buffer the range to catch week-based assignments that might start in late Dec
-    const bufferStart = addDays(yearStart, -7);
-    const bufferEnd = addDays(yearEnd, 7);
-    
     return assignments.filter(a => {
-      // If specific date is available, use it for precise filtering
+      if (a.taskId !== alTask.id) return false;
+      
+      // Calculate the actual date of the assignment
+      let actualDate: Date;
+      
       if (a.date) {
-        const date = new Date(a.date);
-        return a.taskId === alTask.id && date >= yearStart && date <= yearEnd;
+        // Use the specific date if available
+        actualDate = parse(a.date, "yyyy-MM-dd", new Date());
+      } else if (a.weekStartDate && a.day) {
+        // Calculate from weekStartDate + day offset
+        const weekStart = parse(a.weekStartDate, "yyyy-MM-dd", new Date());
+        const dayOffset = dayOffsetMap[a.day];
+        
+        if (dayOffset === undefined) return false;
+        actualDate = addDays(weekStart, dayOffset);
+      } else {
+        return false;
       }
       
-      // Fallback to week-based calculation
-      const weekStart = new Date(a.weekStartDate);
-      const daysInWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-      const dayOffset = daysInWeek.indexOf(a.day);
-      
-      if (dayOffset !== -1) {
-        const actualDate = addDays(weekStart, dayOffset);
-        return a.taskId === alTask.id && actualDate >= yearStart && actualDate <= yearEnd;
-      }
-      
-      return false;
+      return actualDate >= yearStart && actualDate <= yearEnd;
     });
-  }, [assignments, alTask, year]);
+  }, [assignments, alTask, year, dayOffsetMap]);
 
   // Count occurrences per day
   const dailyCounts = useMemo(() => {
