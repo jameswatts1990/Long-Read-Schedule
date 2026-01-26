@@ -107,13 +107,20 @@ export default function ALReporting() {
 
   // Calculate AL per person (AL (AM/PM) as 0.5)
   const alPerPerson = useMemo(() => {
-    if (!alTask) return [];
-    
     const personCounts: Record<string, number> = {};
-    alAssignments.forEach(a => {
-      // Every AL assignment record counts as 0.5 days
-      personCounts[a.personId] = (personCounts[a.personId] || 0) + 0.5;
+    
+    // Initialize all people with 0 days
+    people.forEach(person => {
+      personCounts[person.id] = 0;
     });
+
+    if (alTask) {
+      alAssignments.forEach(a => {
+        // Every AL assignment record counts as 0.5 days.
+        // For "Add to all week", the dialog creates 5 separate records.
+        personCounts[a.personId] = (personCounts[a.personId] || 0) + 0.5;
+      });
+    }
 
     return people
       .map(person => ({
@@ -121,7 +128,6 @@ export default function ALReporting() {
         days: personCounts[person.id] || 0,
         color: person.color
       }))
-      .filter(p => p.days > 0)
       .sort((a, b) => b.days - a.days);
   }, [alAssignments, alTask, people]);
 
