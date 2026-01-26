@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { X, Save, Copy, Trash2, CheckCircle, AlertCircle } from "lucide-react";
-import { type Assignment, type Person, type Task } from "@shared/schema";
+import { type Assignment, type Person, type Task, type User } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
