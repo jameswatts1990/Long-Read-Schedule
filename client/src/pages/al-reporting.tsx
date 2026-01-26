@@ -32,7 +32,9 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
-  Cell
+  Cell,
+  ReferenceLine,
+  Label
 } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
@@ -146,6 +148,25 @@ export default function ALReporting() {
       },
     };
   }, []);
+
+  const targetLeave = useMemo(() => {
+    const now = new Date();
+    const isCurrentYear = now.getFullYear() === year;
+    
+    if (!isCurrentYear) {
+      // If it's a past year, the target is the full 20 days.
+      // If it's a future year, the target is 0 for now.
+      return now.getFullYear() > year ? 20 : 0;
+    }
+    
+    // Calculate progress through the year
+    const start = startOfYear(now);
+    const end = endOfYear(now);
+    const totalDays = eachDayOfInterval({ start, end }).length;
+    const passedDays = eachDayOfInterval({ start, end: now }).length;
+    
+    return (20 / totalDays) * passedDays;
+  }, [year]);
 
   const maxCount = useMemo(() => {
     const values = Object.values(dailyCounts);
@@ -318,6 +339,19 @@ export default function ALReporting() {
                           interval={0}
                         />
                         <ChartTooltip content={<ChartTooltipContent />} />
+                        <ReferenceLine 
+                          x={targetLeave} 
+                          stroke="hsl(var(--primary))" 
+                          strokeDasharray="3 3"
+                          strokeWidth={2}
+                        >
+                          <Label 
+                            value={`Target: ${targetLeave.toFixed(1)}`} 
+                            position="top" 
+                            fontSize={10} 
+                            fill="hsl(var(--muted-foreground))"
+                          />
+                        </ReferenceLine>
                         <Bar 
                           dataKey="days" 
                           fill="var(--color-days)" 
