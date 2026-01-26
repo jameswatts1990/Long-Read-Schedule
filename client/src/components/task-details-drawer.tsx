@@ -262,7 +262,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
             </div>
 
             <div className="flex-1 space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-[3.5px] pb-[3.5px]">
                 <Label htmlFor="batch-size" className="text-sm font-medium">
                   Batch Size
                 </Label>
@@ -350,7 +350,6 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
           </div>
         </div>
       </div>
-
       <DuplicateAssignmentDialog
         assignment={assignment}
         people={people}
