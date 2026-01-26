@@ -56,6 +56,7 @@ export function DuplicateAssignmentDialog({
         if (assignment.batchSize) payload.batchSize = assignment.batchSize;
         if (assignment.notes) payload.notes = assignment.notes;
         if (assignment.date) payload.date = assignment.date;
+        if (assignment.customName) payload.customName = assignment.customName;
         
         return apiRequest("POST", "/api/assignments", payload);
       });
