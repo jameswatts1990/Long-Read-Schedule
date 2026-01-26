@@ -83,31 +83,31 @@ export default function ALReporting() {
   }, [year]);
 
   const getColorClass = (count: number) => {
-    if (count === 0) return "bg-muted/30";
-    if (!maxCount) return "bg-primary/20";
+    if (count === 0) return "bg-muted/30 text-muted-foreground/50";
+    if (!maxCount) return "bg-primary/20 text-primary-foreground";
     const intensity = count / maxCount;
-    if (intensity <= 0.25) return "bg-primary/20";
-    if (intensity <= 0.5) return "bg-primary/40";
-    if (intensity <= 0.75) return "bg-primary/70";
-    return "bg-primary";
+    if (intensity <= 0.25) return "bg-primary/20 text-primary-foreground";
+    if (intensity <= 0.5) return "bg-primary/40 text-primary-foreground";
+    if (intensity <= 0.75) return "bg-primary/70 text-white";
+    return "bg-primary text-white";
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-4 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link href="/admin">
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="h-8 w-8">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <h1 className="text-4xl font-bold">AL Reporting Heatmap</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">AL Reporting</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setYear(year - 1)}>{year - 1}</Button>
-            <span className="text-xl font-bold px-4">{year}</span>
-            <Button variant="outline" size="sm" onClick={() => setYear(year + 1)}>{year + 1}</Button>
+            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setYear(year - 1)}>{year - 1}</Button>
+            <span className="text-lg font-bold px-2">{year}</span>
+            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setYear(year + 1)}>{year + 1}</Button>
           </div>
         </div>
 
@@ -118,10 +118,10 @@ export default function ALReporting() {
           </Card>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {months.map((month) => (
-                <Card key={month.name} className="p-4">
-                  <h3 className="font-semibold mb-4 text-center">{month.name}</h3>
+                <Card key={month.name} className="p-3">
+                  <h3 className="text-sm font-semibold mb-2 text-center">{month.name}</h3>
                   <div className="grid grid-cols-7 gap-1">
                     {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
                       <div key={i} className="text-[10px] text-muted-foreground text-center font-medium">
@@ -141,11 +141,13 @@ export default function ALReporting() {
                             <TooltipTrigger asChild>
                               <div
                                 className={cn(
-                                  "aspect-square rounded-sm transition-colors",
+                                  "aspect-square rounded-sm transition-colors flex items-center justify-center text-[10px] font-bold select-none",
                                   getColorClass(count),
                                   isWeekend(day) && count === 0 ? "opacity-30" : ""
                                 )}
-                              />
+                              >
+                                {count > 0 && count}
+                              </div>
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs font-medium">{format(day, "MMM d, yyyy")}</p>
@@ -160,15 +162,15 @@ export default function ALReporting() {
               ))}
             </div>
 
-            <Card className="p-4">
-              <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+            <Card className="p-3">
+              <div className="flex items-center justify-center gap-3 text-[10px] sm:text-xs text-muted-foreground">
                 <span>Less Leave</span>
                 <div className="flex gap-1">
-                  <div className="w-4 h-4 rounded-sm bg-muted/30" />
-                  <div className="w-4 h-4 rounded-sm bg-primary/20" />
-                  <div className="w-4 h-4 rounded-sm bg-primary/40" />
-                  <div className="w-4 h-4 rounded-sm bg-primary/70" />
-                  <div className="w-4 h-4 rounded-sm bg-primary" />
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-muted/30" />
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-primary/20" />
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-primary/40" />
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-primary/70" />
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-primary" />
                 </div>
                 <span>More Leave</span>
               </div>
