@@ -272,12 +272,20 @@ export default function Admin() {
             </Link>
             <h1 className="text-4xl font-bold">Admin</h1>
           </div>
-          <Link href="/reporting">
-            <Button variant="outline" data-testid="button-reporting">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Reporting
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/reporting">
+              <Button variant="outline" data-testid="button-reporting">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Reporting
+              </Button>
+            </Link>
+            <Link href="/al-reporting">
+              <Button variant="outline" data-testid="button-al-reporting">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                AL Reporting
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* People and Tasks Grid */}
