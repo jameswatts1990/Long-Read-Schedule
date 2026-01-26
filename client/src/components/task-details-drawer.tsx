@@ -97,6 +97,17 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
 
   const handleSave = () => {
     if (!assignment) return;
+    
+    // Batch validation
+    if (batchSize && !batchNumber) {
+      toast({
+        title: "Validation error",
+        description: "Batch ID is required when a batch size is specified",
+        variant: "destructive",
+      });
+      return;
+    }
+
     updateMutation.mutate({
       batchNumber: batchNumber || undefined,
       batchSize: batchSize ? parseInt(batchSize, 10) : undefined,
