@@ -27,6 +27,11 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const { toast } = useToast();
 
+  const { data: creator } = useQuery<User>({
+    queryKey: [`/api/users/${assignment?.createdById}`],
+    enabled: !!assignment?.createdById,
+  });
+
   useEffect(() => {
     if (assignment) {
       setBatchNumber(assignment.batchNumber || "");
@@ -113,11 +118,6 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const person = people.find((p) => p.id === assignment.personId);
   const task = tasks.find((t) => t.id === assignment.taskId);
   const isCustomTask = task?.name.toLowerCase() === "custom task";
-
-  const { data: creator } = useQuery<User>({
-    queryKey: [`/api/users/${assignment.createdById}`],
-    enabled: !!assignment.createdById,
-  });
 
   const formatDate = (date: Date | string | null) => {
     if (!date) return "N/A";
