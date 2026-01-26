@@ -62,8 +62,22 @@ export default function ALReporting() {
   const dailyCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     alAssignments.forEach(a => {
-      const dateKey = a.date || a.weekStartDate;
-      counts[dateKey] = (counts[dateKey] || 0) + 1;
+      // If a.date is set, it's a specific day assignment (from repeat or month mode)
+      // Otherwise it's a week-view assignment where 'day' determines the date
+      let dateKey = a.date;
+      
+      if (!dateKey && a.weekStartDate && a.day) {
+        const weekStart = parse(a.weekStartDate, "yyyy-MM-dd", new Date());
+        const daysInWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        const dayOffset = daysInWeek.indexOf(a.day);
+        if (dayOffset !== -1) {
+          dateKey = format(addDays(weekStart, dayOffset), "yyyy-MM-dd");
+        }
+      }
+      
+      if (dateKey) {
+        counts[dateKey] = (counts[dateKey] || 0) + 1;
+      }
     });
     return counts;
   }, [alAssignments]);
@@ -74,14 +88,7 @@ export default function ALReporting() {
     
     const personCounts: Record<string, number> = {};
     alAssignments.forEach(a => {
-      // In the lab scheduler, assignments for multiple days (like "Add to all week")
-      // are often created as individual records for each day of that week.
-      // However, the "Add to all week" button in the dialog creates 5 separate 
-      // assignments (Mon-Fri) via individual API calls.
-      
-      // The user wants AL (AM/PM) to count as 0.5.
-      // If we assume each AL assignment record represents a half-day slot (AM or PM),
-      // then we should add 0.5 for every single assignment record found.
+      // Every AL assignment record counts as 0.5 days
       personCounts[a.personId] = (personCounts[a.personId] || 0) + 0.5;
     });
 
