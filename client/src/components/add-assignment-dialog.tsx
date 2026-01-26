@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CheckCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { insertAssignmentSchema, type Task, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -27,9 +27,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { startOfWeek, addDays, format, parse, isToday, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import { startOfWeek, addDays, addWeeks, addMonths, format, parse, isToday, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter } from "date-fns";
 import { cn } from "@/lib/utils";
+
+type RepeatUnit = "days" | "weeks" | "months";
+type EndType = "never" | "date" | "occurrences";
 
 interface AddAssignmentDialogProps {
   open: boolean;
@@ -60,6 +67,15 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set([day]));
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   
+  // Repeat state
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatFrequency, setRepeatFrequency] = useState(1);
+  const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("weeks");
+  const [endType, setEndType] = useState<EndType>("occurrences");
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [endOccurrences, setEndOccurrences] = useState(4);
+  
   const currentMonth = useMemo(() => {
     try {
       return parse(weekStartDate, "yyyy-MM-dd", new Date());
@@ -81,6 +97,51 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
   const isCustomTask = selectedTask?.name.toLowerCase() === "custom task";
+
+  // Check if a date is a weekday (Mon-Fri)
+  const isWeekday = (date: Date): boolean => {
+    const dayOfWeek = date.getDay();
+    return dayOfWeek !== 0 && dayOfWeek !== 6; // 0 = Sunday, 6 = Saturday
+  };
+
+  // Generate repeat dates based on settings (only weekdays)
+  const generateRepeatDates = (startDate: Date): Date[] => {
+    if (!repeatEnabled) return [startDate];
+    
+    const dates: Date[] = [];
+    let current = startDate;
+    let count = 0;
+    const maxOccurrences = 365; // Safety limit
+    
+    while (count < maxOccurrences) {
+      // Check end conditions
+      if (endType === "occurrences" && dates.length >= endOccurrences) break;
+      if (endType === "date" && endDate && isAfter(current, endDate)) break;
+      if (endType === "never" && dates.length >= 52) break; // Limit "never" to 52 occurrences
+      
+      // Only add weekdays
+      if (isWeekday(current)) {
+        dates.push(current);
+      }
+      
+      count++; // Safety counter to prevent infinite loops
+      
+      // Calculate next date
+      switch (repeatUnit) {
+        case "days":
+          current = addDays(current, repeatFrequency);
+          break;
+        case "weeks":
+          current = addWeeks(current, repeatFrequency);
+          break;
+        case "months":
+          current = addMonths(current, repeatFrequency);
+          break;
+      }
+    }
+    
+    return dates;
+  };
 
   const createMutation = useMutation({
     mutationFn: async ({ data, override = false }: { data: FormData, override?: boolean }) => {
@@ -194,6 +255,14 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       });
       setSelectedTaskId("");
       setSelectedDays(new Set([day]));
+      // Reset repeat state
+      setRepeatOpen(false);
+      setRepeatEnabled(false);
+      setRepeatFrequency(1);
+      setRepeatUnit("weeks");
+      setEndType("occurrences");
+      setEndDate(undefined);
+      setEndOccurrences(4);
       // Initialize with current date if in month mode
       if (isMonthMode) {
         try {
@@ -212,8 +281,81 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const onSubmit = async (data: FormData) => {
     setPendingFormData(data);
     
+    // Handle repeat assignments
+    if (!isMonthMode && repeatEnabled) {
+      const daysArray = Array.from(selectedDays);
+      const weekStart = parse(weekStartDate, "yyyy-MM-dd", new Date());
+      const dayIndexMap: Record<string, number> = {
+        "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4
+      };
+      
+      // Generate all dates to create assignments for
+      const allDates: { date: Date; dayName: string }[] = [];
+      
+      for (const dayName of daysArray) {
+        const dayOffset = dayIndexMap[dayName] ?? 0;
+        const startDate = addDays(weekStart, dayOffset);
+        const repeatDates = generateRepeatDates(startDate);
+        
+        for (const date of repeatDates) {
+          allDates.push({ date, dayName: format(date, "EEEE") });
+        }
+      }
+      
+      // Create assignments in chunks
+      const CHUNK_SIZE = 5;
+      try {
+        for (let i = 0; i < allDates.length; i += CHUNK_SIZE) {
+          const chunk = allDates.slice(i, i + CHUNK_SIZE);
+          const chunkPromises = chunk.map(({ date, dayName }) => {
+            const dateStr = format(date, "yyyy-MM-dd");
+            const weekStartForDate = startOfWeek(date, { weekStartsOn: 1 });
+            const weekStartStr = format(weekStartForDate, "yyyy-MM-dd");
+            
+            return apiRequest("POST", "/api/assignments", {
+              ...data,
+              personId,
+              day: dayName,
+              weekStartDate: weekStartStr,
+              date: dateStr,
+              batchNumber: data.batchNumber || undefined,
+              notes: data.notes || undefined,
+              customName: data.customName || undefined,
+            });
+          });
+          
+          await Promise.all(chunkPromises);
+          
+          if (i + CHUNK_SIZE < allDates.length) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
+        
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+        });
+        toast({
+          title: "Recurring assignments created",
+          description: `Created ${allDates.length} assignment(s)`,
+          variant: "default",
+        });
+        form.reset();
+        setSelectedDays(new Set([day]));
+        setRepeatEnabled(false);
+        setRepeatOpen(false);
+        if (shouldCloseAfter) onClose();
+      } catch (error: any) {
+        toast({
+          title: "Failed to create assignments",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+    
     if (!isMonthMode && selectedDays.size > 1) {
-      // Multiple days in week mode
+      // Multiple days in week mode (non-repeat)
       const daysArray = Array.from(selectedDays);
       const promises = daysArray.map((d) =>
         apiRequest("POST", "/api/assignments", {
@@ -454,6 +596,151 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                 </div>
               )}
 
+              {!isMonthMode && (
+                <Collapsible open={repeatOpen} onOpenChange={setRepeatOpen} className="border rounded-md">
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="w-full flex items-center justify-between px-4 py-3 h-auto"
+                      data-testid="button-repeat-toggle"
+                    >
+                      <div className="flex items-center gap-2">
+                        {repeatOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        <span className="font-medium">Repeat</span>
+                      </div>
+                      {repeatEnabled && (
+                        <span className="text-xs text-muted-foreground">
+                          Every {repeatFrequency} {repeatUnit}
+                        </span>
+                      )}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-4 pb-4 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="repeat-enabled"
+                        checked={repeatEnabled}
+                        onCheckedChange={(checked) => setRepeatEnabled(!!checked)}
+                        data-testid="checkbox-repeat-enabled"
+                      />
+                      <label htmlFor="repeat-enabled" className="text-sm cursor-pointer">
+                        Enable recurring assignments
+                      </label>
+                    </div>
+                    
+                    {repeatEnabled && (
+                      <>
+                        <div className="space-y-2">
+                          <Label className="text-sm">Repeat every</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min="1"
+                              max="99"
+                              value={repeatFrequency}
+                              onChange={(e) => setRepeatFrequency(Math.max(1, parseInt(e.target.value) || 1))}
+                              className="w-20"
+                              data-testid="input-repeat-frequency"
+                            />
+                            <Select value={repeatUnit} onValueChange={(v) => setRepeatUnit(v as RepeatUnit)}>
+                              <SelectTrigger className="w-28" data-testid="select-repeat-unit">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="days">Day(s)</SelectItem>
+                                <SelectItem value="weeks">Week(s)</SelectItem>
+                                <SelectItem value="months">Month(s)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-sm">End</Label>
+                          <RadioGroup value={endType} onValueChange={(v) => setEndType(v as EndType)} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="occurrences" id="end-occurrences" data-testid="radio-end-occurrences" />
+                              <Label htmlFor="end-occurrences" className="text-sm font-normal flex items-center gap-2 cursor-pointer">
+                                After
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max="365"
+                                  value={endOccurrences}
+                                  onChange={(e) => setEndOccurrences(Math.max(1, parseInt(e.target.value) || 1))}
+                                  className="w-16 h-8"
+                                  disabled={endType !== "occurrences"}
+                                  data-testid="input-end-occurrences"
+                                />
+                                occurrence(s)
+                              </Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="date" id="end-date" data-testid="radio-end-date" />
+                              <Label htmlFor="end-date" className="text-sm font-normal flex items-center gap-2 cursor-pointer">
+                                On date
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={endType !== "date"}
+                                      className="h-8"
+                                      data-testid="button-end-date-picker"
+                                    >
+                                      {endDate ? format(endDate, "MMM d, yyyy") : "Select date"}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                      mode="single"
+                                      selected={endDate}
+                                      onSelect={setEndDate}
+                                      weekStartsOn={1}
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="never" id="end-never" data-testid="radio-end-never" />
+                              <Label htmlFor="end-never" className="text-sm font-normal cursor-pointer">
+                                No end date (max 52 occurrences)
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+
+                        {repeatEnabled && (
+                          <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 space-y-1">
+                            <div>
+                              This will create {
+                                endType === "occurrences" ? endOccurrences :
+                                endType === "never" ? "up to 52" : 
+                                endDate ? "multiple" : "(select an end date)"
+                              } assignments
+                            </div>
+                            {repeatUnit === "days" && (
+                              <div className="text-muted-foreground/70">
+                                Note: Only weekdays (Mon-Fri) will be scheduled
+                              </div>
+                            )}
+                            {endType === "date" && !endDate && (
+                              <div className="text-destructive">
+                                Please select an end date
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
               <div className="flex justify-between gap-2 pt-4">
                 <Button
                   type="button"
@@ -481,7 +768,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={createMutation.isPending}
+                    disabled={createMutation.isPending || (repeatEnabled && endType === "date" && !endDate)}
                     data-testid="button-submit-and-add-another"
                     onClick={() => {
                       form.handleSubmit(onSubmit)();
@@ -491,7 +778,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   </Button>
                   <Button
                     type="submit"
-                    disabled={createMutation.isPending}
+                    disabled={createMutation.isPending || (repeatEnabled && endType === "date" && !endDate)}
                     data-testid="button-submit-and-close"
                     onClick={() => {
                       setShouldCloseAfter(true);
