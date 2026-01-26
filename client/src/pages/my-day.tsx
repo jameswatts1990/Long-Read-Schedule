@@ -151,9 +151,18 @@ export default function MyDay() {
     return days;
   }, [selectedDate]);
 
-  const hasAssignmentsOnDate = (date: Date) => {
-    return assignmentsByDate.has(formatDateStr(date));
-  };
+  const listContainerRef = useState<HTMLDivElement | null>(null)[0];
+  const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (containerRef && sortedDates.length > 0) {
+      const todayStr = formatDateStr(new Date());
+      const todayRow = containerRef.querySelector(`[data-testid="day-row-${todayStr}"]`);
+      if (todayRow) {
+        todayRow.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  }, [containerRef, sortedDates]);
 
   if (!matchedPerson) {
     return (
@@ -239,7 +248,7 @@ export default function MyDay() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" ref={setContainerRef}>
         {sortedDates.length === 0 ? (
           <div className="flex items-center justify-center h-full p-6">
             <div className="text-center space-y-2">
