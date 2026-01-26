@@ -51,20 +51,33 @@ export default function MyDay() {
     console.log("Matching user:", { userEmail, userName, firstName, lastName });
     console.log("Available people:", people.map(p => p.name));
     
-    return people.find(p => {
+    // Priority 1: Exact name match (highest priority)
+    let match = people.find(p => userName && p.name.toLowerCase() === userName);
+    if (match) {
+      console.log("Matched by exact name:", match.name);
+      return match;
+    }
+    
+    // Priority 2: Full name contains both first and last name
+    match = people.find(p => {
       const personName = p.name.toLowerCase();
-      // Heuristic 1: Exact name match
-      if (userName && personName === userName) return true;
-      // Heuristic 2: James Watts specific match for jw24
-      if (userEmail === "jw24@sanger.ac.uk" && personName === "james watts") return true;
-      // Heuristic 3: Email local part
-      if (userEmail && personName.includes(userEmail.split('@')[0])) return true;
-      // Heuristic 4: Last Name + First Name
-      if (lastName && firstName && personName.includes(lastName) && personName.includes(firstName)) return true;
-      // Heuristic 5: First name match
-      if (firstName && personName.includes(firstName)) return true;
-      return false;
+      return lastName && firstName && personName.includes(lastName) && personName.includes(firstName);
     });
+    if (match) {
+      console.log("Matched by first+last name:", match.name);
+      return match;
+    }
+    
+    // Priority 3: Email local part match (less reliable)
+    match = people.find(p => userEmail && p.name.toLowerCase().includes(userEmail.split('@')[0]));
+    if (match) {
+      console.log("Matched by email:", match.name);
+      return match;
+    }
+    
+    // No match found
+    console.log("No match found for user");
+    return null;
   }, [user, people]);
 
   const { data: assignments = [] } = useQuery<Assignment[]>({
@@ -117,11 +130,12 @@ export default function MyDay() {
 
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
-  const formatDayLabel = (dateStr: string): { day: number; weekday: string; isToday: boolean; isTomorrow: boolean } => {
+  const formatDayLabel = (dateStr: string): { day: number; weekday: string; month: string; isToday: boolean; isTomorrow: boolean } => {
     const date = parse(dateStr, "yyyy-MM-dd", new Date());
     return {
       day: date.getDate(),
       weekday: format(date, "EEE"),
+      month: format(date, "MMM"),
       isToday: isToday(date),
       isTomorrow: isTomorrow(date),
     };
@@ -188,11 +202,12 @@ export default function MyDay() {
 
       <div className="px-4 py-3 border-b bg-muted/30">
         <div className="flex items-center justify-between gap-1">
-          {["M", "T", "W", "T", "F", "S", "S"].map((day, i) => {
+          {["M", "T", "W", "T", "F", "S", "S"].map((dayName, i) => {
             const date = calendarDays[i];
             const isSelected = isSameDay(date, selectedDate);
             const hasTasks = hasAssignmentsOnDate(date);
             const isTodayDate = isToday(date);
+            const monthAbbrev = format(date, "MMM");
             
             return (
               <button
@@ -204,16 +219,17 @@ export default function MyDay() {
                 )}
                 data-testid={`calendar-day-${i}`}
               >
-                <span className={cn("text-xs mb-1", !isSelected && "text-muted-foreground")}>{day}</span>
+                <span className={cn("text-xs", !isSelected && "text-muted-foreground")}>{dayName}</span>
                 <span className={cn(
                   "text-lg font-semibold w-8 h-8 flex items-center justify-center rounded-full",
                   isTodayDate && !isSelected && "bg-primary/20 text-primary"
                 )}>
                   {date.getDate()}
                 </span>
+                <span className={cn("text-[10px]", !isSelected && "text-muted-foreground/70")}>{monthAbbrev}</span>
                 {hasTasks && (
                   <div className={cn(
-                    "w-1.5 h-1.5 rounded-full mt-1",
+                    "w-1.5 h-1.5 rounded-full mt-0.5",
                     isSelected ? "bg-primary-foreground" : "bg-primary"
                   )} />
                 )}
@@ -246,6 +262,7 @@ export default function MyDay() {
                     )}>
                       <div className="text-2xl font-bold">{dayLabel.day}</div>
                       <div className="text-xs text-muted-foreground uppercase">{dayLabel.weekday}</div>
+                      <div className="text-[10px] text-muted-foreground/70 uppercase">{dayLabel.month}</div>
                     </div>
                   </div>
                   
