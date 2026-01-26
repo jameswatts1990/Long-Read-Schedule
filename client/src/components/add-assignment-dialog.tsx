@@ -523,7 +523,58 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   name="batchNumber"
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel>Batch Number (Optional)</FormLabel>
+                      <div className="flex items-center justify-between">
+                        <FormLabel>Batch Number (Optional)</FormLabel>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] uppercase font-bold"
+                          onClick={async () => {
+                            if (!selectedTaskId) {
+                              toast({
+                                title: "Task required",
+                                description: "Please select a task first",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+                            const task = tasks.find(t => t.id === selectedTaskId);
+                            if (!task) return;
+                            
+                            try {
+                              const res = await apiRequest("GET", "/api/assignments");
+                              const allAssignments: Assignment[] = await res.json();
+                              
+                              // Get task prefix (e.g., "ONT loading" -> "ONT")
+                              const prefix = task.name.split(" ")[0].toUpperCase();
+                              
+                              // Find existing sequence numbers for this task prefix
+                              const sequenceNumbers = allAssignments
+                                .filter(a => a.batchNumber?.startsWith(`${prefix}-`))
+                                .map(a => {
+                                  const parts = a.batchNumber?.split("-") || [];
+                                  const lastPart = parts[parts.length - 1];
+                                  return parseInt(lastPart, 10);
+                                })
+                                .filter(n => !isNaN(n));
+                              
+                              const nextSeq = sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) + 1 : 1;
+                              const newBatchId = `${prefix}-${String(nextSeq).padStart(3, '0')}`;
+                              
+                              form.setValue("batchNumber", newBatchId);
+                            } catch (e) {
+                              toast({
+                                title: "Error",
+                                description: "Failed to generate batch ID",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                        >
+                          Auto
+                        </Button>
+                      </div>
                       <FormControl>
                         <Input
                           {...field}

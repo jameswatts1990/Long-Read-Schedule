@@ -209,9 +209,48 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
 
           <div className="flex gap-4">
             <div className="flex-1 space-y-2">
-              <Label htmlFor="batch-number" className="text-sm font-medium">
-                Batch Number
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="batch-number" className="text-sm font-medium">
+                  Batch Number
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] uppercase font-bold"
+                  onClick={async () => {
+                    if (!task) return;
+                    
+                    try {
+                      const res = await apiRequest("GET", "/api/assignments");
+                      const allAssignments: Assignment[] = await res.json();
+                      
+                      const prefix = task.name.split(" ")[0].toUpperCase();
+                      const sequenceNumbers = allAssignments
+                        .filter(a => a.batchNumber?.startsWith(`${prefix}-`))
+                        .map(a => {
+                          const parts = a.batchNumber?.split("-") || [];
+                          const lastPart = parts[parts.length - 1];
+                          return parseInt(lastPart, 10);
+                        })
+                        .filter(n => !isNaN(n));
+                      
+                      const nextSeq = sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) + 1 : 1;
+                      const newBatchId = `${prefix}-${String(nextSeq).padStart(3, '0')}`;
+                      
+                      setBatchNumber(newBatchId);
+                    } catch (e) {
+                      toast({
+                        title: "Error",
+                        description: "Failed to generate batch ID",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  Auto
+                </Button>
+              </div>
               <Input
                 id="batch-number"
                 value={batchNumber}
