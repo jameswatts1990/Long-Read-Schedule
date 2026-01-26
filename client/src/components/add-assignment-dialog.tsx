@@ -593,7 +593,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   render={({ field }) => (
                     <FormItem className="flex-1">
                       <div className="flex items-center justify-between">
-                        <FormLabel>Batch Size (Optional)</FormLabel>
+                        <FormLabel className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 pt-[8.5px] pb-[8.5px]">Batch Size (Optional)</FormLabel>
                         {/* Empty placeholder div to match Batch Number's header height */}
                         <div className="h-6" />
                       </div>
