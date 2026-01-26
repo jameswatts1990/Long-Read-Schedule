@@ -54,6 +54,14 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
   batchSize: z.number().int().positive().optional(),
   notes: z.string().optional(),
   customName: z.string().optional(),
+}).refine(data => {
+  if (data.batchSize !== undefined && data.batchSize !== null && !data.batchNumber) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Batch ID is required when a batch size is specified",
+  path: ["batchNumber"],
 });
 
 type FormData = z.infer<typeof formSchema>;
