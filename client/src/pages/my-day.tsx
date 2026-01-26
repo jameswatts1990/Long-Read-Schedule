@@ -45,48 +45,38 @@ export default function MyDay() {
     const userEmail = (user as any).email?.toLowerCase();
     const userName = `${(user as any).firstName || ''} ${(user as any).lastName || ''}`.trim().toLowerCase();
     const firstName = (user as any).firstName?.toLowerCase();
+    const lastName = (user as any).lastName?.toLowerCase();
     
     // Log for debugging
-    console.log("Matching user:", { userEmail, userName, firstName });
+    console.log("Matching user:", { userEmail, userName, firstName, lastName });
+    console.log("Available people:", people.map(p => p.name));
     
     return people.find(p => {
       const personName = p.name.toLowerCase();
       // Heuristic 1: Exact name match
       if (userName && personName === userName) return true;
-      // Heuristic 2: Email local part
+      // Heuristic 2: James Watts specific match for jw24
+      if (userEmail === "jw24@sanger.ac.uk" && personName === "james watts") return true;
+      // Heuristic 3: Email local part
       if (userEmail && personName.includes(userEmail.split('@')[0])) return true;
-      // Heuristic 3: First name match
+      // Heuristic 4: Last Name + First Name
+      if (lastName && firstName && personName.includes(lastName) && personName.includes(firstName)) return true;
+      // Heuristic 5: First name match
       if (firstName && personName.includes(firstName)) return true;
-      // Heuristic 4: Reverse name check (lastName firstName)
-      if ((user as any).lastName && (user as any).firstName) {
-        const reverseName = `${(user as any).lastName} ${(user as any).firstName}`.toLowerCase();
-        if (personName === reverseName) return true;
-      }
       return false;
     });
   }, [user, people]);
 
-  const startDate = useMemo(() => {
-    const today = new Date();
-    // Go back 14 days to catch any recent past assignments the user might want to see
-    const pastDate = new Date(today);
-    pastDate.setDate(today.getDate() - 14);
-    return formatDateStr(getMonday(pastDate));
-  }, []);
-  const endDate = useMemo(() => {
-    const end = new Date();
-    end.setDate(end.getDate() + 90);
-    return formatDateStr(end);
-  }, []);
-
   const { data: assignments = [] } = useQuery<Assignment[]>({
-    queryKey: ["/api/assignments", { startDate, endDate }],
+    queryKey: ["/api/assignments"],
     enabled: !!matchedPerson,
   });
 
   const myAssignments = useMemo(() => {
     if (!matchedPerson) return [];
-    return assignments.filter(a => a.personId === matchedPerson.id);
+    const filtered = assignments.filter(a => a.personId === matchedPerson.id);
+    console.log("Filtered assignments for", matchedPerson.name, ":", filtered.length);
+    return filtered;
   }, [assignments, matchedPerson]);
 
   const assignmentsByDate = useMemo(() => {
@@ -99,9 +89,16 @@ export default function MyDay() {
       } else {
         const dayIndex = DAYS.indexOf(assignment.day as typeof DAYS[number]);
         if (dayIndex === -1) return;
-        const weekStart = parse(assignment.weekStartDate, "yyyy-MM-dd", new Date());
-        const assignmentDate = addDays(weekStart, dayIndex);
-        dateKey = formatDateStr(assignmentDate);
+        
+        // Use the assignment's weekStartDate to calculate the specific date
+        try {
+          const weekStart = parse(assignment.weekStartDate, "yyyy-MM-dd", new Date());
+          const assignmentDate = addDays(weekStart, dayIndex);
+          dateKey = formatDateStr(assignmentDate);
+        } catch (e) {
+          console.error("Failed to parse date for assignment:", assignment);
+          return;
+        }
       }
       
       if (!map.has(dateKey)) map.set(dateKey, []);
@@ -113,9 +110,10 @@ export default function MyDay() {
 
   const sortedDates = useMemo(() => {
     const dates = Array.from(assignmentsByDate.keys()).sort();
-    const selectedDateStr = formatDateStr(selectedDate);
-    return dates.filter(d => d >= selectedDateStr);
-  }, [assignmentsByDate, selectedDate]);
+    // For the list view, we show EVERYTHING assigned to this person, not just future tasks
+    // This makes it easier for them to see their whole schedule
+    return dates;
+  }, [assignmentsByDate]);
 
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
