@@ -198,7 +198,10 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       if (isMonthMode) {
         try {
           const initialDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
-          setSelectedDates([initialDate]);
+          const daysInWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+          const dayOffset = daysInWeek.indexOf(day);
+          const actualDate = dayOffset !== -1 ? addDays(initialDate, dayOffset) : initialDate;
+          setSelectedDates([actualDate]);
         } catch (e) {
           setSelectedDates([new Date()]);
         }
