@@ -176,7 +176,14 @@ export default function MyDay() {
               <ChevronLeft className="w-5 h-5" />
             </Button>
           </Link>
-          <h1 className="text-lg font-semibold flex-1">My Schedule</h1>
+          <h1 className="text-lg font-semibold flex-1">
+          My Schedule
+          {matchedPerson && (
+            <span className="block text-xs font-normal text-muted-foreground -mt-1">
+              {matchedPerson.name}
+            </span>
+          )}
+        </h1>
         </header>
         
         <div className="flex-1 flex items-center justify-center p-6">
@@ -203,7 +210,14 @@ export default function MyDay() {
             <ChevronLeft className="w-5 h-5" />
           </Button>
         </Link>
-        <h1 className="text-lg font-semibold flex-1">My Schedule</h1>
+        <h1 className="text-lg font-semibold flex-1">
+          My Schedule
+          {matchedPerson && (
+            <span className="block text-xs font-normal text-muted-foreground -mt-1">
+              {matchedPerson.name}
+            </span>
+          )}
+        </h1>
         <Button variant="ghost" size="icon" data-testid="button-search">
           <Search className="w-5 h-5" />
         </Button>
