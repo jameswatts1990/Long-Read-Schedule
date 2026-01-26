@@ -137,7 +137,8 @@ export default function ALReporting() {
     return monthData;
   }, [year]);
 
-  const getColorClass = (count: number) => {
+  const getColorClass = (count: number, isBankHoliday: boolean) => {
+    if (isBankHoliday) return "bg-zinc-800 text-white border border-zinc-700";
     if (count === 0) return "bg-muted/30 text-muted-foreground/50";
     if (!maxCount) return "bg-primary/20 text-primary-foreground";
     const intensity = count / maxCount;
@@ -146,6 +147,17 @@ export default function ALReporting() {
     if (intensity <= 0.75) return "bg-primary/70 text-white";
     return "bg-primary text-white";
   };
+
+  const bankHolidays2026 = useMemo(() => [
+    "2026-01-01", // New Year's Day
+    "2026-04-03", // Good Friday
+    "2026-04-06", // Easter Monday
+    "2026-05-04", // Early May bank holiday
+    "2026-05-25", // Spring bank holiday
+    "2026-08-31", // Summer bank holiday
+    "2026-12-25", // Christmas Day
+    "2026-12-28", // Boxing Day (substitute)
+  ], []);
 
   return (
     <div className="min-h-screen bg-background p-4 sm:p-6">
@@ -192,6 +204,7 @@ export default function ALReporting() {
                       if (isWeekend(day)) return null;
                       const dateKey = format(day, "yyyy-MM-dd");
                       const count = dailyCounts[dateKey] || 0;
+                      const isBankHoliday = bankHolidays2026.includes(dateKey);
                       return (
                         <TooltipProvider key={dateKey}>
                           <Tooltip>
@@ -199,14 +212,15 @@ export default function ALReporting() {
                               <div
                                 className={cn(
                                   "aspect-square rounded-sm transition-colors flex items-center justify-center text-[10px] font-bold select-none",
-                                  getColorClass(count)
+                                  getColorClass(count, isBankHoliday)
                                 )}
                               >
-                                {count > 0 && count}
+                                {count > 0 && !isBankHoliday && count}
                               </div>
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs font-medium">{format(day, "MMM d, yyyy")}</p>
+                              {isBankHoliday && <p className="text-xs font-bold text-zinc-400">Bank Holiday</p>}
                               <p className="text-xs">{count} AL event{count !== 1 ? "s" : ""}</p>
                             </TooltipContent>
                           </Tooltip>
