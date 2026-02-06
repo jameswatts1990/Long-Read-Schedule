@@ -213,6 +213,21 @@ export function WeeklyCalendar({
     });
   };
 
+  const requiredDailyTasks = useMemo(() => {
+    return tasks.filter(t => (t as any).requiredDaily === 1);
+  }, [tasks]);
+
+  const getMissingRequiredTasks = (day: string) => {
+    if (requiredDailyTasks.length === 0) return [];
+    const scheduledTaskIds = new Set<string>();
+    for (const a of assignments) {
+      if (a.day === day) {
+        scheduledTaskIds.add(a.taskId);
+      }
+    }
+    return requiredDailyTasks.filter(t => !scheduledTaskIds.has(t.id));
+  };
+
   // Number of columns: 1 for person (when shown) + 5 for days
   const numCols = hidePersonColumn ? 5 : 6;
 
@@ -239,6 +254,7 @@ export function WeeklyCalendar({
                   )}
                   {DAYS.map((day, dayIndex) => {
                     const isTodayDay = isCurrentDay(dayIndex);
+                    const missingRequired = getMissingRequiredTasks(day);
                     return (
                       <th 
                         key={day} 
@@ -248,11 +264,35 @@ export function WeeklyCalendar({
                         )}
                         data-testid={`header-day-${day.toLowerCase()}`}
                       >
-                        <div className={cn(
-                          "font-semibold text-sm",
-                          isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
-                        )}>
-                          {day.slice(0, 3)}
+                        <div className="flex items-center justify-center gap-1">
+                          <div className={cn(
+                            "font-semibold text-sm",
+                            isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
+                          )}>
+                            {day.slice(0, 3)}
+                          </div>
+                          {missingRequired.length > 0 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="cursor-help" data-testid={`missing-required-${day.toLowerCase()}`}>
+                                    <Info className="w-3.5 h-3.5 text-red-500" />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="p-3 max-w-xs">
+                                  <p className="text-xs font-bold text-muted-foreground uppercase mb-1">Unscheduled required tasks</p>
+                                  <ul className="space-y-1">
+                                    {missingRequired.map(t => (
+                                      <li key={t.id} className="flex items-center gap-1.5 text-sm">
+                                        <div className="w-2.5 h-2.5 rounded shrink-0" style={{ backgroundColor: t.color }} />
+                                        {t.name}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </div>
                         <div className={cn(
                           "text-xs mt-0.5",
