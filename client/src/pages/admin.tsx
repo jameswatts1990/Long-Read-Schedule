@@ -78,6 +78,7 @@ const taskFormSchema = z.object({
   color: z.string().min(1, "Color is required"),
   description: z.string().optional(),
   isProduction: z.coerce.boolean().default(true),
+  requiredDaily: z.coerce.boolean().default(false),
 });
 
 type PersonFormData = z.infer<typeof personFormSchema>;
@@ -113,6 +114,7 @@ export default function Admin() {
       color: PRESET_COLORS[0],
       description: "",
       isProduction: true,
+      requiredDaily: false,
     },
   });
 
@@ -257,7 +259,7 @@ export default function Admin() {
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
-    taskForm.reset({ name: task.name, color: task.color, description: task.description || "", isProduction: Boolean((task as any).isProduction) });
+    taskForm.reset({ name: task.name, color: task.color, description: task.description || "", isProduction: Boolean((task as any).isProduction), requiredDaily: Boolean((task as any).requiredDaily) });
   };
 
   return (
@@ -636,7 +638,8 @@ export default function Admin() {
             <form onSubmit={taskForm.handleSubmit((data) => {
               const payload = {
                 ...data,
-                isProduction: data.isProduction ? 1 : 0
+                isProduction: data.isProduction ? 1 : 0,
+                requiredDaily: data.requiredDaily ? 1 : 0
               } as any;
               editingTask ? updateTaskMutation.mutate(payload) : createTaskMutation.mutate(payload);
             })} className="space-y-4">
@@ -717,6 +720,23 @@ export default function Admin() {
                       />
                     </FormControl>
                     <FormLabel className="mb-0 cursor-pointer">Show in reporting (production task)</FormLabel>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={taskForm.control}
+                name="requiredDaily"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-required-daily"
+                      />
+                    </FormControl>
+                    <FormLabel className="mb-0 cursor-pointer">Task is required daily</FormLabel>
                   </FormItem>
                 )}
               />
