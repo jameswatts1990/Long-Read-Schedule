@@ -546,8 +546,16 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                               const res = await apiRequest("GET", "/api/assignments");
                               const allAssignments: Assignment[] = await res.json();
                               
-                              // Get task prefix (e.g., "ONT loading" -> "ONT")
-                              const prefix = task.name.split(" ")[0].toUpperCase();
+                              // Extract 4-letter prefix
+                              const words = task.name.trim().split(/\s+/);
+                              let prefix = "";
+                              if (words.length >= 2) {
+                                prefix = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
+                              } else {
+                                prefix = words[0].substring(0, 4).toUpperCase();
+                              }
+                              
+                              if (!prefix) return;
                               
                               // Find existing sequence numbers for this task prefix
                               const sequenceNumbers = allAssignments

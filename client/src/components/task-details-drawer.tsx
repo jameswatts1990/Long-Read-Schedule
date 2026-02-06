@@ -225,7 +225,17 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
                       const res = await apiRequest("GET", "/api/assignments");
                       const allAssignments: Assignment[] = await res.json();
                       
-                      const prefix = task.name.split(" ")[0].toUpperCase();
+                      // Extract 4-letter prefix
+                      const words = task.name.trim().split(/\s+/);
+                      let prefix = "";
+                      if (words.length >= 2) {
+                        prefix = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
+                      } else {
+                        prefix = words[0].substring(0, 4).toUpperCase();
+                      }
+                      
+                      if (!prefix) return;
+
                       const sequenceNumbers = allAssignments
                         .filter(a => a.batchNumber?.startsWith(`${prefix}-`))
                         .map(a => {
