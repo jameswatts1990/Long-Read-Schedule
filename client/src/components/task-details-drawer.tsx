@@ -24,6 +24,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const [batchSize, setBatchSize] = useState("");
   const [notes, setNotes] = useState("");
   const [customName, setCustomName] = useState("");
+  const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const { toast } = useToast();
 
@@ -217,11 +218,13 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
                   type="button"
                   variant="ghost"
                   size="sm"
+                  disabled={isGeneratingBatchId}
                   className="h-6 px-2 text-[10px] uppercase font-bold"
                   onClick={async () => {
                     if (!task) return;
                     
                     try {
+                      setIsGeneratingBatchId(true);
                       const res = await apiRequest("GET", "/api/assignments");
                       const allAssignments: Assignment[] = await res.json();
                       
@@ -255,10 +258,12 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
                         description: "Failed to generate batch ID",
                         variant: "destructive",
                       });
+                    } finally {
+                      setIsGeneratingBatchId(false);
                     }
                   }}
                 >
-                  Auto
+                  {isGeneratingBatchId ? "..." : "Auto"}
                 </Button>
               </div>
               <Input

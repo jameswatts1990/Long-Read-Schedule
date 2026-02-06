@@ -84,6 +84,8 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [endOccurrences, setEndOccurrences] = useState(4);
   
+  const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
+  
   const currentMonth = useMemo(() => {
     try {
       return parse(weekStartDate, "yyyy-MM-dd", new Date());
@@ -529,6 +531,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                           type="button"
                           variant="ghost"
                           size="sm"
+                          disabled={isGeneratingBatchId}
                           className="h-6 px-2 text-[10px] uppercase font-bold"
                           onClick={async () => {
                             if (!selectedTaskId) {
@@ -543,6 +546,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                             if (!task) return;
                             
                             try {
+                              setIsGeneratingBatchId(true);
                               const res = await apiRequest("GET", "/api/assignments");
                               const allAssignments: Assignment[] = await res.json();
                               
@@ -577,10 +581,12 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                                 description: "Failed to generate batch ID",
                                 variant: "destructive",
                               });
+                            } finally {
+                              setIsGeneratingBatchId(false);
                             }
                           }}
                         >
-                          Auto
+                          {isGeneratingBatchId ? "..." : "Auto"}
                         </Button>
                       </div>
                       <FormControl>
