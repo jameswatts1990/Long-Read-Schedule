@@ -45,6 +45,7 @@ export const tasks = pgTable("tasks", {
   order: integer("order").default(0),
   batchSize: integer("batch_size"),
   isProduction: integer("is_production").default(1),
+  requiredDaily: integer("required_daily").default(0),
 });
 
 export const assignments = pgTable("assignments", {
