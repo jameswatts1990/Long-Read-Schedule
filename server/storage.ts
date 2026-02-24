@@ -292,6 +292,14 @@ export class MemStorage implements IStorage {
     this.tasks.delete(id);
   }
 
+  async updateTask(id: string, data: Partial<InsertTask>): Promise<Task> {
+    const existing = this.tasks.get(id);
+    if (!existing) throw new Error("Task not found");
+    const updated: Task = { ...existing, ...data };
+    this.tasks.set(id, updated);
+    return updated;
+  }
+
   async reorderTasks(taskIds: string[]): Promise<Task[]> {
     taskIds.forEach((id, index) => {
       const task = this.tasks.get(id);
@@ -585,12 +593,12 @@ export class PostgresStorage implements IStorage {
   }
 
   async updateTask(id: string, data: Partial<InsertTask>): Promise<Task> {
-    const result = await this.db
+    const [task] = await this.db
       .update(tasks)
       .set(data)
       .where(eq(tasks.id, id))
       .returning();
-    return result[0];
+    return task;
   }
 
   async deleteTask(id: string): Promise<void> {
