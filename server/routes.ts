@@ -186,8 +186,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     taskId: insertAssignmentSchema.shape.taskId.optional(),
     batchNumber: insertAssignmentSchema.shape.batchNumber.optional(),
     batchSize: insertAssignmentSchema.shape.batchSize.optional(),
-    notes: insertAssignmentSchema.shape.notes.optional(),
-    date: insertAssignmentSchema.shape.date.optional(),
+    notes: insertAssignmentSchema.shape.notes.optional().nullable(),
+    date: insertAssignmentSchema.shape.date.optional().nullable(),
     personId: insertAssignmentSchema.shape.personId.optional(),
     day: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]).optional(),
     weekStartDate: isoDateString.optional(),
@@ -201,7 +201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Assignment not found" });
       }
 
-      const parsed = assignmentPatchSchema.parse(req.body ?? {});
+      const parsed = assignmentPatchSchema.partial().parse(req.body ?? {});
       const { weekStartDate, ...mutable } = parsed;
       const nextPayload = {
         ...mutable,
@@ -211,6 +211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updated = await storage.updateAssignment(assignmentId, nextPayload);
       res.json(updated);
     } catch (error) {
+      console.error("PATCH assignment error:", error);
       res.status(400).json({ error: "Invalid update data" });
     }
   });
