@@ -70,6 +70,7 @@ GET    /api/auth/user       - Get current authenticated user
 GET    /api/people          - Fetch all people
 POST   /api/people          - Create new person
 DELETE /api/people/:id      - Delete person
+PATCH  /api/people/:id/link-user - Link/unlink user account to person
 
 GET    /api/tasks           - Fetch all tasks
 POST   /api/tasks           - Create new task
@@ -133,6 +134,7 @@ DELETE /api/premade-filters/:id - Delete premade filter
 - `color` (text, required) - Hex color for person identification
 - `order` (integer) - Display order
 - `excluded` (integer, default 0) - Exclusion flag (0=active, 1=excluded)
+- `userId` (varchar, nullable) - Linked user ID for reliable audit trail (1:1 with users table)
 
 **Tasks Table:**
 - `id` (UUID, primary key, auto-generated)

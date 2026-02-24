@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun, UserCheck, UserX } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Form,
   FormControl,
@@ -252,6 +259,27 @@ export default function Admin() {
     },
   });
 
+  const linkUserMutation = useMutation({
+    mutationFn: async ({ personId, userId }: { personId: string; userId: string | null }) => {
+      const res = await apiRequest("PATCH", `/api/people/${personId}/link-user`, { userId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      toast({ title: "User link updated", description: "The user has been linked to this team member" });
+    },
+    onError: (error: any) => {
+      const msg = error?.message || "Failed to link user";
+      const serverMsg = msg.includes(":") ? msg.split(": ").slice(1).join(": ") : msg;
+      let description = "Failed to link user";
+      try {
+        const parsed = JSON.parse(serverMsg);
+        description = parsed.error || description;
+      } catch { description = serverMsg || description; }
+      toast({ title: "Error", description, variant: "destructive" });
+    },
+  });
+
   const handleEditPerson = (person: Person) => {
     setEditingPerson(person);
     personForm.reset({ name: person.name, color: person.color });
@@ -364,28 +392,53 @@ export default function Admin() {
                       }`}
                       data-testid={`person-item-${person.id}`}
                     >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <div
-                        className="w-6 h-6 rounded"
+                        className="w-6 h-6 rounded flex-shrink-0"
                         style={{ backgroundColor: person.color }}
                       />
-                      <span>{person.name}</span>
-                      {(() => {
-                        const user = allUsers.find(u => {
-                          const userFullName = `${u.firstName} ${u.lastName}`.trim().toLowerCase();
-                          const personName = person.name.trim().toLowerCase();
-                          const userEmail = u.email?.toLowerCase();
-                          return userFullName === personName || userEmail === personName;
-                        });
-                        return user && (
-                          <span className="text-xs text-muted-foreground ml-2">
-                            (Last login: {new Date(user.updatedAt!).toLocaleDateString()})
-                          </span>
-                        );
-                      })()}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{person.name}</span>
+                          {person.userId ? (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <UserCheck className="h-3 w-3 text-green-500" />
+                              {allUsers.find(u => u.id === person.userId)?.email || "linked"}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <UserX className="h-3 w-3 text-orange-400" />
+                              not linked
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                          <Select
+                            value={person.userId || "__none__"}
+                            onValueChange={(value) => {
+                              linkUserMutation.mutate({
+                                personId: person.id,
+                                userId: value === "__none__" ? null : value,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs w-48" data-testid={`select-link-user-${person.id}`}>
+                              <SelectValue placeholder="Link to user account..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">No user linked</SelectItem>
+                              {allUsers.map((user) => (
+                                <SelectItem key={user.id} value={user.id}>
+                                  {user.email || `${user.firstName} ${user.lastName}`.trim() || user.id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 flex-shrink-0">
                       <Button
                         variant="ghost"
                         size="icon"

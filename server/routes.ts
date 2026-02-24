@@ -278,6 +278,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const linkUserSchema = z.object({
+    userId: z.string().nullable(),
+  });
+
+  app.patch("/api/people/:id/link-user", isAuthenticated, async (req, res) => {
+    try {
+      const personId = req.params.id;
+      const { userId } = linkUserSchema.parse(req.body);
+
+      if (userId) {
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(400).json({ error: "User not found" });
+        }
+        const allPeople = await storage.getPeople();
+        const alreadyLinked = allPeople.find(p => p.userId === userId && p.id !== personId);
+        if (alreadyLinked) {
+          return res.status(400).json({ error: `User is already linked to ${alreadyLinked.name}` });
+        }
+      }
+
+      const person = await storage.updatePerson(personId, { userId });
+      res.json(person);
+    } catch (error) {
+      console.error("Link user error:", error);
+      res.status(400).json({ error: "Failed to link user" });
+    }
+  });
+
   app.get("/api/admin/users", isAuthenticated, async (_req, res) => {
     try {
       const users = await storage.getUsers();

@@ -179,10 +179,17 @@ export class MemStorage implements IStorage {
 
     sampleAssignments.forEach((a) => {
       const id = randomUUID();
+      const now = new Date();
       this.assignments.set(id, {
         id,
         ...a,
-      });
+        batchSize: null,
+        order: 0,
+        customName: null,
+        createdAt: now,
+        updatedAt: now,
+        createdById: null,
+      } as Assignment);
     });
   }
 

@@ -29,7 +29,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const { toast } = useToast();
 
   const { data: creator } = useQuery<User>({
-    queryKey: [`/api/users/${assignment?.createdById}`],
+    queryKey: ['/api/users', assignment?.createdById],
     enabled: !!assignment?.createdById,
   });
 
@@ -322,7 +322,14 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
             {creator && (
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span className="font-medium">Created By</span>
-                <span>{creator.firstName} {creator.lastName}</span>
+                <span>
+                  {(() => {
+                    const linkedPerson = people.find(p => p.userId === creator.id);
+                    if (linkedPerson) return linkedPerson.name;
+                    const fullName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
+                    return fullName || creator.email || 'Unknown';
+                  })()}
+                </span>
               </div>
             )}
           </div>
