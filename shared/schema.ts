@@ -35,6 +35,7 @@ export const people = pgTable("people", {
   color: text("color").notNull(),
   order: integer("order").default(0),
   excluded: integer("excluded").default(0),
+  userId: varchar("user_id"),
 });
 
 export const tasks = pgTable("tasks", {
