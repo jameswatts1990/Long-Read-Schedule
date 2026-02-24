@@ -259,7 +259,13 @@ export default function Admin() {
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
-    taskForm.reset({ name: task.name, color: task.color, description: task.description || "", isProduction: Boolean((task as any).isProduction), requiredDaily: Boolean((task as any).requiredDaily) });
+    taskForm.reset({ 
+      name: task.name, 
+      color: task.color, 
+      description: task.description || "", 
+      isProduction: Boolean(task.isProduction), 
+      requiredDaily: Boolean(task.requiredDaily) 
+    });
   };
 
   return (
@@ -512,25 +518,32 @@ export default function Admin() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditTask(task)}
-                          data-testid={`button-edit-task-${task.id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteTaskMutation.mutate(task.id)}
-                          disabled={deleteTaskMutation.isPending}
-                          data-testid={`button-delete-task-${task.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditTask(task);
+                          setShowAddTask(true);
+                        }}
+                        data-testid={`button-edit-task-${task.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteTaskMutation.mutate(task.id);
+                        }}
+                        disabled={deleteTaskMutation.isPending}
+                        data-testid={`button-delete-task-${task.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                     </div>
                   </div>
                 ))}
