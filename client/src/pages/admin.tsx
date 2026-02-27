@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -312,42 +314,16 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
 
       {/* Manage Members Dialog */}
       <Dialog open={!!managingWorkspace} onOpenChange={(open) => { if (!open) setManagingWorkspace(null); }}>
-        <DialogContent className="max-w-lg" data-testid="dialog-manage-members">
-          <DialogHeader>
-            <DialogTitle>Manage Members — {managingWorkspace?.name}</DialogTitle>
-            <DialogDescription>Add or remove users from this workspace.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-2xl h-[80vh] flex flex-col p-0 overflow-hidden" data-testid="dialog-manage-members">
+          <div className="p-6 pb-0">
+            <DialogHeader>
+              <DialogTitle>Manage Members — {managingWorkspace?.name}</DialogTitle>
+              <DialogDescription>Add or remove users from this workspace.</DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Current members */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Current Members</p>
-              {workspaceMembers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No members yet.</p>
-              ) : (
-                workspaceMembers.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between p-2 border rounded-md gap-2" data-testid={`member-row-${member.id}`}>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{member.email || `${member.firstName} ${member.lastName}`.trim() || member.id}</p>
-                      <Badge variant="secondary" className="text-xs mt-0.5">{(member as any).role}</Badge>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeMemberMutation.mutate({ workspaceId: managingWorkspace!.id, userId: member.id })}
-                      disabled={removeMemberMutation.isPending}
-                      data-testid={`button-remove-member-${member.id}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Add member */}
+            {/* Add member section at top for better usability */}
             {nonMembers.length > 0 && (
-              <div className="space-y-2 pt-2 border-t">
+              <div className="space-y-2 py-4">
                 <p className="text-sm font-medium">Add Member</p>
                 <div className="flex gap-2">
                   <Select value={addingUserId} onValueChange={setAddingUserId}>
@@ -384,6 +360,49 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
                 </div>
               </div>
             )}
+          </div>
+
+          <Separator />
+
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="px-6 py-3 border-b bg-muted/30">
+              <p className="text-sm font-medium flex items-center justify-between">
+                Current Members
+                <Badge variant="outline" className="ml-2">{workspaceMembers.length}</Badge>
+              </p>
+            </div>
+            
+            <ScrollArea className="flex-1">
+              <div className="p-6 pt-2 space-y-1.5">
+                {workspaceMembers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-8 text-center">No members yet.</p>
+                ) : (
+                  workspaceMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between p-2 border rounded-md gap-2 hover:bg-muted/50 transition-colors" data-testid={`member-row-${member.id}`}>
+                      <div className="min-w-0 flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold shrink-0">
+                          {(member.email?.[0] || member.firstName?.[0] || "?").toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate leading-none mb-1">{member.email || `${member.firstName} ${member.lastName}`.trim() || member.id}</p>
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1 py-0 font-normal">{(member as any).role}</Badge>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeMemberMutation.mutate({ workspaceId: managingWorkspace!.id, userId: member.id })}
+                        disabled={removeMemberMutation.isPending}
+                        data-testid={`button-remove-member-${member.id}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
           </div>
         </DialogContent>
       </Dialog>
