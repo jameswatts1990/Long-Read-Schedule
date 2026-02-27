@@ -818,7 +818,7 @@ export default function Admin() {
                   <FormItem className="flex items-center gap-2">
                     <FormControl>
                       <Checkbox
-                        checked={field.value}
+                        checked={!!field.value}
                         onCheckedChange={field.onChange}
                         data-testid="checkbox-show-in-pipeline-view"
                       />
