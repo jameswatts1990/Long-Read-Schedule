@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, MoreVertical } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { MonthView } from "@/components/month-view";
+import { PipelineView } from "@/components/pipeline-view";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
 import { FilterMegaMenu } from "@/components/filter-mega-menu";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
@@ -45,7 +46,7 @@ function formatWeekDisplay(weekStart: Date): string {
   return `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
 }
 
-type ViewMode = "week" | "month";
+type ViewMode = "week" | "month" | "pipeline";
 
 function getWeeksInMonth(date: Date): Date[] {
   const weeks: Date[] = [];
@@ -118,10 +119,10 @@ export default function Scheduler() {
   const monthStartStr = weeksInMonth.length > 0 ? formatDate(weeksInMonth[0]) : weekStartStr;
   const monthEndStr = weeksInMonth.length > 0 ? formatDate(weeksInMonth[weeksInMonth.length - 1]) : weekStartStr;
   
-  // Fetch assignments filtered by week for week view
+  // Fetch assignments filtered by week for week/pipeline view
   const { data: weekAssignmentsData = [] } = useQuery<Assignment[]>({ 
     queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`],
-    enabled: viewMode === "week"
+    enabled: viewMode === "week" || viewMode === "pipeline"
   });
   
   // Fetch assignments for entire month range for month view
@@ -130,7 +131,7 @@ export default function Scheduler() {
     enabled: viewMode === "month"
   });
   
-  let weekAssignments = viewMode === "week" ? weekAssignmentsData : monthAssignmentsData;
+  let weekAssignments = viewMode === "month" ? monthAssignmentsData : weekAssignmentsData;
 
   // Apply filters
   if (filterPersonIds.size > 0) {
@@ -182,8 +183,12 @@ export default function Scheduler() {
     }
   };
 
-  const toggleViewMode = () => {
-    setViewMode(viewMode === "week" ? "month" : "week");
+  const togglePipelineView = () => {
+    setViewMode(viewMode === "pipeline" ? "week" : "pipeline");
+  };
+
+  const toggleMonthView = () => {
+    setViewMode(viewMode === "month" ? "week" : "month");
   };
 
   const handleExport = async () => {
@@ -356,15 +361,24 @@ export default function Scheduler() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* View Mode Toggle */}
+          {/* View Mode Toggles */}
+          <Button
+            variant={viewMode === "pipeline" ? "default" : "outline"}
+            size="default"
+            onClick={togglePipelineView}
+            data-testid="button-toggle-pipeline-view"
+          >
+            <LayoutList className="w-4 h-4" />
+            <span>Pipeline View</span>
+          </Button>
           <Button
             variant={viewMode === "month" ? "default" : "outline"}
             size="default"
-            onClick={toggleViewMode}
-            data-testid="button-toggle-view-mode"
+            onClick={toggleMonthView}
+            data-testid="button-toggle-month-view"
           >
             <CalendarDays className="w-4 h-4" />
-            <span>{viewMode === "week" ? "Month View" : "Week View"}</span>
+            <span>Month View</span>
           </Button>
 
           {/* Navigation Controls */}
@@ -372,7 +386,7 @@ export default function Scheduler() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={viewMode === "week" ? goToPreviousWeek : goToPreviousMonth}
+              onClick={viewMode === "month" ? goToPreviousMonth : goToPreviousWeek}
               data-testid="button-previous"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -387,9 +401,9 @@ export default function Scheduler() {
                   data-testid="button-date-picker"
                   className="min-w-36"
                 >
-                  {viewMode === "week" 
-                    ? formatWeekDisplay(currentWeekStart) 
-                    : formatMonthDisplay(currentWeekStart)}
+                  {viewMode === "month"
+                    ? formatMonthDisplay(currentWeekStart)
+                    : formatWeekDisplay(currentWeekStart)}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="center">
@@ -406,7 +420,7 @@ export default function Scheduler() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={viewMode === "week" ? goToNextWeek : goToNextMonth}
+              onClick={viewMode === "month" ? goToNextMonth : goToNextWeek}
               data-testid="button-next"
             >
               <ChevronRight className="w-4 h-4" />
@@ -505,7 +519,7 @@ export default function Scheduler() {
         </div>
       </header>
       <div className={`flex-1 overflow-auto ${isCompactView ? "p-2" : "p-6"}`}>
-        {viewMode === "week" ? (
+        {viewMode === "week" && (
           <WeeklyCalendar
             weekStartDate={weekStartStr}
             assignments={weekAssignments}
@@ -514,7 +528,8 @@ export default function Scheduler() {
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
           />
-        ) : (
+        )}
+        {viewMode === "month" && (
           <MonthView
             weeksInMonth={weeksInMonth}
             weekAssignments={weekAssignments}
@@ -523,6 +538,16 @@ export default function Scheduler() {
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
             formatDate={formatDate}
+          />
+        )}
+        {viewMode === "pipeline" && (
+          <PipelineView
+            weekStartDate={weekStartStr}
+            assignments={weekAssignments}
+            people={people}
+            tasks={tasks}
+            onAssignmentClick={setSelectedAssignment}
+            isCompactView={isCompactView}
           />
         )}
       </div>

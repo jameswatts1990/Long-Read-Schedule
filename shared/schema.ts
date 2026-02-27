@@ -47,6 +47,7 @@ export const tasks = pgTable("tasks", {
   batchSize: integer("batch_size"),
   isProduction: integer("is_production").default(1),
   requiredDaily: integer("required_daily").default(0),
+  showInPipelineView: integer("show_in_pipeline_view").default(0),
 });
 
 export const assignments = pgTable("assignments", {

@@ -48,7 +48,8 @@ Preferred communication style: Simple, everyday language.
 - Week navigation with Monday-based week starts
 - Calendar popover for quick date navigation (click date display to open calendar picker)
 - Month view mode showing multiple weeks in continuous scroll
-- View mode toggle between single week and month views
+- View mode toggle between single week, month, and pipeline views
+- Pipeline view: tasks (flagged for pipeline) as rows, days as columns, person names shown in cells
 - Drag-to-delete functionality (drag task onto person name to delete)
 
 ### Backend Architecture
@@ -142,6 +143,7 @@ DELETE /api/premade-filters/:id - Delete premade filter
 - `color` (text, required) - Pastel background color
 - `description` (text, optional)
 - `order` (integer) - Display order
+- `showInPipelineView` (integer, default 0) - Flag to show task as a row in Pipeline View
 
 **Assignments Table:**
 - `id` (UUID, primary key, auto-generated)

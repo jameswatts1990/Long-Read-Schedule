@@ -86,6 +86,7 @@ const taskFormSchema = z.object({
   description: z.string().optional(),
   isProduction: z.coerce.boolean().default(true),
   requiredDaily: z.coerce.boolean().default(false),
+  showInPipelineView: z.coerce.boolean().default(false),
 });
 
 type PersonFormData = z.infer<typeof personFormSchema>;
@@ -122,6 +123,7 @@ export default function Admin() {
       description: "",
       isProduction: true,
       requiredDaily: false,
+      showInPipelineView: false,
     },
   });
 
@@ -292,7 +294,8 @@ export default function Admin() {
       color: task.color, 
       description: task.description || "", 
       isProduction: Boolean(task.isProduction), 
-      requiredDaily: Boolean(task.requiredDaily) 
+      requiredDaily: Boolean(task.requiredDaily),
+      showInPipelineView: Boolean(task.showInPipelineView),
     });
   };
 
@@ -705,7 +708,8 @@ export default function Admin() {
               const payload = {
                 ...data,
                 isProduction: data.isProduction ? 1 : 0,
-                requiredDaily: data.requiredDaily ? 1 : 0
+                requiredDaily: data.requiredDaily ? 1 : 0,
+                showInPipelineView: data.showInPipelineView ? 1 : 0,
               } as any;
               editingTask ? updateTaskMutation.mutate(payload) : createTaskMutation.mutate(payload);
             })} className="space-y-4">
@@ -803,6 +807,23 @@ export default function Admin() {
                       />
                     </FormControl>
                     <FormLabel className="mb-0 cursor-pointer">Task is required daily</FormLabel>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={taskForm.control}
+                name="showInPipelineView"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-show-in-pipeline-view"
+                      />
+                    </FormControl>
+                    <FormLabel className="mb-0 cursor-pointer">Show in pipeline view</FormLabel>
                   </FormItem>
                 )}
               />
