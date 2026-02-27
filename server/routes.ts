@@ -119,9 +119,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── My Workspace (session-based) ────────────────────────────────────────────
 
-  // Get workspaces the current user belongs to
+  // Get workspaces the current user belongs to (Super admins see all)
   app.get("/api/my-workspaces", isAuthenticated, async (req: any, res) => {
     try {
+      const userEmail = req.user.claims.email;
+      if (isSuperAdmin(userEmail)) {
+        const allWorkspaces = await storage.getWorkspaces();
+        return res.json(allWorkspaces);
+      }
       const userId = req.user.claims.sub;
       const userWorkspaces = await storage.getUserWorkspaces(userId);
       res.json(userWorkspaces);
@@ -136,13 +141,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workspaceId = (req.session as any).activeWorkspaceId;
       if (!workspaceId) return res.json(null);
       const workspace = await storage.getWorkspace(workspaceId);
-      // Validate user still belongs to the workspace
+      
+      // Validate user still belongs to the workspace (Super admins bypass this)
       if (workspace) {
-        const userId = req.user.claims.sub;
-        const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
-        if (!membership) {
-          (req.session as any).activeWorkspaceId = undefined;
-          return res.json(null);
+        const userEmail = req.user.claims.email;
+        if (!isSuperAdmin(userEmail)) {
+          const userId = req.user.claims.sub;
+          const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
+          if (!membership) {
+            (req.session as any).activeWorkspaceId = undefined;
+            return res.json(null);
+          }
         }
       }
       res.json(workspace || null);
@@ -157,9 +166,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { workspaceId } = req.body;
       if (!workspaceId) return res.status(400).json({ error: "workspaceId required" });
 
-      const userId = req.user.claims.sub;
-      const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
-      if (!membership) return res.status(403).json({ error: "Not a member of this workspace" });
+      const userEmail = req.user.claims.email;
+      if (!isSuperAdmin(userEmail)) {
+        const userId = req.user.claims.sub;
+        const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
+        if (!membership) return res.status(403).json({ error: "Not a member of this workspace" });
+      }
 
       (req.session as any).activeWorkspaceId = workspaceId;
       const workspace = await storage.getWorkspace(workspaceId);
