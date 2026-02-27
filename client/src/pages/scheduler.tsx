@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -16,6 +16,7 @@ import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { type Person, type Task, type Assignment, type PremadeFilter } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -76,6 +77,7 @@ export default function Scheduler() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -358,6 +360,38 @@ export default function Scheduler() {
         <div className="flex items-center gap-3">
           <CalendarIcon className="w-6 h-6 text-primary" data-testid="icon-logo" />
           <h1 className="text-2xl font-semibold" data-testid="text-app-title">LR Lab Scheduler</h1>
+          {/* Workspace Switcher */}
+          {activeWorkspace && (
+            availableWorkspaces.length > 1 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="default" className="gap-1.5" data-testid="button-workspace-switcher">
+                    <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-medium max-w-32 truncate">{activeWorkspace.name}</span>
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  {availableWorkspaces.map((ws) => (
+                    <DropdownMenuItem
+                      key={ws.id}
+                      onClick={() => setWorkspace(ws.id)}
+                      className={ws.id === activeWorkspace.id ? "bg-accent" : ""}
+                      data-testid={`menu-item-workspace-${ws.id}`}
+                    >
+                      <Layers className="h-4 w-4 mr-2 text-muted-foreground" />
+                      {ws.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground border rounded-md px-3 h-9" data-testid="text-workspace-name">
+                <Layers className="h-3.5 w-3.5" />
+                <span>{activeWorkspace.name}</span>
+              </div>
+            )
+          )}
         </div>
 
         <div className="flex items-center gap-3">

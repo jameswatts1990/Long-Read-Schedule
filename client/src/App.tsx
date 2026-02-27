@@ -4,33 +4,44 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { useEffect, useState, useRef } from "react";
+import { io, Socket } from "socket.io-client";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
 import ALReporting from "@/pages/al-reporting";
 import MyDay from "@/pages/my-day";
 import Landing from "@/pages/landing";
+import WorkspacePicker from "@/pages/workspace-picker";
 import NotFound from "@/pages/not-found";
 
-function useRealTimeUpdates() {
+function useRealTimeUpdates(workspaceId: string | null) {
+  const socketRef = useRef<Socket | null>(null);
+
   useEffect(() => {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+
     const socket = io({
       path: "/socket.io",
       transports: ["websocket", "polling"],
+      query: workspaceId ? { workspaceId } : {},
     });
 
     socket.on("update", (data) => {
       console.log("Real-time update received:", data);
-      // Invalidate all queries to refresh data across the app
       queryClient.invalidateQueries();
     });
+
+    socketRef.current = socket;
 
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [workspaceId]);
 }
 
 function useIsMobile() {
@@ -44,31 +55,32 @@ function useIsMobile() {
       const isSmallScreen = window.innerWidth < 768;
       setIsMobile(isMobileDevice || isSmallScreen);
     };
-    
+
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   return isMobile;
 }
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [hasRedirected, setHasRedirected] = useState(false);
 
-  useRealTimeUpdates();
+  useRealTimeUpdates(activeWorkspace?.id ?? null);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated && isMobile && !location.startsWith("/my-day") && !hasRedirected) {
+    if (!authLoading && !workspaceLoading && isAuthenticated && activeWorkspace && isMobile && !location.startsWith("/my-day") && !hasRedirected) {
       setHasRedirected(true);
       setLocation("/my-day");
     }
-  }, [isLoading, isAuthenticated, isMobile, location, hasRedirected, setLocation]);
+  }, [authLoading, workspaceLoading, isAuthenticated, activeWorkspace, isMobile, location, hasRedirected, setLocation]);
 
-  if (isLoading) {
+  if (authLoading || (isAuthenticated && workspaceLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
@@ -78,6 +90,11 @@ function Router() {
 
   if (!isAuthenticated) {
     return <Landing />;
+  }
+
+  // Authenticated but no workspace selected
+  if (!activeWorkspace) {
+    return <WorkspacePicker />;
   }
 
   return (

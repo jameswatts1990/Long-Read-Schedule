@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun, UserCheck, UserX } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun, UserCheck, UserX, Layers, Users, X, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import {
@@ -34,7 +35,10 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { type Person, type Task, type User } from "@shared/schema";
+import { type Person, type Task, type User, type Workspace } from "@shared/schema";
+
+// Super-admin email list (must match server/routes.ts SUPER_ADMIN_EMAILS)
+const SUPER_ADMIN_EMAILS = new Set(["admin@sanger.ac.uk"]);
 
 // 20 unique colors with light, medium, and dark variants (60 colors total)
 const PRESET_COLORS = [
@@ -92,6 +96,283 @@ const taskFormSchema = z.object({
 type PersonFormData = z.infer<typeof personFormSchema>;
 type TaskFormData = z.infer<typeof taskFormSchema>;
 
+type WorkspaceMember = User & { role: string };
+
+function WorkspaceManagementSection({ currentUser }: { currentUser: User | null }) {
+  const { toast } = useToast();
+  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null);
+  const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(null);
+  const [addingUserId, setAddingUserId] = useState<string>("");
+  const [addingUserRole, setAddingUserRole] = useState<string>("member");
+
+  const { data: workspaces = [], isLoading } = useQuery<Workspace[]>({
+    queryKey: ["/api/workspaces"],
+  });
+  const { data: allUsers = [] } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
+  const { data: workspaceMembers = [] } = useQuery<WorkspaceMember[]>({
+    queryKey: ["/api/workspaces", managingWorkspace?.id, "members"],
+    enabled: !!managingWorkspace,
+  });
+
+  const wsForm = useForm<{ name: string; description: string }>({
+    defaultValues: { name: "", description: "" },
+  });
+
+  const createWsMutation = useMutation({
+    mutationFn: async (data: { name: string; description: string }) => {
+      const res = await apiRequest("POST", "/api/workspaces", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      toast({ title: "Workspace created" });
+      wsForm.reset();
+      setShowCreateWorkspace(false);
+    },
+    onError: () => toast({ title: "Failed to create workspace", variant: "destructive" }),
+  });
+
+  const updateWsMutation = useMutation({
+    mutationFn: async (data: { name: string; description: string }) => {
+      const res = await apiRequest("PUT", `/api/workspaces/${editingWorkspace!.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      toast({ title: "Workspace updated" });
+      setEditingWorkspace(null);
+    },
+    onError: () => toast({ title: "Failed to update workspace", variant: "destructive" }),
+  });
+
+  const deleteWsMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/workspaces/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      toast({ title: "Workspace deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete workspace", variant: "destructive" }),
+  });
+
+  const addMemberMutation = useMutation({
+    mutationFn: async ({ workspaceId, userId, role }: { workspaceId: string; userId: string; role: string }) => {
+      const res = await apiRequest("POST", `/api/workspaces/${workspaceId}/members`, { userId, role });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", managingWorkspace?.id, "members"] });
+      toast({ title: "Member added" });
+      setAddingUserId("");
+      setAddingUserRole("member");
+    },
+    onError: () => toast({ title: "Failed to add member", variant: "destructive" }),
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: async ({ workspaceId, userId }: { workspaceId: string; userId: string }) => {
+      const res = await apiRequest("DELETE", `/api/workspaces/${workspaceId}/members/${userId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", managingWorkspace?.id, "members"] });
+      toast({ title: "Member removed" });
+    },
+    onError: () => toast({ title: "Failed to remove member", variant: "destructive" }),
+  });
+
+  const handleEditWorkspace = (ws: Workspace) => {
+    setEditingWorkspace(ws);
+    wsForm.reset({ name: ws.name, description: ws.description || "" });
+  };
+
+  const nonMembers = allUsers.filter(u => !workspaceMembers.find(m => m.id === u.id));
+
+  if (isLoading) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Layers className="h-5 w-5" />
+          <h2 className="text-2xl font-bold">Workspaces</h2>
+        </div>
+        <Button onClick={() => { setShowCreateWorkspace(true); wsForm.reset({ name: "", description: "" }); }} data-testid="button-create-workspace">
+          <Plus className="h-4 w-4 mr-2" />
+          Create Workspace
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        {workspaces.length === 0 ? (
+          <Card className="p-6">
+            <p className="text-muted-foreground text-sm">No workspaces yet. Create one to get started.</p>
+          </Card>
+        ) : (
+          workspaces.map((ws) => (
+            <Card key={ws.id} className="p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="font-semibold" data-testid={`text-workspace-name-${ws.id}`}>{ws.name}</p>
+                  {ws.description && <p className="text-sm text-muted-foreground mt-0.5">{ws.description}</p>}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={() => setManagingWorkspace(ws)}
+                    data-testid={`button-manage-members-${ws.id}`}
+                  >
+                    <Users className="h-4 w-4 mr-1.5" />
+                    Members
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleEditWorkspace(ws)} data-testid={`button-edit-workspace-${ws.id}`}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (confirm(`Delete workspace "${ws.name}"? This will delete all data in it.`)) {
+                        deleteWsMutation.mutate(ws.id);
+                      }
+                    }}
+                    disabled={deleteWsMutation.isPending}
+                    data-testid={`button-delete-workspace-${ws.id}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Create/Edit Workspace Dialog */}
+      <Dialog
+        open={showCreateWorkspace || !!editingWorkspace}
+        onOpenChange={(open) => { if (!open) { setShowCreateWorkspace(false); setEditingWorkspace(null); } }}
+      >
+        <DialogContent data-testid="dialog-workspace-form">
+          <DialogHeader>
+            <DialogTitle>{editingWorkspace ? "Edit Workspace" : "Create Workspace"}</DialogTitle>
+            <DialogDescription>
+              {editingWorkspace ? "Update workspace details." : "Create a new isolated workspace for a team."}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={wsForm.handleSubmit((data) => {
+              if (editingWorkspace) {
+                updateWsMutation.mutate(data);
+              } else {
+                createWsMutation.mutate(data);
+              }
+            })}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Name</label>
+              <Input {...wsForm.register("name", { required: true })} placeholder="e.g. Genomics Lab Team" data-testid="input-workspace-name" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Description (optional)</label>
+              <Textarea {...wsForm.register("description")} placeholder="Brief description of this workspace..." rows={2} data-testid="input-workspace-description" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => { setShowCreateWorkspace(false); setEditingWorkspace(null); }}>Cancel</Button>
+              <Button type="submit" disabled={createWsMutation.isPending || updateWsMutation.isPending} data-testid="button-submit-workspace">
+                {createWsMutation.isPending || updateWsMutation.isPending ? "Saving..." : editingWorkspace ? "Update" : "Create"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Members Dialog */}
+      <Dialog open={!!managingWorkspace} onOpenChange={(open) => { if (!open) setManagingWorkspace(null); }}>
+        <DialogContent className="max-w-lg" data-testid="dialog-manage-members">
+          <DialogHeader>
+            <DialogTitle>Manage Members — {managingWorkspace?.name}</DialogTitle>
+            <DialogDescription>Add or remove users from this workspace.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Current members */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Current Members</p>
+              {workspaceMembers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No members yet.</p>
+              ) : (
+                workspaceMembers.map((member) => (
+                  <div key={member.id} className="flex items-center justify-between p-2 border rounded-md gap-2" data-testid={`member-row-${member.id}`}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{member.email || `${member.firstName} ${member.lastName}`.trim() || member.id}</p>
+                      <Badge variant="secondary" className="text-xs mt-0.5">{(member as any).role}</Badge>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeMemberMutation.mutate({ workspaceId: managingWorkspace!.id, userId: member.id })}
+                      disabled={removeMemberMutation.isPending}
+                      data-testid={`button-remove-member-${member.id}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Add member */}
+            {nonMembers.length > 0 && (
+              <div className="space-y-2 pt-2 border-t">
+                <p className="text-sm font-medium">Add Member</p>
+                <div className="flex gap-2">
+                  <Select value={addingUserId} onValueChange={setAddingUserId}>
+                    <SelectTrigger className="flex-1" data-testid="select-add-member-user">
+                      <SelectValue placeholder="Select user..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {nonMembers.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.email || `${u.firstName} ${u.lastName}`.trim() || u.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={addingUserRole} onValueChange={setAddingUserRole}>
+                    <SelectTrigger className="w-28" data-testid="select-add-member-role">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">Member</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={() => {
+                      if (!addingUserId) return;
+                      addMemberMutation.mutate({ workspaceId: managingWorkspace!.id, userId: addingUserId, role: addingUserRole });
+                    }}
+                    disabled={!addingUserId || addMemberMutation.isPending}
+                    data-testid="button-confirm-add-member"
+                  >
+                    {addMemberMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const [showAddPerson, setShowAddPerson] = useState(false);
@@ -106,6 +387,8 @@ export default function Admin() {
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: allUsers = [] } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
+  const { data: currentUser } = useQuery<User>({ queryKey: ["/api/auth/user"] });
+  const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.has(currentUser.email.toLowerCase()) : false;
 
   const personForm = useForm<PersonFormData>({
     resolver: zodResolver(personFormSchema),
@@ -627,6 +910,13 @@ export default function Admin() {
           </div>
         </Card>
         </div>
+
+        {/* Super-Admin: Workspace Management */}
+        {isSuperAdmin && (
+          <Card className="p-6">
+            <WorkspaceManagementSection currentUser={currentUser ?? null} />
+          </Card>
+        )}
       </div>
 
       {/* Add/Edit Person Dialog */}

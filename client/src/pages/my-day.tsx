@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, Search, Settings, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, Search, Settings, Calendar as CalendarIcon, Layers } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { format, addDays, parse, startOfWeek, isToday, isTomorrow, isPast, isSameDay, eachDayOfInterval } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,7 @@ const isDarkColor = (hexColor: string): boolean => getLuminance(hexColor) < 0.5;
 
 export default function MyDay() {
   const { user } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
@@ -208,6 +210,7 @@ export default function MyDay() {
           {matchedPerson && (
             <span className="block text-xs font-normal text-muted-foreground -mt-1">
               {matchedPerson.name}
+              {activeWorkspace && ` · ${activeWorkspace.name}`}
             </span>
           )}
         </h1>

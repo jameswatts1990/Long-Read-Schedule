@@ -9,23 +9,46 @@ import {
   type UpsertUser,
   type PremadeFilter,
   type InsertPremadeFilter,
+  type Workspace,
+  type InsertWorkspace,
+  type WorkspaceUser,
   people,
   tasks,
   assignments,
   users,
   premadeFilters,
+  workspaces,
+  workspaceUsers,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { eq, and, gte, lte } from "drizzle-orm";
 
+export interface WorkspaceMember extends User {
+  role: string;
+}
+
 export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  getUsers(): Promise<User[]>;
 
-  getPeople(): Promise<Person[]>;
+  // Workspace operations
+  getWorkspaces(): Promise<Workspace[]>;
+  getWorkspace(id: string): Promise<Workspace | undefined>;
+  createWorkspace(data: InsertWorkspace): Promise<Workspace>;
+  updateWorkspace(id: string, data: Partial<InsertWorkspace>): Promise<Workspace>;
+  deleteWorkspace(id: string): Promise<void>;
+  getUserWorkspaces(userId: string): Promise<Workspace[]>;
+  addUserToWorkspace(userId: string, workspaceId: string, role?: string): Promise<WorkspaceUser>;
+  removeUserFromWorkspace(userId: string, workspaceId: string): Promise<void>;
+  getWorkspaceMembers(workspaceId: string): Promise<WorkspaceMember[]>;
+  getUserWorkspaceMembership(userId: string, workspaceId: string): Promise<WorkspaceUser | undefined>;
+
+  // People (scoped to workspace)
+  getPeople(workspaceId: string): Promise<Person[]>;
   getPerson(id: string): Promise<Person | undefined>;
   createPerson(person: InsertPerson): Promise<Person>;
   updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person>;
@@ -34,449 +57,30 @@ export interface IStorage {
   reorderPeople(personIds: string[]): Promise<Person[]>;
   togglePersonExcluded(id: string): Promise<Person>;
 
-  getTasks(): Promise<Task[]>;
+  // Tasks (scoped to workspace)
+  getTasks(workspaceId: string): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, data: Partial<InsertTask>): Promise<Task>;
   deleteTask(id: string): Promise<void>;
   reorderTasks(taskIds: string[]): Promise<Task[]>;
 
-  getAssignments(): Promise<Assignment[]>;
-  getAssignmentsByWeek(weekStartDate: string): Promise<Assignment[]>;
-  getAssignmentsByDateRange(startDate: string, endDate: string): Promise<Assignment[]>;
+  // Assignments (scoped to workspace)
+  getAssignments(workspaceId: string): Promise<Assignment[]>;
+  getAssignmentsByWeek(weekStartDate: string, workspaceId: string): Promise<Assignment[]>;
+  getAssignmentsByDateRange(startDate: string, endDate: string, workspaceId: string): Promise<Assignment[]>;
   getAssignment(id: string): Promise<Assignment | undefined>;
   getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]>;
-  createAssignment(assignment: InsertAssignment): Promise<Assignment>;
+  createAssignment(assignment: InsertAssignment, createdById?: string): Promise<Assignment>;
   updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment>;
   deleteAssignment(id: string): Promise<void>;
   reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]>;
 
-  getPremadeFilters(): Promise<PremadeFilter[]>;
+  // Premade Filters (scoped to workspace)
+  getPremadeFilters(workspaceId: string): Promise<PremadeFilter[]>;
   createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter>;
   updatePremadeFilter(id: string, data: Partial<InsertPremadeFilter>): Promise<PremadeFilter>;
   deletePremadeFilter(id: string): Promise<void>;
-  getUsers(): Promise<User[]>;
-}
-
-export class MemStorage implements IStorage {
-  private people: Map<string, Person>;
-  private tasks: Map<string, Task>;
-  private assignments: Map<string, Assignment>;
-  private users: Map<string, User>;
-  private premadeFiltersMap: Map<string, PremadeFilter>;
-
-  constructor() {
-    this.people = new Map();
-    this.tasks = new Map();
-    this.assignments = new Map();
-    this.users = new Map();
-    this.premadeFiltersMap = new Map();
-    
-    this.initializeSampleData();
-  }
-
-  // User operations (required for Replit Auth)
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    const now = new Date();
-    const existing = this.users.get(userData.id!);
-    const user: User = {
-      ...userData,
-      id: userData.id!,
-      email: userData.email ?? null,
-      firstName: userData.firstName ?? null,
-      lastName: userData.lastName ?? null,
-      profileImageUrl: userData.profileImageUrl ?? null,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    this.users.set(user.id, user);
-    return user;
-  }
-
-  private initializeSampleData() {
-    const samplePeople = [
-      { name: "Dr. Sarah Chen", color: "#3B82F6" },
-      { name: "James Rodriguez", color: "#10B981" },
-      { name: "Emily Watson", color: "#F59E0B" },
-    ];
-
-    const sampleTasks = [
-      { name: "Cell Culture Prep", color: "#DBEAFE", description: "Prepare cell culture media and plates" },
-      { name: "PCR Analysis", color: "#D1FAE5", description: "Run PCR amplification and gel analysis" },
-      { name: "Sample Collection", color: "#FEF3C7", description: "Collect and process samples" },
-      { name: "Equipment Maintenance", color: "#E0E7FF", description: "Regular equipment calibration and cleaning" },
-    ];
-
-    const peopleIds: string[] = [];
-    samplePeople.forEach((p, index) => {
-      const id = randomUUID();
-      this.people.set(id, { id, ...p, order: index } as any);
-      peopleIds.push(id);
-    });
-
-    const taskIds: string[] = [];
-    sampleTasks.forEach((t, index) => {
-      const id = randomUUID();
-      this.tasks.set(id, { id, ...t, order: index } as any);
-      taskIds.push(id);
-    });
-
-    const getMonday = (date: Date): Date => {
-      const d = new Date(date);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      return new Date(d.setDate(diff));
-    };
-
-    const formatDate = (date: Date): string => {
-      return date.toISOString().split("T")[0];
-    };
-
-    const currentWeekStart = formatDate(getMonday(new Date()));
-
-    const sampleAssignments: InsertAssignment[] = [
-      {
-        taskId: taskIds[0],
-        personId: peopleIds[0],
-        day: "Monday",
-        weekStartDate: currentWeekStart,
-        batchNumber: "B-2024-001",
-        notes: null,
-        date: null,
-      },
-      {
-        taskId: taskIds[1],
-        personId: peopleIds[0],
-        day: "Monday",
-        weekStartDate: currentWeekStart,
-        batchNumber: null,
-        notes: null,
-        date: null,
-      },
-      {
-        taskId: taskIds[0],
-        personId: peopleIds[1],
-        day: "Tuesday",
-        weekStartDate: currentWeekStart,
-        batchNumber: "B-2024-002",
-        notes: "Priority sample",
-        date: null,
-      },
-      {
-        taskId: taskIds[2],
-        personId: peopleIds[2],
-        day: "Wednesday",
-        weekStartDate: currentWeekStart,
-        batchNumber: null,
-        notes: null,
-        date: null,
-      },
-    ];
-
-    sampleAssignments.forEach((a) => {
-      const id = randomUUID();
-      const now = new Date();
-      this.assignments.set(id, {
-        id,
-        ...a,
-        batchSize: null,
-        order: 0,
-        customName: null,
-        createdAt: now,
-        updatedAt: now,
-        createdById: null,
-      } as Assignment);
-    });
-  }
-
-  async getPeople(): Promise<Person[]> {
-    return Array.from(this.people.values()).sort((a, b) => {
-      const orderA = (a as any).order ?? 0;
-      const orderB = (b as any).order ?? 0;
-      return orderA - orderB;
-    });
-  }
-
-  async getPerson(id: string): Promise<Person | undefined> {
-    return this.people.get(id);
-  }
-
-  async createPerson(insertPerson: InsertPerson): Promise<Person> {
-    const id = randomUUID();
-    const order = this.people.size;
-    const person: Person = { ...insertPerson, id, order } as any;
-    this.people.set(id, person);
-    return person;
-  }
-
-  async updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person> {
-    const existing = this.people.get(id);
-    if (!existing) throw new Error("Person not found");
-    const updated: Person = { ...existing, ...data };
-    this.people.set(id, updated);
-    return updated;
-  }
-
-  async deletePerson(id: string): Promise<void> {
-    this.people.delete(id);
-  }
-
-  async updatePersonOrder(id: string, newOrder: number): Promise<Person> {
-    const person = this.people.get(id);
-    if (!person) throw new Error("Person not found");
-    const oldOrder = (person as any).order ?? 0;
-    const allPeople = Array.from(this.people.values()).map(p => ({
-      ...p,
-      order: (p as any).order ?? 0
-    }));
-
-    if (newOrder < oldOrder) {
-      allPeople.forEach(p => {
-        if (p.id !== id && p.order >= newOrder && p.order < oldOrder) {
-          (p as any).order += 1;
-        }
-      });
-    } else if (newOrder > oldOrder) {
-      allPeople.forEach(p => {
-        if (p.id !== id && p.order > oldOrder && p.order <= newOrder) {
-          (p as any).order -= 1;
-        }
-      });
-    }
-
-    allPeople.forEach(p => {
-      this.people.set(p.id, { ...p, order: p.order } as Person);
-    });
-
-    const updated = this.people.get(id)!;
-    return updated;
-  }
-
-  async reorderPeople(personIds: string[]): Promise<Person[]> {
-    personIds.forEach((id, index) => {
-      const person = this.people.get(id);
-      if (person) {
-        this.people.set(id, { ...person, order: index } as any);
-      }
-    });
-    return await this.getPeople();
-  }
-
-  async togglePersonExcluded(id: string): Promise<Person> {
-    const person = this.people.get(id);
-    if (!person) throw new Error("Person not found");
-    const excluded = (person as any).excluded ? 0 : 1;
-    const updated = { ...person, excluded } as any;
-    this.people.set(id, updated);
-    return updated;
-  }
-
-  async getTasks(): Promise<Task[]> {
-    return Array.from(this.tasks.values()).sort((a, b) => {
-      const orderA = (a as any).order ?? 0;
-      const orderB = (b as any).order ?? 0;
-      return orderA - orderB;
-    });
-  }
-
-  async getTask(id: string): Promise<Task | undefined> {
-    return this.tasks.get(id);
-  }
-
-  async createTask(insertTask: InsertTask): Promise<Task> {
-    const id = randomUUID();
-    const order = this.tasks.size;
-    const task: Task = { 
-      ...insertTask, 
-      id, 
-      order,
-      showInPipelineView: insertTask.showInPipelineView ?? 0
-    } as any;
-    this.tasks.set(id, task);
-    return task;
-  }
-
-  async deleteTask(id: string): Promise<void> {
-    this.tasks.delete(id);
-  }
-
-  async updateTask(id: string, data: Partial<InsertTask>): Promise<Task> {
-    const existing = this.tasks.get(id);
-    if (!existing) throw new Error("Task not found");
-    const updated: Task = { ...existing, ...data };
-    this.tasks.set(id, updated);
-    return updated;
-  }
-
-  async reorderTasks(taskIds: string[]): Promise<Task[]> {
-    taskIds.forEach((id, index) => {
-      const task = this.tasks.get(id);
-      if (task) {
-        this.tasks.set(id, { ...task, order: index } as any);
-      }
-    });
-    return await this.getTasks();
-  }
-
-  async getAssignments(): Promise<Assignment[]> {
-    return Array.from(this.assignments.values()).sort((a, b) => {
-      const orderA = (a as any).order ?? 0;
-      const orderB = (b as any).order ?? 0;
-      return orderA - orderB;
-    });
-  }
-
-  async getAssignmentsByWeek(weekStartDate: string): Promise<Assignment[]> {
-    return Array.from(this.assignments.values())
-      .filter(a => a.weekStartDate === weekStartDate)
-      .sort((a, b) => {
-        const orderA = (a as any).order ?? 0;
-        const orderB = (b as any).order ?? 0;
-        return orderA - orderB;
-      });
-  }
-
-  async getAssignmentsByDateRange(startDate: string, endDate: string): Promise<Assignment[]> {
-    return Array.from(this.assignments.values())
-      .filter(a => a.weekStartDate >= startDate && a.weekStartDate <= endDate)
-      .sort((a, b) => {
-        const orderA = (a as any).order ?? 0;
-        const orderB = (b as any).order ?? 0;
-        return orderA - orderB;
-      });
-  }
-
-  async getAssignment(id: string): Promise<Assignment | undefined> {
-    return this.assignments.get(id);
-  }
-
-  async getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]> {
-    return Array.from(this.assignments.values())
-      .filter(
-        a => a.personId === personId &&
-             a.day === day &&
-             a.weekStartDate === weekStartDate
-      )
-      .sort((a, b) => {
-        const orderA = (a as any).order ?? 0;
-        const orderB = (b as any).order ?? 0;
-        return orderA - orderB;
-      });
-  }
-
-  async createAssignment(insertAssignment: InsertAssignment, createdById?: string): Promise<Assignment> {
-    const id = randomUUID();
-    const cellAssignments = Array.from(this.assignments.values()).filter(
-      a => a.personId === insertAssignment.personId &&
-           a.day === insertAssignment.day &&
-           a.weekStartDate === insertAssignment.weekStartDate
-    );
-    const order = cellAssignments.length;
-    const now = new Date();
-    const assignment: Assignment = {
-      id,
-      ...insertAssignment,
-      batchNumber: insertAssignment.batchNumber || null,
-      notes: insertAssignment.notes || null,
-      date: insertAssignment.date || null,
-      order,
-      createdAt: now,
-      updatedAt: now,
-      createdById: createdById || null,
-    } as any;
-    this.assignments.set(id, assignment);
-    return assignment;
-  }
-
-  async reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]> {
-    const assignments = Array.from(this.assignments.values()).filter(
-      a => a.personId === personId &&
-           a.day === day &&
-           a.weekStartDate === weekStartDate
-    );
-    
-    assignmentIds.forEach((id, index) => {
-      const assignment = assignments.find(a => a.id === id);
-      if (assignment) {
-        const updated = { ...assignment, order: index } as any;
-        this.assignments.set(id, updated);
-      }
-    });
-    
-    return this.getConflictingAssignments(personId, day, weekStartDate);
-  }
-
-  async updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment> {
-    const existing = this.assignments.get(id);
-    if (!existing) throw new Error("Assignment not found");
-
-    const now = new Date();
-    const next: Assignment = { 
-      ...existing,
-      updatedAt: now
-    };
-    for (const [key, value] of Object.entries(data)) {
-      if (value === undefined) continue;
-      if (key === "weekStartDate") {
-        const trimmed = typeof value === "string" ? value.trim() : "";
-        if (!trimmed) continue;
-        next.weekStartDate = trimmed;
-        continue;
-      }
-      (next as any)[key] = value as any;
-    }
-
-    this.assignments.set(id, next);
-    return next;
-  }
-
-  async deleteAssignment(id: string): Promise<void> {
-    this.assignments.delete(id);
-  }
-
-  async getPremadeFilters(): Promise<PremadeFilter[]> {
-    return Array.from(this.premadeFiltersMap.values());
-  }
-
-  async createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter> {
-    const id = randomUUID();
-    const newFilter: PremadeFilter = {
-      id,
-      name: filter.name,
-      personIds: filter.personIds || [],
-      taskIds: filter.taskIds || [],
-    };
-    this.premadeFiltersMap.set(id, newFilter);
-    return newFilter;
-  }
-
-  async updatePremadeFilter(id: string, data: Partial<InsertPremadeFilter>): Promise<PremadeFilter> {
-    const existing = this.premadeFiltersMap.get(id);
-    if (!existing) throw new Error("Premade filter not found");
-    
-    const updated: PremadeFilter = {
-      ...existing,
-      name: data.name ?? existing.name,
-      personIds: data.personIds ?? existing.personIds,
-      taskIds: data.taskIds ?? existing.taskIds,
-    };
-    this.premadeFiltersMap.set(id, updated);
-    return updated;
-  }
-
-  async deletePremadeFilter(id: string): Promise<void> {
-    this.premadeFiltersMap.delete(id);
-  }
-
-  async getUsers(): Promise<User[]> {
-    return Array.from(this.users.values()).sort((a, b) => 
-      (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0)
-    );
-  }
 }
 
 export class PostgresStorage implements IStorage {
@@ -491,7 +95,8 @@ export class PostgresStorage implements IStorage {
     this.db = drizzle(sql);
   }
 
-  // User operations (required for Replit Auth)
+  // ─── User operations ───────────────────────────────────────────────────────
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await this.db.select().from(users).where(eq(users.id, id));
     return user;
@@ -503,39 +108,120 @@ export class PostgresStorage implements IStorage {
       .values(userData)
       .onConflictDoUpdate({
         target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
+        set: { ...userData, updatedAt: new Date() },
       })
       .returning();
     return user;
   }
 
-  async getPeople(): Promise<Person[]> {
-    const result = await this.db.select().from(people).orderBy(people.order);
+  async getUsers(): Promise<User[]> {
+    return await this.db.select().from(users).orderBy(users.createdAt);
+  }
+
+  // ─── Workspace operations ──────────────────────────────────────────────────
+
+  async getWorkspaces(): Promise<Workspace[]> {
+    return await this.db.select().from(workspaces).orderBy(workspaces.createdAt);
+  }
+
+  async getWorkspace(id: string): Promise<Workspace | undefined> {
+    const [ws] = await this.db.select().from(workspaces).where(eq(workspaces.id, id));
+    return ws;
+  }
+
+  async createWorkspace(data: InsertWorkspace): Promise<Workspace> {
+    const [ws] = await this.db.insert(workspaces).values(data).returning();
+    return ws;
+  }
+
+  async updateWorkspace(id: string, data: Partial<InsertWorkspace>): Promise<Workspace> {
+    const [ws] = await this.db.update(workspaces).set(data).where(eq(workspaces.id, id)).returning();
+    return ws;
+  }
+
+  async deleteWorkspace(id: string): Promise<void> {
+    await this.db.delete(workspaceUsers).where(eq(workspaceUsers.workspaceId, id));
+    await this.db.delete(premadeFilters).where(eq(premadeFilters.workspaceId, id));
+    await this.db.delete(assignments).where(eq(assignments.workspaceId, id));
+    await this.db.delete(people).where(eq(people.workspaceId, id));
+    await this.db.delete(tasks).where(eq(tasks.workspaceId, id));
+    await this.db.delete(workspaces).where(eq(workspaces.id, id));
+  }
+
+  async getUserWorkspaces(userId: string): Promise<Workspace[]> {
+    const memberships = await this.db
+      .select()
+      .from(workspaceUsers)
+      .where(eq(workspaceUsers.userId, userId));
+    if (memberships.length === 0) return [];
+    const wsIds = memberships.map(m => m.workspaceId);
+    const all = await this.db.select().from(workspaces).orderBy(workspaces.createdAt);
+    return all.filter(ws => wsIds.includes(ws.id));
+  }
+
+  async addUserToWorkspace(userId: string, workspaceId: string, role = "member"): Promise<WorkspaceUser> {
+    const existing = await this.getUserWorkspaceMembership(userId, workspaceId);
+    if (existing) return existing;
+    const [membership] = await this.db
+      .insert(workspaceUsers)
+      .values({ userId, workspaceId, role })
+      .returning();
+    return membership;
+  }
+
+  async removeUserFromWorkspace(userId: string, workspaceId: string): Promise<void> {
+    await this.db
+      .delete(workspaceUsers)
+      .where(and(eq(workspaceUsers.userId, userId), eq(workspaceUsers.workspaceId, workspaceId)));
+  }
+
+  async getWorkspaceMembers(workspaceId: string): Promise<WorkspaceMember[]> {
+    const memberships = await this.db
+      .select()
+      .from(workspaceUsers)
+      .where(eq(workspaceUsers.workspaceId, workspaceId));
+    const result: WorkspaceMember[] = [];
+    for (const m of memberships) {
+      const user = await this.getUser(m.userId);
+      if (user) result.push({ ...user, role: m.role });
+    }
     return result;
   }
 
+  async getUserWorkspaceMembership(userId: string, workspaceId: string): Promise<WorkspaceUser | undefined> {
+    const [m] = await this.db
+      .select()
+      .from(workspaceUsers)
+      .where(and(eq(workspaceUsers.userId, userId), eq(workspaceUsers.workspaceId, workspaceId)));
+    return m;
+  }
+
+  // ─── People ────────────────────────────────────────────────────────────────
+
+  async getPeople(workspaceId: string): Promise<Person[]> {
+    return await this.db
+      .select()
+      .from(people)
+      .where(eq(people.workspaceId, workspaceId))
+      .orderBy(people.order);
+  }
+
   async getPerson(id: string): Promise<Person | undefined> {
-    const result = await this.db.select().from(people).where(eq(people.id, id));
-    return result[0];
+    const [p] = await this.db.select().from(people).where(eq(people.id, id));
+    return p;
   }
 
   async createPerson(insertPerson: InsertPerson): Promise<Person> {
-    const allPeople = await this.db.select().from(people);
-    const maxOrder = allPeople.length > 0 ? Math.max(...allPeople.map(p => p.order ?? 0)) : -1;
-    const result = await this.db.insert(people).values({ ...insertPerson, order: maxOrder + 1 }).returning();
-    return result[0];
+    const workspaceId = insertPerson.workspaceId ?? "default";
+    const existing = await this.getPeople(workspaceId);
+    const maxOrder = existing.length > 0 ? Math.max(...existing.map(p => p.order ?? 0)) : -1;
+    const [p] = await this.db.insert(people).values({ ...insertPerson, order: maxOrder + 1 }).returning();
+    return p;
   }
 
   async updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person> {
-    const result = await this.db
-      .update(people)
-      .set(data)
-      .where(eq(people.id, id))
-      .returning();
-    return result[0];
+    const [p] = await this.db.update(people).set(data).where(eq(people.id, id)).returning();
+    return p;
   }
 
   async deletePerson(id: string): Promise<void> {
@@ -545,9 +231,8 @@ export class PostgresStorage implements IStorage {
   async updatePersonOrder(id: string, newOrder: number): Promise<Person> {
     const person = await this.getPerson(id);
     if (!person) throw new Error("Person not found");
-    
     const oldOrder = person.order ?? 0;
-    const allPeople = await this.db.select().from(people);
+    const allPeople = await this.getPeople(person.workspaceId);
 
     if (newOrder < oldOrder) {
       for (const p of allPeople) {
@@ -565,52 +250,53 @@ export class PostgresStorage implements IStorage {
       }
     }
 
-    const result = await this.db.update(people).set({ order: newOrder }).where(eq(people.id, id)).returning();
-    return result[0];
+    const [updated] = await this.db.update(people).set({ order: newOrder }).where(eq(people.id, id)).returning();
+    return updated;
   }
 
   async reorderPeople(personIds: string[]): Promise<Person[]> {
     for (let i = 0; i < personIds.length; i++) {
       await this.db.update(people).set({ order: i }).where(eq(people.id, personIds[i]));
     }
-    return await this.getPeople();
+    if (personIds.length === 0) return [];
+    const first = await this.getPerson(personIds[0]);
+    return first ? await this.getPeople(first.workspaceId) : [];
   }
 
   async togglePersonExcluded(id: string): Promise<Person> {
     const person = await this.getPerson(id);
     if (!person) throw new Error("Person not found");
-    const excluded = (person.excluded ? 0 : 1);
-    const result = await this.db
-      .update(people)
-      .set({ excluded })
-      .where(eq(people.id, id))
-      .returning();
-    return result[0];
+    const excluded = person.excluded ? 0 : 1;
+    const [updated] = await this.db.update(people).set({ excluded }).where(eq(people.id, id)).returning();
+    return updated;
   }
 
-  async getTasks(): Promise<Task[]> {
-    return await this.db.select().from(tasks).orderBy(tasks.order);
+  // ─── Tasks ─────────────────────────────────────────────────────────────────
+
+  async getTasks(workspaceId: string): Promise<Task[]> {
+    return await this.db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.workspaceId, workspaceId))
+      .orderBy(tasks.order);
   }
 
   async getTask(id: string): Promise<Task | undefined> {
-    const result = await this.db.select().from(tasks).where(eq(tasks.id, id));
-    return result[0];
+    const [t] = await this.db.select().from(tasks).where(eq(tasks.id, id));
+    return t;
   }
 
   async createTask(insertTask: InsertTask): Promise<Task> {
-    const allTasks = await this.db.select().from(tasks);
-    const maxOrder = allTasks.length > 0 ? Math.max(...allTasks.map(t => t.order ?? 0)) : -1;
-    const result = await this.db.insert(tasks).values({ ...insertTask, order: maxOrder + 1 }).returning();
-    return result[0];
+    const workspaceId = insertTask.workspaceId ?? "default";
+    const existing = await this.getTasks(workspaceId);
+    const maxOrder = existing.length > 0 ? Math.max(...existing.map(t => t.order ?? 0)) : -1;
+    const [t] = await this.db.insert(tasks).values({ ...insertTask, order: maxOrder + 1 }).returning();
+    return t;
   }
 
   async updateTask(id: string, data: Partial<InsertTask>): Promise<Task> {
-    const [task] = await this.db
-      .update(tasks)
-      .set(data)
-      .where(eq(tasks.id, id))
-      .returning();
-    return task;
+    const [t] = await this.db.update(tasks).set(data).where(eq(tasks.id, id)).returning();
+    return t;
   }
 
   async deleteTask(id: string): Promise<void> {
@@ -621,37 +307,42 @@ export class PostgresStorage implements IStorage {
     for (let i = 0; i < taskIds.length; i++) {
       await this.db.update(tasks).set({ order: i }).where(eq(tasks.id, taskIds[i]));
     }
-    return await this.getTasks();
+    if (taskIds.length === 0) return [];
+    const first = await this.getTask(taskIds[0]);
+    return first ? await this.getTasks(first.workspaceId) : [];
   }
 
-  async getAssignments(): Promise<Assignment[]> {
-    return await this.db.select().from(assignments);
+  // ─── Assignments ───────────────────────────────────────────────────────────
+
+  async getAssignments(workspaceId: string): Promise<Assignment[]> {
+    return await this.db.select().from(assignments).where(eq(assignments.workspaceId, workspaceId));
   }
 
-  async getAssignmentsByWeek(weekStartDate: string): Promise<Assignment[]> {
+  async getAssignmentsByWeek(weekStartDate: string, workspaceId: string): Promise<Assignment[]> {
     const result = await this.db
       .select()
       .from(assignments)
-      .where(eq(assignments.weekStartDate, weekStartDate));
-    return result.sort((a, b) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
+      .where(and(eq(assignments.weekStartDate, weekStartDate), eq(assignments.workspaceId, workspaceId)));
+    return result.sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)));
   }
 
-  async getAssignmentsByDateRange(startDate: string, endDate: string): Promise<Assignment[]> {
+  async getAssignmentsByDateRange(startDate: string, endDate: string, workspaceId: string): Promise<Assignment[]> {
     const result = await this.db
       .select()
       .from(assignments)
       .where(
         and(
           gte(assignments.weekStartDate, startDate),
-          lte(assignments.weekStartDate, endDate)
+          lte(assignments.weekStartDate, endDate),
+          eq(assignments.workspaceId, workspaceId)
         )
       );
-    return result.sort((a, b) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
+    return result.sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)));
   }
 
   async getAssignment(id: string): Promise<Assignment | undefined> {
-    const result = await this.db.select().from(assignments).where(eq(assignments.id, id));
-    return result[0];
+    const [a] = await this.db.select().from(assignments).where(eq(assignments.id, id));
+    return a;
   }
 
   async getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]> {
@@ -659,33 +350,31 @@ export class PostgresStorage implements IStorage {
       .select()
       .from(assignments)
       .where(
-        eq(assignments.personId, personId)
+        and(
+          eq(assignments.personId, personId),
+          eq(assignments.day, day),
+          eq(assignments.weekStartDate, weekStartDate)
+        )
       );
-    
-    return result.filter(
-      a => a.day === day &&
-           a.weekStartDate === weekStartDate
-    );
+    return result.sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)));
   }
 
   async createAssignment(insertAssignment: InsertAssignment, createdById?: string): Promise<Assignment> {
-    const result = await this.db.insert(assignments).values({
+    const [a] = await this.db.insert(assignments).values({
       ...insertAssignment,
       batchNumber: insertAssignment.batchNumber || null,
       notes: insertAssignment.notes || null,
       date: insertAssignment.date || null,
       createdById: createdById || null,
     }).returning();
-    return result[0];
+    return a;
   }
 
   async updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment> {
     const existing = await this.getAssignment(id);
     if (!existing) throw new Error("Assignment not found");
 
-    const next: Partial<Assignment> = {
-      updatedAt: new Date(),
-    };
+    const next: Partial<Assignment> = { updatedAt: new Date() };
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
       if (key === "weekStartDate") {
@@ -697,12 +386,8 @@ export class PostgresStorage implements IStorage {
       (next as any)[key] = value as any;
     }
 
-    const result = await this.db
-      .update(assignments)
-      .set(next)
-      .where(eq(assignments.id, id))
-      .returning();
-    return result[0];
+    const [updated] = await this.db.update(assignments).set(next).where(eq(assignments.id, id)).returning();
+    return updated;
   }
 
   async deleteAssignment(id: string): Promise<void> {
@@ -710,41 +395,26 @@ export class PostgresStorage implements IStorage {
   }
 
   async reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]> {
-    for (let index = 0; index < assignmentIds.length; index++) {
-      await this.db
-        .update(assignments)
-        .set({ order: index })
-        .where(eq(assignments.id, assignmentIds[index]));
+    for (let i = 0; i < assignmentIds.length; i++) {
+      await this.db.update(assignments).set({ order: i }).where(eq(assignments.id, assignmentIds[i]));
     }
-    
-    const result = await this.db
-      .select()
-      .from(assignments)
-      .where(
-        and(
-          eq(assignments.personId, personId),
-          eq(assignments.day, day),
-          eq(assignments.weekStartDate, weekStartDate)
-        )
-      );
-    return result.sort((a, b) => {
-      const orderA = (a as any).order ?? 0;
-      const orderB = (b as any).order ?? 0;
-      return orderA - orderB;
-    });
+    return await this.getConflictingAssignments(personId, day, weekStartDate);
   }
 
-  async getPremadeFilters(): Promise<PremadeFilter[]> {
-    return await this.db.select().from(premadeFilters);
+  // ─── Premade Filters ───────────────────────────────────────────────────────
+
+  async getPremadeFilters(workspaceId: string): Promise<PremadeFilter[]> {
+    return await this.db.select().from(premadeFilters).where(eq(premadeFilters.workspaceId, workspaceId));
   }
 
   async createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter> {
-    const result = await this.db.insert(premadeFilters).values({
+    const [f] = await this.db.insert(premadeFilters).values({
       name: filter.name,
       personIds: filter.personIds || [],
       taskIds: filter.taskIds || [],
+      workspaceId: filter.workspaceId,
     }).returning();
-    return result[0];
+    return f;
   }
 
   async updatePremadeFilter(id: string, data: Partial<InsertPremadeFilter>): Promise<PremadeFilter> {
@@ -752,23 +422,14 @@ export class PostgresStorage implements IStorage {
     if (data.name !== undefined) updateData.name = data.name;
     if (data.personIds !== undefined) updateData.personIds = data.personIds;
     if (data.taskIds !== undefined) updateData.taskIds = data.taskIds;
-    
-    const result = await this.db
-      .update(premadeFilters)
-      .set(updateData)
-      .where(eq(premadeFilters.id, id))
-      .returning();
-    
-    if (result.length === 0) throw new Error("Premade filter not found");
-    return result[0];
+
+    const [f] = await this.db.update(premadeFilters).set(updateData).where(eq(premadeFilters.id, id)).returning();
+    if (!f) throw new Error("Premade filter not found");
+    return f;
   }
 
   async deletePremadeFilter(id: string): Promise<void> {
     await this.db.delete(premadeFilters).where(eq(premadeFilters.id, id));
-  }
-
-  async getUsers(): Promise<User[]> {
-    return await this.db.select().from(users).orderBy(users.createdAt);
   }
 }
 

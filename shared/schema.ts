@@ -29,6 +29,23 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Workspaces — each workspace is a separate team/lab
+export const workspaces = pgTable("workspaces", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Workspace membership — which users belong to which workspaces
+export const workspaceUsers = pgTable("workspace_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  workspaceId: varchar("workspace_id").notNull(),
+  role: varchar("role").notNull().default("member"), // "admin" | "member"
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const people = pgTable("people", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -36,6 +53,7 @@ export const people = pgTable("people", {
   order: integer("order").default(0),
   excluded: integer("excluded").default(0),
   userId: varchar("user_id"),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
 });
 
 export const tasks = pgTable("tasks", {
@@ -48,6 +66,7 @@ export const tasks = pgTable("tasks", {
   isProduction: integer("is_production").default(1),
   requiredDaily: integer("required_daily").default(0),
   showInPipelineView: integer("show_in_pipeline_view").default(0),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
 });
 
 export const assignments = pgTable("assignments", {
@@ -65,6 +84,7 @@ export const assignments = pgTable("assignments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdById: varchar("created_by_id"),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
 });
 
 export const premadeFilters = pgTable("premade_filters", {
@@ -72,6 +92,7 @@ export const premadeFilters = pgTable("premade_filters", {
   name: text("name").notNull(),
   personIds: text("person_ids").array().notNull().default([]),
   taskIds: text("task_ids").array().notNull().default([]),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
 });
 
 export const isoDateString = z.string()
@@ -87,6 +108,8 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id:
   weekStartDate: isoDateString,
 });
 export const insertPremadeFilterSchema = createInsertSchema(premadeFilters).omit({ id: true });
+export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
+export const insertWorkspaceUserSchema = createInsertSchema(workspaceUsers).omit({ id: true, createdAt: true });
 
 export type Person = typeof people.$inferSelect;
 export type InsertPerson = z.infer<typeof insertPersonSchema>;
@@ -102,3 +125,9 @@ export type UpsertUser = typeof users.$inferInsert;
 
 export type PremadeFilter = typeof premadeFilters.$inferSelect;
 export type InsertPremadeFilter = z.infer<typeof insertPremadeFilterSchema>;
+
+export type Workspace = typeof workspaces.$inferSelect;
+export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
+
+export type WorkspaceUser = typeof workspaceUsers.$inferSelect;
+export type InsertWorkspaceUser = z.infer<typeof insertWorkspaceUserSchema>;
