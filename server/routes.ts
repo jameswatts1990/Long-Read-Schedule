@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { Server as SocketServer } from "socket.io";
 import { storage } from "./storage";
 import { insertPersonSchema, insertTaskSchema, insertAssignmentSchema, insertPremadeFilterSchema, isoDateString } from "@shared/schema";
 import { z } from "zod";
@@ -8,6 +9,23 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Replit Auth
   await setupAuth(app);
+
+  const httpServer = createServer(app);
+  const io = new SocketServer(httpServer, {
+    path: "/socket.io",
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
+  });
+
+  io.on("connection", (socket) => {
+    console.log("Client connected to real-time updates");
+  });
+
+  const broadcastUpdate = (type: string) => {
+    io.emit("update", { type });
+  };
 
   // Auth endpoint - get current user
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
@@ -45,6 +63,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertPersonSchema.parse(req.body);
       const person = await storage.createPerson(data);
+      broadcastUpdate("people");
       res.json(person);
     } catch (error) {
       res.status(400).json({ error: "Invalid person data" });
@@ -54,6 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/people/:id", isAuthenticated, async (req, res) => {
     try {
       await storage.deletePerson(req.params.id);
+      broadcastUpdate("people");
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete person" });
@@ -67,6 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "personIds must be an array" });
       }
       const result = await storage.reorderPeople(personIds);
+      broadcastUpdate("people");
       res.json(result);
     } catch (error) {
       res.status(400).json({ error: "Failed to reorder people" });
@@ -76,6 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/people/:id/toggle-excluded", isAuthenticated, async (req, res) => {
     try {
       const person = await storage.togglePersonExcluded(req.params.id);
+      broadcastUpdate("people");
       res.json(person);
     } catch (error) {
       res.status(500).json({ error: "Failed to toggle excluded status" });
@@ -95,6 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertTaskSchema.parse(req.body);
       const task = await storage.createTask(data);
+      broadcastUpdate("tasks");
       res.json(task);
     } catch (error) {
       res.status(400).json({ error: "Invalid task data" });
@@ -105,6 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertPersonSchema.partial().parse(req.body);
       const person = await storage.updatePerson(req.params.id, data);
+      broadcastUpdate("people");
       res.json(person);
     } catch (error) {
       res.status(400).json({ error: "Invalid person data" });
@@ -115,6 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertTaskSchema.partial().parse(req.body);
       const task = await storage.updateTask(req.params.id, data);
+      broadcastUpdate("tasks");
       res.json(task);
     } catch (error) {
       res.status(400).json({ error: "Invalid task data" });
@@ -124,6 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/tasks/:id", isAuthenticated, async (req, res) => {
     try {
       await storage.deleteTask(req.params.id);
+      broadcastUpdate("tasks");
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete task" });
@@ -137,6 +163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "taskIds must be an array" });
       }
       const result = await storage.reorderTasks(taskIds);
+      broadcastUpdate("tasks");
       res.json(result);
     } catch (error) {
       res.status(400).json({ error: "Failed to reorder tasks" });
@@ -174,6 +201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Multiple tasks allowed per time slot - just create the assignment
       const assignment = await storage.createAssignment(data, userId);
+      broadcastUpdate("assignments");
       res.json(assignment);
     } catch (error) {
       console.error("Assignment validation error:", error);
@@ -210,6 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const updated = await storage.updateAssignment(assignmentId, nextPayload);
+      broadcastUpdate("assignments");
       res.json(updated);
     } catch (error) {
       console.error("PATCH assignment error:", error);
@@ -224,6 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields" });
       }
       const result = await storage.reorderAssignmentsByCell(personId, day, weekStartDate, assignmentIds);
+      broadcastUpdate("assignments");
       res.json(result);
     } catch (error) {
       console.error("Reorder error:", error);
@@ -234,6 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/assignments/:id", isAuthenticated, async (req, res) => {
     try {
       await storage.deleteAssignment(req.params.id);
+      broadcastUpdate("assignments");
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete assignment" });
@@ -254,6 +285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertPremadeFilterSchema.parse(req.body);
       const filter = await storage.createPremadeFilter(data);
+      broadcastUpdate("premade-filters");
       res.json(filter);
     } catch (error) {
       res.status(400).json({ error: "Invalid filter data" });
@@ -263,6 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/premade-filters/:id", isAuthenticated, async (req, res) => {
     try {
       const filter = await storage.updatePremadeFilter(req.params.id, req.body);
+      broadcastUpdate("premade-filters");
       res.json(filter);
     } catch (error) {
       res.status(400).json({ error: "Failed to update premade filter" });
@@ -272,6 +305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/premade-filters/:id", isAuthenticated, async (req, res) => {
     try {
       await storage.deletePremadeFilter(req.params.id);
+      broadcastUpdate("premade-filters");
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete premade filter" });
@@ -300,6 +334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const person = await storage.updatePerson(personId, { userId });
+      broadcastUpdate("people");
       res.json(person);
     } catch (error) {
       console.error("Link user error:", error);
@@ -315,8 +350,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch users" });
     }
   });
-
-  const httpServer = createServer(app);
 
   return httpServer;
 }

@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
+import { io } from "socket.io-client";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
@@ -12,6 +13,25 @@ import ALReporting from "@/pages/al-reporting";
 import MyDay from "@/pages/my-day";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
+
+function useRealTimeUpdates() {
+  useEffect(() => {
+    const socket = io({
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("update", (data) => {
+      console.log("Real-time update received:", data);
+      // Invalidate all queries to refresh data across the app
+      queryClient.invalidateQueries();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -38,6 +58,8 @@ function Router() {
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [hasRedirected, setHasRedirected] = useState(false);
+
+  useRealTimeUpdates();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && isMobile && !location.startsWith("/my-day") && !hasRedirected) {
