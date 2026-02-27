@@ -130,7 +130,13 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
       wsForm.reset();
       setShowCreateWorkspace(false);
     },
-    onError: () => toast({ title: "Failed to create workspace", variant: "destructive" }),
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to create workspace", 
+        description: error.message || "Unknown error", 
+        variant: "destructive" 
+      });
+    },
   });
 
   const updateWsMutation = useMutation({
@@ -143,7 +149,13 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
       toast({ title: "Workspace updated" });
       setEditingWorkspace(null);
     },
-    onError: () => toast({ title: "Failed to update workspace", variant: "destructive" }),
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to update workspace", 
+        description: error.message || "Unknown error", 
+        variant: "destructive" 
+      });
+    },
   });
 
   const deleteWsMutation = useMutation({
@@ -155,7 +167,13 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
       queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
       toast({ title: "Workspace deleted" });
     },
-    onError: () => toast({ title: "Failed to delete workspace", variant: "destructive" }),
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to delete workspace", 
+        description: error.message || "Unknown error", 
+        variant: "destructive" 
+      });
+    },
   });
 
   const addMemberMutation = useMutation({

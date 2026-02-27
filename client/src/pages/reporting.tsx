@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BarChart3, Filter } from "lucide-react";
+import { ArrowLeft, BarChart3, Filter, Layers } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { type Assignment, type Task } from "@shared/schema";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import {
   BarChart,
   Bar,
@@ -25,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Reporting() {
+  const { activeWorkspace } = useWorkspace();
   const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
   const { data: allTasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   
@@ -150,7 +152,15 @@ export default function Reporting() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <h1 className="text-3xl sm:text-4xl font-bold">Weekly Capacity Report</h1>
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold">Weekly Capacity Report</h1>
+              {activeWorkspace && (
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+                  <Layers className="h-3.5 w-3.5" />
+                  {activeWorkspace.name}
+                </p>
+              )}
+            </div>
           </div>
           
           <div className="flex flex-wrap items-center gap-2">

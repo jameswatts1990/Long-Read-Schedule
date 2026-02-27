@@ -48,6 +48,16 @@ const requireWorkspace = async (req: Request, res: Response, next: NextFunction)
   next();
 };
 
+// Middleware: require super-admin privileges
+const requireSuperAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  const userEmail = (req as any).user?.claims?.email;
+  if (!isSuperAdmin(userEmail)) {
+    console.warn(`[SuperAdmin Check] Access denied for ${userEmail}`);
+    return res.status(403).json({ error: "Forbidden: Super-admin access required" });
+  }
+  next();
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
@@ -161,10 +171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Workspace Management (super-admin only) ─────────────────────────────────
 
-  app.get("/api/workspaces", isAuthenticated, async (req: any, res) => {
+  app.get("/api/workspaces", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
-      if (!isSuperAdmin(user?.email)) return res.status(403).json({ error: "Forbidden" });
       const all = await storage.getWorkspaces();
       res.json(all);
     } catch (error) {
@@ -172,10 +180,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/workspaces", isAuthenticated, async (req: any, res) => {
+  app.post("/api/workspaces", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
-      if (!isSuperAdmin(user?.email)) return res.status(403).json({ error: "Forbidden" });
       const data = insertWorkspaceSchema.parse(req.body);
       const workspace = await storage.createWorkspace(data);
       res.json(workspace);
@@ -184,10 +190,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/workspaces/:id", isAuthenticated, async (req: any, res) => {
+  app.put("/api/workspaces/:id", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
-      if (!isSuperAdmin(user?.email)) return res.status(403).json({ error: "Forbidden" });
       const data = insertWorkspaceSchema.partial().parse(req.body);
       const workspace = await storage.updateWorkspace(req.params.id, data);
       res.json(workspace);
@@ -196,10 +200,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/workspaces/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/workspaces/:id", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
-      if (!isSuperAdmin(user?.email)) return res.status(403).json({ error: "Forbidden" });
       await storage.deleteWorkspace(req.params.id);
       res.json({ success: true });
     } catch (error) {
@@ -207,10 +209,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/workspaces/:id/members", isAuthenticated, async (req: any, res) => {
+  app.get("/api/workspaces/:id/members", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
-      if (!isSuperAdmin(user?.email)) return res.status(403).json({ error: "Forbidden" });
       const members = await storage.getWorkspaceMembers(req.params.id);
       res.json(members);
     } catch (error) {
@@ -218,10 +218,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/workspaces/:id/members", isAuthenticated, async (req: any, res) => {
+  app.post("/api/workspaces/:id/members", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
-      if (!isSuperAdmin(user?.email)) return res.status(403).json({ error: "Forbidden" });
       const { userId, role } = req.body;
       if (!userId) return res.status(400).json({ error: "userId required" });
       const membership = await storage.addUserToWorkspace(userId, req.params.id, role || "member");
@@ -231,10 +229,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/workspaces/:id/members/:userId", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/workspaces/:id/members/:userId", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
-      if (!isSuperAdmin(user?.email)) return res.status(403).json({ error: "Forbidden" });
       await storage.removeUserFromWorkspace(req.params.userId, req.params.id);
       res.json({ success: true });
     } catch (error) {

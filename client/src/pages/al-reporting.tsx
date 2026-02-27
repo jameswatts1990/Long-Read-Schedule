@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Calendar as CalendarIcon, Info, Users } from "lucide-react";
+import { ArrowLeft, Calendar as CalendarIcon, Info, Users, Layers } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { type Assignment, type Task, type Person } from "@shared/schema";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useMemo, useState } from "react";
 import { 
   format, 
@@ -39,6 +40,7 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 export default function ALReporting() {
+  const { activeWorkspace } = useWorkspace();
   const [year, setYear] = useState(new Date().getFullYear());
   const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -223,7 +225,15 @@ export default function ALReporting() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <h1 className="text-2xl sm:text-3xl font-bold">AL Reporting</h1>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold">AL Reporting</h1>
+              {activeWorkspace && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                  <Layers className="h-3 w-3" />
+                  {activeWorkspace.name}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setYear(year - 1)}>{year - 1}</Button>
