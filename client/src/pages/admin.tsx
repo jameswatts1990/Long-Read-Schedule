@@ -38,7 +38,7 @@ import { z } from "zod";
 import { type Person, type Task, type User, type Workspace } from "@shared/schema";
 
 // Super-admin email list (must match server/routes.ts SUPER_ADMIN_EMAILS)
-const SUPER_ADMIN_EMAILS = new Set(["admin@sanger.ac.uk"]);
+const SUPER_ADMIN_EMAILS = new Set(["jw24@sanger.ac.uk", "admin@sanger.ac.uk"]);
 
 // 20 unique colors with light, medium, and dark variants (60 colors total)
 const PRESET_COLORS = [

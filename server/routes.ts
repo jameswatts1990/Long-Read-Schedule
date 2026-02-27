@@ -15,8 +15,8 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 
 // Super-admin email list — these users can manage workspaces
 export const SUPER_ADMIN_EMAILS = new Set<string>([
+  "jw24@sanger.ac.uk",
   "admin@sanger.ac.uk",
-  // Add additional super-admin emails here
 ]);
 
 function isSuperAdmin(email: string | null | undefined): boolean {
