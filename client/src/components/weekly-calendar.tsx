@@ -173,6 +173,15 @@ export function WeeklyCalendar({
     return assignmentsByCell.get(`${personId}-${day}`) || [];
   };
 
+  const personHasFullWeekScheduled = useMemo(() => {
+    return people.reduce<Record<string, boolean>>((acc, person) => {
+      acc[person.id] = DAYS.every((day) =>
+        assignments.some((assignment) => assignment.personId === person.id && assignment.day === day)
+      );
+      return acc;
+    }, {});
+  }, [people, assignments]);
+
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
   const getDateForDay = (dayIndex: number) => {
@@ -196,13 +205,6 @@ export function WeeklyCalendar({
     const endDate = addDays(startDate, 4);
     const today = new Date();
     return today >= startDate && today <= endDate;
-  };
-
-  const hasAssignmentEveryDay = (personId: string) => {
-    return DAYS.every(day => {
-      const cellAssignments = getAssignmentsForCell(personId, day);
-      return cellAssignments.length > 0;
-    });
   };
 
   const hasAnnualLeave = (personId: string, day: string) => {
@@ -350,7 +352,7 @@ export function WeeklyCalendar({
                           <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
                             {person.name}
                           </span>
-                          {assignments.some(a => a.personId === person.id) && (
+                          {personHasFullWeekScheduled[person.id] && (
                             <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
                           )}
                         </div>
