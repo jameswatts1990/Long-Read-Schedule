@@ -17,6 +17,7 @@ import { type Person, type Task, type Assignment, type PremadeFilter } from "@sh
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useAuth } from "@/hooks/useAuth";
 import { assignmentKeys } from "@/lib/queryKeys";
 
 function getMonday(date: Date): Date {
@@ -74,11 +75,13 @@ export default function Scheduler() {
   const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
   const [isCompactView, setIsCompactView] = useState(false);
+  const [showMyScheduleOnly, setShowMyScheduleOnly] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
+  const { user } = useAuth();
 
   const workspaceId = activeWorkspace?.id;
 
@@ -162,13 +165,38 @@ export default function Scheduler() {
   
   const weekAssignments = viewMode === "month" ? monthAssignmentsData : weekAssignmentsData;
 
+  const matchedPerson = useMemo(() => {
+    if (!user || !people.length) return null;
+
+    const userEmail = (user as any).email?.toLowerCase();
+    const userName = `${(user as any).firstName || ""} ${(user as any).lastName || ""}`.trim().toLowerCase();
+    const firstName = (user as any).firstName?.toLowerCase();
+    const lastName = (user as any).lastName?.toLowerCase();
+
+    let match = people.find((person) => userName && person.name.toLowerCase() === userName);
+    if (match) return match;
+
+    match = people.find((person) => {
+      const personName = person.name.toLowerCase();
+      return !!(firstName && lastName && personName.includes(firstName) && personName.includes(lastName));
+    });
+    if (match) return match;
+
+    match = people.find((person) => userEmail && person.name.toLowerCase().includes(userEmail.split("@")[0]));
+    if (match) return match;
+
+    return null;
+  }, [people, user]);
+
   const filteredAssignments = useMemo(() => {
     return weekAssignments.filter((assignment) => {
       const matchesPerson = filterPersonIds.size === 0 || filterPersonIds.has(assignment.personId);
       const matchesTask = filterTaskIds.size === 0 || filterTaskIds.has(assignment.taskId);
-      return matchesPerson && matchesTask;
+      const matchesActiveUser = !showMyScheduleOnly || !matchedPerson || assignment.personId === matchedPerson.id;
+
+      return matchesPerson && matchesTask && matchesActiveUser;
     });
-  }, [weekAssignments, filterPersonIds, filterTaskIds]);
+  }, [weekAssignments, filterPersonIds, filterTaskIds, showMyScheduleOnly, matchedPerson]);
 
   const personIdsInFilteredAssignments = useMemo(
     () => new Set(filteredAssignments.map((assignment) => assignment.personId)),
@@ -179,6 +207,10 @@ export default function Scheduler() {
 
   // When filters are active, only show people who have assignments in the filtered results
   const displayPeople = useMemo(() => {
+    if (showMyScheduleOnly && matchedPerson) {
+      return people.filter((person) => !person.excluded && person.id === matchedPerson.id);
+    }
+
     if (!hasActiveFilters) {
       return people.filter((person) => !person.excluded);
     }
@@ -186,7 +218,14 @@ export default function Scheduler() {
     return people.filter(
       (person) => !person.excluded && personIdsInFilteredAssignments.has(person.id),
     );
-  }, [hasActiveFilters, people, personIdsInFilteredAssignments]);
+  }, [showMyScheduleOnly, matchedPerson, hasActiveFilters, people, personIdsInFilteredAssignments]);
+
+  const canToggleMySchedule = !!matchedPerson;
+
+  const toggleMyScheduleOnly = () => {
+    if (!canToggleMySchedule) return;
+    setShowMyScheduleOnly((prev) => !prev);
+  };
 
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeekStart);
@@ -595,6 +634,9 @@ export default function Scheduler() {
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
+            isMyScheduleOnly={showMyScheduleOnly}
+            canToggleMySchedule={canToggleMySchedule}
+            onToggleMySchedule={toggleMyScheduleOnly}
           />
         )}
         {viewMode === "month" && (
@@ -606,6 +648,9 @@ export default function Scheduler() {
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
             formatDate={formatDate}
+            isMyScheduleOnly={showMyScheduleOnly}
+            canToggleMySchedule={canToggleMySchedule}
+            onToggleMySchedule={toggleMyScheduleOnly}
           />
         )}
         {viewMode === "pipeline" && (
