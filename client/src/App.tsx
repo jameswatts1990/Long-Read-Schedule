@@ -18,8 +18,16 @@ import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import NotFound from "@/pages/not-found";
 
+const VISIBILITY_REFRESH_THRESHOLD_MS = 20_000;
+const WORKSPACE_REFRESH_CHANNEL = "workspace-refresh-sync";
+const WORKSPACE_REFRESH_STORAGE_PREFIX = "workspace-refresh:";
+
+const getWorkspaceRefreshStorageKey = (workspaceId: string) => `${WORKSPACE_REFRESH_STORAGE_PREFIX}${workspaceId}`;
+
 function useRealTimeUpdates(workspaceId: string | null) {
   const socketRef = useRef<Socket | null>(null);
+  const missedEventsRef = useRef(false);
+  const lastRefreshRef = useRef(0);
 
   const handleUpdate = (data: { type?: string; action?: string; record?: Record<string, unknown> & { id?: string } }) => {
     const { type, action, record } = data ?? {};
@@ -118,31 +126,102 @@ function useRealTimeUpdates(workspaceId: string | null) {
       socketRef.current = null;
     };
 
+    const readLastRefresh = () => {
+      const rawTimestamp = localStorage.getItem(getWorkspaceRefreshStorageKey(workspaceId));
+      const parsedTimestamp = rawTimestamp ? Number(rawTimestamp) : 0;
+      return Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0;
+    };
+
+    const updateLastRefresh = (timestamp: number) => {
+      lastRefreshRef.current = Math.max(lastRefreshRef.current, timestamp);
+      localStorage.setItem(getWorkspaceRefreshStorageKey(workspaceId), String(timestamp));
+    };
+
+    const broadcastChannel = typeof BroadcastChannel !== "undefined"
+      ? new BroadcastChannel(WORKSPACE_REFRESH_CHANNEL)
+      : null;
+
+    const publishRefresh = (timestamp: number) => {
+      updateLastRefresh(timestamp);
+      broadcastChannel?.postMessage({ workspaceId, refreshedAt: timestamp });
+    };
+
+    const refreshOnVisible = async (mode: "targeted" | "full") => {
+      if (mode === "targeted") {
+        await queryClient.refetchQueries({ predicate: isAssignmentQuery, type: "active" });
+        await queryClient.refetchQueries({ queryKey: ["/api/people"], type: "active" });
+        await queryClient.refetchQueries({ queryKey: ["/api/tasks"], type: "active" });
+        await queryClient.refetchQueries({ queryKey: ["/api/premade-filters"], type: "active" });
+        return;
+      }
+
+      queryClient.invalidateQueries({ predicate: isAssignmentQuery });
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+    };
+
+    const maybeRefresh = async () => {
+      const now = Date.now();
+      const lastKnownRefresh = Math.max(lastRefreshRef.current, readLastRefresh());
+      const refreshAge = now - lastKnownRefresh;
+      const shouldRefresh = missedEventsRef.current || refreshAge > VISIBILITY_REFRESH_THRESHOLD_MS;
+
+      if (!shouldRefresh) return;
+
+      try {
+        await refreshOnVisible("targeted");
+      } catch {
+        await refreshOnVisible("full");
+      }
+
+      missedEventsRef.current = false;
+      publishRefresh(Date.now());
+    };
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== getWorkspaceRefreshStorageKey(workspaceId) || !event.newValue) return;
+      const timestamp = Number(event.newValue);
+      if (!Number.isFinite(timestamp)) return;
+      lastRefreshRef.current = Math.max(lastRefreshRef.current, timestamp);
+    };
+
+    const onBroadcastMessage = (event: MessageEvent) => {
+      const payload = event.data as { workspaceId?: string; refreshedAt?: number } | undefined;
+      if (!payload || payload.workspaceId !== workspaceId || !payload.refreshedAt) return;
+      lastRefreshRef.current = Math.max(lastRefreshRef.current, payload.refreshedAt);
+    };
+
     // Fix 4: pause the socket while the tab is hidden so the server stops
     // sending heartbeats to a screen nobody is looking at. Reconnect the
     // moment the tab becomes visible again (and refetch stale data so the
     // user sees fresh content immediately).
     const onVisibilityChange = () => {
       if (document.hidden) {
+        missedEventsRef.current = true;
         disconnect();
       } else {
         connect();
-        // Refresh everything that may have changed while the tab was away
-        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
-        queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+        void maybeRefresh();
       }
     };
 
     // Only connect if the tab is currently visible
     if (!document.hidden) {
       connect();
+      void maybeRefresh();
     }
 
+    lastRefreshRef.current = Math.max(lastRefreshRef.current, readLastRefresh());
+
+    window.addEventListener("storage", onStorage);
+    broadcastChannel?.addEventListener("message", onBroadcastMessage);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
+      window.removeEventListener("storage", onStorage);
+      broadcastChannel?.removeEventListener("message", onBroadcastMessage);
+      broadcastChannel?.close();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       disconnect();
     };
