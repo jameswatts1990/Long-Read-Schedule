@@ -105,7 +105,7 @@ export function MonthView({
     return assignmentsByCell.get(`${weekStartDate}-${personId}-${day}`) || [];
   };
 
-  const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
+  const taskById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
 
   const getDateForDay = (weekStartDate: string, dayIndex: number) => {
     const startDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
@@ -250,7 +250,7 @@ export function MonthView({
                     >
                       <div className={cn("space-y-1", isCompactView && "space-y-0.5")}>
                         {cellAssignments.map(assignment => {
-                          const task = getTaskById(assignment.taskId);
+                          const task = taskById.get(assignment.taskId);
                           if (!task) return null;
                           const isTaskDark = isDarkColor(task.color);
 

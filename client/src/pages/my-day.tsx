@@ -113,7 +113,7 @@ export default function MyDay() {
     return dates;
   }, [assignmentsByDate]);
 
-  const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
+  const taskById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
 
   const formatDayLabel = (dateStr: string): { day: number; weekday: string; month: string; isToday: boolean; isTomorrow: boolean } => {
     const date = parse(dateStr, "yyyy-MM-dd", new Date());
@@ -271,7 +271,7 @@ export default function MyDay() {
                   
                   <div className="flex-1 py-3 pr-4 space-y-2">
                     {dayAssignments.map(assignment => {
-                      const task = getTaskById(assignment.taskId);
+                      const task = taskById.get(assignment.taskId);
                       if (!task) return null;
                       
                       const isTaskDark = isDarkColor(task.color);
