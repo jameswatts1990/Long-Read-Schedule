@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-import type { Assignment } from "@shared/schema";
+import type { Assignment, Person, PremadeFilter, Task } from "@shared/schema";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
@@ -26,20 +26,22 @@ const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
 function useRealTimeUpdates(workspaceId: string | null) {
   const socketRef = useRef<Socket | null>(null);
 
-  const handleUpdate = (data: { type?: string; action?: string; record?: Assignment & { id: string; weekStartDate?: string } }) => {
+  const handleUpdate = (data: { type?: string; action?: string; record?: Record<string, unknown> & { id?: string } }) => {
     const { type, action, record } = data ?? {};
 
     if (type === "assignments") {
-      if ((action === "create" || action === "update") && record?.weekStartDate) {
+      const assignmentRecord = record as Assignment;
+
+      if ((action === "create" || action === "update") && assignmentRecord?.weekStartDate) {
         // Fix Issues 1 & 2: update the specific week's cache directly — zero HTTP requests
-        const weekKey = `/api/assignments?weekStartDate=${record.weekStartDate}`;
+        const weekKey = `/api/assignments?weekStartDate=${assignmentRecord.weekStartDate}`;
         queryClient.setQueryData<Assignment[]>([weekKey], (old) => {
           if (!old) return old; // week not in cache — nothing to update
           if (action === "create") {
             // Guard against duplicate (creator already has it via their own mutation)
-            return old.some((a) => a.id === record.id) ? old : [...old, record];
+            return old.some((a) => a.id === assignmentRecord.id) ? old : [...old, assignmentRecord];
           }
-          return old.map((a) => (a.id === record.id ? record : a));
+          return old.map((a) => (a.id === assignmentRecord.id ? assignmentRecord : a));
         });
       } else if (action === "delete" && record?.id) {
         // Remove from every cached assignment list (week view, month view, reporting)
@@ -53,11 +55,56 @@ function useRealTimeUpdates(workspaceId: string | null) {
         queryClient.invalidateQueries({ predicate: isAssignmentQuery });
       }
     } else if (type === "people") {
-      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      if ((action === "create" || action === "update") && record?.id) {
+        const personRecord = record as Person;
+        queryClient.setQueryData<Person[]>(["/api/people"], (old) => {
+          if (!old) return old;
+          if (action === "create") {
+            return old.some((person) => person.id === personRecord.id) ? old : [...old, personRecord];
+          }
+          return old.map((person) => (person.id === personRecord.id ? personRecord : person));
+        });
+      } else if (action === "delete" && record?.id) {
+        queryClient.setQueryData<Person[]>(["/api/people"], (old) =>
+          old ? old.filter((person) => person.id !== record.id) : old,
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      }
     } else if (type === "tasks") {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      if ((action === "create" || action === "update") && record?.id) {
+        const taskRecord = record as Task;
+        queryClient.setQueryData<Task[]>(["/api/tasks"], (old) => {
+          if (!old) return old;
+          if (action === "create") {
+            return old.some((task) => task.id === taskRecord.id) ? old : [...old, taskRecord];
+          }
+          return old.map((task) => (task.id === taskRecord.id ? taskRecord : task));
+        });
+      } else if (action === "delete" && record?.id) {
+        queryClient.setQueryData<Task[]>(["/api/tasks"], (old) =>
+          old ? old.filter((task) => task.id !== record.id) : old,
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      }
     } else if (type === "premade-filters") {
-      queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+      if ((action === "create" || action === "update") && record?.id) {
+        const filterRecord = record as PremadeFilter;
+        queryClient.setQueryData<PremadeFilter[]>(["/api/premade-filters"], (old) => {
+          if (!old) return old;
+          if (action === "create") {
+            return old.some((filter) => filter.id === filterRecord.id) ? old : [...old, filterRecord];
+          }
+          return old.map((filter) => (filter.id === filterRecord.id ? filterRecord : filter));
+        });
+      } else if (action === "delete" && record?.id) {
+        queryClient.setQueryData<PremadeFilter[]>(["/api/premade-filters"], (old) =>
+          old ? old.filter((filter) => filter.id !== record.id) : old,
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+      }
     }
   };
 
