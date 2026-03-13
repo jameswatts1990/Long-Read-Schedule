@@ -63,7 +63,7 @@ interface ReorderCellPayload {
   assignmentIds: string[];
 }
 
-const reorderCellAssignments = (
+const reorderCellAssignmentOrderFields = (
   assignments: Assignment[],
   payload: ReorderCellPayload,
 ) => {
@@ -139,7 +139,7 @@ type ReorderPayload = {
   orderedAssignmentIds: string[];
 };
 
-const reorderCellAssignments = (
+const reorderWeekCellAssignments = (
   assignments: Assignment[],
   payload: ReorderPayload,
 ): Assignment[] => {
@@ -193,14 +193,14 @@ export const applyAssignmentReorder = (client: QueryClient, payload: ReorderPayl
   const weekKey = assignmentKeys.week(weekStartDate);
 
   client.setQueryData<Assignment[]>(weekKey, (old) =>
-    old ? reorderCellAssignments(old, payload) : old,
+    old ? reorderWeekCellAssignments(old, payload) : old,
   );
 
   client.setQueriesData<Assignment[]>(
     {
       predicate: (query) => isAssignmentQuery(query) && queryContainsDate(query.queryKey, weekStartDate),
     },
-    (old) => (old ? reorderCellAssignments(old, payload) : old),
+    (old) => (old ? reorderWeekCellAssignments(old, payload) : old),
   );
 };
 
@@ -234,13 +234,13 @@ export const applyAssignmentReorderCell = (
   const weekKey = assignmentKeys.week(payload.weekStartDate);
 
   client.setQueryData<Assignment[]>(weekKey, (old) =>
-    old ? reorderCellAssignments(old, payload) : old,
+    old ? reorderCellAssignmentOrderFields(old, payload) : old,
   );
 
   client.setQueriesData<Assignment[]>(
     {
       predicate: (query) => isAssignmentQuery(query) && queryContainsDate(query.queryKey, payload.weekStartDate),
     },
-    (old) => (old ? reorderCellAssignments(old, payload) : old),
+    (old) => (old ? reorderCellAssignmentOrderFields(old, payload) : old),
   );
 };
