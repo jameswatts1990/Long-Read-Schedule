@@ -269,10 +269,17 @@ function useIsMobile() {
 
 function Router() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
+  const {
+    activeWorkspace,
+    availableWorkspaces,
+    isLoading: workspaceLoading,
+    setWorkspace,
+    isSettingWorkspace,
+  } = useWorkspace();
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [hasRedirected, setHasRedirected] = useState(false);
+  const [isAutoSelectingWorkspace, setIsAutoSelectingWorkspace] = useState(false);
   const [clientId] = useState(() => {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
       return crypto.randomUUID();
@@ -293,6 +300,24 @@ function Router() {
     }
   }, [authLoading, workspaceLoading, isAuthenticated, activeWorkspace, isMobile, location, hasRedirected, setLocation]);
 
+  const shouldAutoSelectWorkspace =
+    !authLoading &&
+    !workspaceLoading &&
+    isAuthenticated &&
+    !activeWorkspace &&
+    availableWorkspaces.length === 1;
+
+  useEffect(() => {
+    if (!shouldAutoSelectWorkspace || isSettingWorkspace) {
+      return;
+    }
+
+    setIsAutoSelectingWorkspace(true);
+    void setWorkspace(availableWorkspaces[0].id).finally(() => {
+      setIsAutoSelectingWorkspace(false);
+    });
+  }, [availableWorkspaces, isSettingWorkspace, setWorkspace, shouldAutoSelectWorkspace]);
+
   if (authLoading || (isAuthenticated && workspaceLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -303,6 +328,14 @@ function Router() {
 
   if (!isAuthenticated) {
     return <Landing />;
+  }
+
+  if (shouldAutoSelectWorkspace || isAutoSelectingWorkspace || isSettingWorkspace) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
   }
 
   // Authenticated but no workspace selected
