@@ -471,16 +471,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/assignments", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
-      const { weekStartDate, startDate, endDate } = req.query;
+      const querySchema = z.object({
+        weekStartDate: isoDateString.optional(),
+        startDate: isoDateString.optional(),
+        endDate: isoDateString.optional(),
+        personId: z.string().trim().min(1).optional(),
+      }).superRefine((value, ctx) => {
+        const hasStart = !!value.startDate;
+        const hasEnd = !!value.endDate;
 
-      if (startDate && endDate && typeof startDate === "string" && typeof endDate === "string") {
+        if (hasStart !== hasEnd) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "startDate and endDate must be provided together",
+            path: [hasStart ? "endDate" : "startDate"],
+          });
+        }
+
+        if (value.startDate && value.endDate && value.startDate > value.endDate) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "startDate must be before or equal to endDate",
+            path: ["startDate"],
+          });
+        }
+      });
+
+      const { weekStartDate, startDate, endDate, personId } = querySchema.parse(req.query);
+
+      if (personId && startDate && endDate) {
+        return res.json(
+          await storage.getAssignmentsForPersonInRange(req.workspaceId!, personId, startDate, endDate),
+        );
+      }
+
+      if (startDate && endDate) {
         return res.json(await storage.getAssignmentsByDateRange(startDate, endDate, req.workspaceId!));
       }
-      if (weekStartDate && typeof weekStartDate === "string") {
+      if (weekStartDate) {
         return res.json(await storage.getAssignmentsByWeek(weekStartDate, req.workspaceId!));
       }
       res.json(await storage.getAssignments(req.workspaceId!));
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid assignment query", details: error.flatten() });
+      }
       res.status(500).json({ error: "Failed to fetch assignments" });
     }
   });

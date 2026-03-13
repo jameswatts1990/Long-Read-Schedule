@@ -83,6 +83,7 @@ export interface IStorage {
   getAssignments(workspaceId: string): Promise<Assignment[]>;
   getAssignmentsByWeek(weekStartDate: string, workspaceId: string): Promise<Assignment[]>;
   getAssignmentsByDateRange(startDate: string, endDate: string, workspaceId: string): Promise<Assignment[]>;
+  getAssignmentsForPersonInRange(workspaceId: string, personId: string, startDate: string, endDate: string): Promise<Assignment[]>;
   getAssignment(id: string): Promise<Assignment | undefined>;
   getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]>;
   createAssignment(assignment: InsertAssignment, createdById?: string): Promise<Assignment>;
@@ -343,6 +344,39 @@ export class PostgresStorage implements IStorage {
           eq(assignments.workspaceId, workspaceId)
         )
       );
+    return result.sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)));
+  }
+
+  async getAssignmentsForPersonInRange(
+    workspaceId: string,
+    personId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<Assignment[]> {
+    const assignmentDateExpression = sql<string>`COALESCE(
+      NULLIF(${assignments.date}, '')::date,
+      ${assignments.weekStartDate}::date + CASE ${assignments.day}
+        WHEN 'Monday' THEN 0
+        WHEN 'Tuesday' THEN 1
+        WHEN 'Wednesday' THEN 2
+        WHEN 'Thursday' THEN 3
+        WHEN 'Friday' THEN 4
+        ELSE 0
+      END
+    )`;
+
+    const result = await this.db
+      .select()
+      .from(assignments)
+      .where(
+        and(
+          eq(assignments.workspaceId, workspaceId),
+          eq(assignments.personId, personId),
+          gte(assignmentDateExpression, sql`${startDate}::date`),
+          lte(assignmentDateExpression, sql`${endDate}::date`),
+        ),
+      );
+
     return result.sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)));
   }
 
