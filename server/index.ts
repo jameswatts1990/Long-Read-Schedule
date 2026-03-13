@@ -106,13 +106,17 @@ function setupMemoryDiagnostics(server: HttpServer) {
     throw err;
   });
 
+  const isProduction = process.env.NODE_ENV === "production";
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  if (!isProduction) {
+    log("Starting in development mode with Vite middleware", "server");
     await setupVite(app, server);
   } else {
-    serveStatic(app);
+    const staticPath = serveStatic(app);
+    log(`Starting in production mode serving static assets from ${staticPath}`, "server");
   }
 
   setupMemoryDiagnostics(server);
