@@ -35,7 +35,6 @@ import {
   Label
 } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { assignmentKeys } from "@/lib/queryKeys";
 
 export default function ALReporting() {
   const { activeWorkspace } = useWorkspace();
@@ -43,12 +42,7 @@ export default function ALReporting() {
 
   // Fix Issue 7: scope to selected year only — server returns only that year's data
   const { data: assignments = [] } = useQuery<Assignment[]>({
-    queryKey: assignmentKeys.range(`${year}-01-01`, `${year}-12-31`),
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments?startDate=${year}-01-01&endDate=${year}-12-31`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch assignments");
-      return res.json();
-    },
+    queryKey: [`/api/assignments?startDate=${year}-01-01&endDate=${year}-12-31`],
   });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });

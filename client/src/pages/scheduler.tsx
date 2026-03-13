@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -17,8 +17,6 @@ import { type Person, type Task, type Assignment, type PremadeFilter } from "@sh
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { useAuth } from "@/hooks/useAuth";
-import { assignmentKeys } from "@/lib/queryKeys";
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -75,31 +73,15 @@ export default function Scheduler() {
   const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
   const [isCompactView, setIsCompactView] = useState(false);
-  const [showMyScheduleOnly, setShowMyScheduleOnly] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
-  const { user } = useAuth();
 
-  const workspaceId = activeWorkspace?.id;
-
-  const { data: people = [] } = useQuery<Person[]>({
-    queryKey: ["/api/people"],
-    enabled: !!workspaceId,
-    refetchOnMount: "always",
-  });
-  const { data: tasks = [] } = useQuery<Task[]>({
-    queryKey: ["/api/tasks"],
-    enabled: !!workspaceId,
-    refetchOnMount: "always",
-  });
-  const { data: premadeFilters = [] } = useQuery<PremadeFilter[]>({
-    queryKey: ["/api/premade-filters"],
-    enabled: !!workspaceId,
-    refetchOnMount: "always",
-  });
+  const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
+  const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: premadeFilters = [] } = useQuery<PremadeFilter[]>({ queryKey: ["/api/premade-filters"] });
 
   const createFilterMutation = useMutation({
     mutationFn: async (data: { name: string; personIds: string[]; taskIds: string[] }) => {
@@ -141,91 +123,32 @@ export default function Scheduler() {
   
   // Fetch assignments filtered by week for week/pipeline view
   const { data: weekAssignmentsData = [] } = useQuery<Assignment[]>({ 
-    queryKey: [...assignmentKeys.week(weekStartStr), workspaceId],
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments?weekStartDate=${weekStartStr}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch weekly assignments");
-      return res.json();
-    },
-    enabled: !!workspaceId && (viewMode === "week" || viewMode === "pipeline"),
-    refetchOnMount: "always",
+    queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`],
+    enabled: viewMode === "week" || viewMode === "pipeline"
   });
   
   // Fetch assignments for entire month range for month view
   const { data: monthAssignmentsData = [] } = useQuery<Assignment[]>({ 
-    queryKey: [...assignmentKeys.range(monthStartStr, monthEndStr), workspaceId],
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments?startDate=${monthStartStr}&endDate=${monthEndStr}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch monthly assignments");
-      return res.json();
-    },
-    enabled: !!workspaceId && viewMode === "month",
-    refetchOnMount: "always",
+    queryKey: [`/api/assignments?startDate=${monthStartStr}&endDate=${monthEndStr}`],
+    enabled: viewMode === "month"
   });
   
-  const weekAssignments = viewMode === "month" ? monthAssignmentsData : weekAssignmentsData;
+  let weekAssignments = viewMode === "month" ? monthAssignmentsData : weekAssignmentsData;
 
-  const matchedPerson = useMemo(() => {
-    if (!user || !people.length) return null;
-
-    const userEmail = (user as any).email?.toLowerCase();
-    const userName = `${(user as any).firstName || ""} ${(user as any).lastName || ""}`.trim().toLowerCase();
-    const firstName = (user as any).firstName?.toLowerCase();
-    const lastName = (user as any).lastName?.toLowerCase();
-
-    let match = people.find((person) => userName && person.name.toLowerCase() === userName);
-    if (match) return match;
-
-    match = people.find((person) => {
-      const personName = person.name.toLowerCase();
-      return !!(firstName && lastName && personName.includes(firstName) && personName.includes(lastName));
-    });
-    if (match) return match;
-
-    match = people.find((person) => userEmail && person.name.toLowerCase().includes(userEmail.split("@")[0]));
-    if (match) return match;
-
-    return null;
-  }, [people, user]);
-
-  const filteredAssignments = useMemo(() => {
-    return weekAssignments.filter((assignment) => {
-      const matchesPerson = filterPersonIds.size === 0 || filterPersonIds.has(assignment.personId);
-      const matchesTask = filterTaskIds.size === 0 || filterTaskIds.has(assignment.taskId);
-      const matchesActiveUser = !showMyScheduleOnly || !matchedPerson || assignment.personId === matchedPerson.id;
-
-      return matchesPerson && matchesTask && matchesActiveUser;
-    });
-  }, [weekAssignments, filterPersonIds, filterTaskIds, showMyScheduleOnly, matchedPerson]);
-
-  const personIdsInFilteredAssignments = useMemo(
-    () => new Set(filteredAssignments.map((assignment) => assignment.personId)),
-    [filteredAssignments],
-  );
+  // Apply filters
+  if (filterPersonIds.size > 0) {
+    weekAssignments = weekAssignments.filter(a => filterPersonIds.has(a.personId));
+  }
+  if (filterTaskIds.size > 0) {
+    weekAssignments = weekAssignments.filter(a => filterTaskIds.has(a.taskId));
+  }
 
   const hasActiveFilters = filterPersonIds.size > 0 || filterTaskIds.size > 0;
 
   // When filters are active, only show people who have assignments in the filtered results
-  const displayPeople = useMemo(() => {
-    if (showMyScheduleOnly && matchedPerson) {
-      return people.filter((person) => !person.excluded && person.id === matchedPerson.id);
-    }
-
-    if (!hasActiveFilters) {
-      return people.filter((person) => !person.excluded);
-    }
-
-    return people.filter(
-      (person) => !person.excluded && personIdsInFilteredAssignments.has(person.id),
-    );
-  }, [showMyScheduleOnly, matchedPerson, hasActiveFilters, people, personIdsInFilteredAssignments]);
-
-  const canToggleMySchedule = !!matchedPerson;
-
-  const toggleMyScheduleOnly = () => {
-    if (!canToggleMySchedule) return;
-    setShowMyScheduleOnly((prev) => !prev);
-  };
+  const displayPeople = hasActiveFilters
+    ? people.filter(p => !p.excluded && weekAssignments.some(a => a.personId === p.id))
+    : people.filter(p => !p.excluded);
 
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeekStart);
@@ -355,7 +278,11 @@ export default function Scheduler() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/people"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }),
-        queryClient.invalidateQueries({ queryKey: assignmentKeys.all }),
+        queryClient.invalidateQueries({ 
+          predicate: (query) => 
+            typeof query.queryKey[0] === 'string' && 
+            query.queryKey[0].startsWith('/api/assignments')
+        }),
       ]);
 
       toast({
@@ -629,34 +556,28 @@ export default function Scheduler() {
         {viewMode === "week" && (
           <WeeklyCalendar
             weekStartDate={weekStartStr}
-            assignments={filteredAssignments}
+            assignments={weekAssignments}
             people={displayPeople}
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
-            isMyScheduleOnly={showMyScheduleOnly}
-            canToggleMySchedule={canToggleMySchedule}
-            onToggleMySchedule={toggleMyScheduleOnly}
           />
         )}
         {viewMode === "month" && (
           <MonthView
             weeksInMonth={weeksInMonth}
-            weekAssignments={filteredAssignments}
+            weekAssignments={weekAssignments}
             people={displayPeople}
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
             formatDate={formatDate}
-            isMyScheduleOnly={showMyScheduleOnly}
-            canToggleMySchedule={canToggleMySchedule}
-            onToggleMySchedule={toggleMyScheduleOnly}
           />
         )}
         {viewMode === "pipeline" && (
           <PipelineView
             weekStartDate={weekStartStr}
-            assignments={filteredAssignments}
+            assignments={weekAssignments}
             people={people}
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}

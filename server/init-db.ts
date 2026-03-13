@@ -3,79 +3,60 @@ import { storage, sharedDb as db } from "./storage";
 import { people, tasks, assignments, premadeFilters } from "@shared/schema";
 import { isNull, or, eq } from "drizzle-orm";
 
-const MIGRATION_MODE_ENV = "DB_MIGRATION_MODE";
-
-async function ensureDefaultWorkspace(): Promise<string> {
-  const allWorkspaces = await storage.getWorkspaces();
-
-  if (allWorkspaces.length === 0) {
-    console.log("Creating default workspace...");
-    const defaultWs = await storage.createWorkspace({
-      name: "Default Workspace",
-      description: "The default lab workspace",
-    });
-    console.log(`Created default workspace: ${defaultWs.id}`);
-    return defaultWs.id;
-  }
-
-  return allWorkspaces[0].id;
-}
-
-async function runWorkspaceNormalizationMigration(defaultWorkspaceId: string) {
-  console.log("Running workspace normalization migration...");
-
-  await db
-    .update(people)
-    .set({ workspaceId: defaultWorkspaceId })
-    .where(or(isNull(people.workspaceId), eq(people.workspaceId, "default")));
-
-  await db
-    .update(tasks)
-    .set({ workspaceId: defaultWorkspaceId })
-    .where(or(isNull(tasks.workspaceId), eq(tasks.workspaceId, "default")));
-
-  await db
-    .update(assignments)
-    .set({ workspaceId: defaultWorkspaceId })
-    .where(or(isNull(assignments.workspaceId), eq(assignments.workspaceId, "default")));
-
-  await db
-    .update(premadeFilters)
-    .set({ workspaceId: defaultWorkspaceId })
-    .where(or(isNull(premadeFilters.workspaceId), eq(premadeFilters.workspaceId, "default")));
-
-  const allUsers = await storage.getUsers();
-  for (const user of allUsers) {
-    const existing = await storage.getUserWorkspaceMembership(user.id, defaultWorkspaceId);
-    if (!existing) {
-      console.log(`Adding user ${user.email || user.id} to default workspace`);
-      await storage.addUserToWorkspace(user.id, defaultWorkspaceId, "member");
-    }
-  }
-
-  console.log("Workspace normalization migration completed.");
-}
-
-function isMigrationModeEnabled() {
-  return process.env[MIGRATION_MODE_ENV] === "true";
-}
-
-export async function runDatabaseMigrations() {
-  const defaultWorkspaceId = await ensureDefaultWorkspace();
-  await runWorkspaceNormalizationMigration(defaultWorkspaceId);
-}
-
 export async function initializeDatabase() {
   try {
-    const defaultWorkspaceId = await ensureDefaultWorkspace();
+    // ── Step 1: Ensure at least one workspace exists ─────────────────────────
+    const allWorkspaces = await storage.getWorkspaces();
+    let defaultWorkspaceId: string;
 
-    if (isMigrationModeEnabled()) {
-      console.log(
-        `${MIGRATION_MODE_ENV}=true detected; running database migration tasks during startup.`,
-      );
-      await runWorkspaceNormalizationMigration(defaultWorkspaceId);
+    if (allWorkspaces.length === 0) {
+      console.log("Creating default workspace...");
+      const defaultWs = await storage.createWorkspace({
+        name: "Default Workspace",
+        description: "The default lab workspace",
+      });
+      defaultWorkspaceId = defaultWs.id;
+      console.log(`Created default workspace: ${defaultWorkspaceId}`);
+    } else {
+      defaultWorkspaceId = allWorkspaces[0].id;
     }
 
+    // ── Step 2: Migrate any rows missing workspaceId ─────────────────────────
+    // People
+    await db
+      .update(people)
+      .set({ workspaceId: defaultWorkspaceId })
+      .where(or(isNull(people.workspaceId), eq(people.workspaceId, "default")));
+
+    // Tasks
+    await db
+      .update(tasks)
+      .set({ workspaceId: defaultWorkspaceId })
+      .where(or(isNull(tasks.workspaceId), eq(tasks.workspaceId, "default")));
+
+    // Assignments
+    await db
+      .update(assignments)
+      .set({ workspaceId: defaultWorkspaceId })
+      .where(or(isNull(assignments.workspaceId), eq(assignments.workspaceId, "default")));
+
+    // Premade Filters
+    await db
+      .update(premadeFilters)
+      .set({ workspaceId: defaultWorkspaceId })
+      .where(or(isNull(premadeFilters.workspaceId), eq(premadeFilters.workspaceId, "default")));
+
+    // ── Step 3: Ensure all existing users are members of the default workspace ─
+    const allUsers = await storage.getUsers();
+    for (const user of allUsers) {
+      const existing = await storage.getUserWorkspaceMembership(user.id, defaultWorkspaceId);
+      if (!existing) {
+        console.log(`Adding user ${user.email || user.id} to default workspace`);
+        await storage.addUserToWorkspace(user.id, defaultWorkspaceId, "member");
+      }
+    }
+
+    // ── Step 4: Seed sample data if the default workspace is empty ───────────
     const existingPeople = await storage.getPeople(defaultWorkspaceId);
     if (existingPeople.length > 0) {
       console.log("Database already has data, skipping sample seed");

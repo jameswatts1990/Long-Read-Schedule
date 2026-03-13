@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
-import { format, addDays, addMonths, subMonths, parse, startOfWeek, isToday, isTomorrow, isPast, isSameDay, eachDayOfInterval } from "date-fns";
+import { format, addDays, parse, startOfWeek, isToday, isTomorrow, isPast, isSameDay, eachDayOfInterval } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useState, useMemo, useEffect } from "react";
 
@@ -38,7 +38,6 @@ export default function MyDay() {
   const { user } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [rangeMonths, setRangeMonths] = useState(12);
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -68,27 +67,9 @@ export default function MyDay() {
     return null;
   }, [user, people]);
 
-  const assignmentRange = useMemo(() => {
-    const today = new Date();
-    return {
-      startDate: formatDateStr(subMonths(today, rangeMonths)),
-      endDate: formatDateStr(addMonths(today, rangeMonths)),
-    };
-  }, [rangeMonths]);
-
-  const assignmentsQueryUrl = useMemo(() => {
-    if (!matchedPerson) return "";
-    const params = new URLSearchParams({
-      personId: matchedPerson.id,
-      startDate: assignmentRange.startDate,
-      endDate: assignmentRange.endDate,
-    });
-    return `/api/assignments?${params.toString()}`;
-  }, [matchedPerson, assignmentRange]);
-
   const { data: assignments = [] } = useQuery<Assignment[]>({
-    queryKey: [assignmentsQueryUrl],
-    enabled: !!matchedPerson && !!assignmentsQueryUrl,
+    queryKey: ["/api/assignments"],
+    enabled: !!matchedPerson,
   });
 
   const myAssignments = useMemo(() => {
@@ -132,7 +113,7 @@ export default function MyDay() {
     return dates;
   }, [assignmentsByDate]);
 
-  const taskById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
+  const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
   const formatDayLabel = (dateStr: string): { day: number; weekday: string; month: string; isToday: boolean; isTomorrow: boolean } => {
     const date = parse(dateStr, "yyyy-MM-dd", new Date());
@@ -260,19 +241,6 @@ export default function MyDay() {
             );
           })}
         </div>
-        <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>
-            Showing assignments from {assignmentRange.startDate} to {assignmentRange.endDate}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRangeMonths((months) => months + 12)}
-            data-testid="button-expand-range"
-          >
-            Load more
-          </Button>
-        </div>
       </div>
       <div className="flex-1 overflow-y-auto" ref={setContainerRef}>
         {sortedDates.length === 0 ? (
@@ -303,7 +271,7 @@ export default function MyDay() {
                   
                   <div className="flex-1 py-3 pr-4 space-y-2">
                     {dayAssignments.map(assignment => {
-                      const task = taskById.get(assignment.taskId);
+                      const task = getTaskById(assignment.taskId);
                       if (!task) return null;
                       
                       const isTaskDark = isDarkColor(task.color);

@@ -17,7 +17,6 @@ externalPort = 80
 
 [env]
 PORT = "5000"
-NODE_ENV = "production"
 
 [workflows]
 runButton = "Project"
@@ -34,9 +33,6 @@ args = "Start application"
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"

@@ -1,18 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
-import type { Server as HttpServer } from "http";
-import type { Server as SocketServer } from "socket.io";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
-import { getAuthDiagnostics } from "./replitAuth";
 
 const app = express();
-
-const ENABLE_MEMORY_DIAGNOSTICS = process.env.ENABLE_MEMORY_DIAGNOSTICS === "true";
-const MEMORY_DIAGNOSTICS_INTERVAL_MS = Math.max(
-  Number.parseInt(process.env.MEMORY_DIAGNOSTICS_INTERVAL_MS ?? "60000", 10) || 60000,
-  10000,
-);
 
 declare module 'http' {
   interface IncomingMessage {
@@ -41,59 +32,6 @@ app.use((req, res, next) => {
   next();
 });
 
-function setupMemoryDiagnostics(server: HttpServer) {
-  if (!ENABLE_MEMORY_DIAGNOSTICS) {
-    return;
-  }
-
-  const socketServer = (server as HttpServer & { socketServer?: SocketServer }).socketServer;
-
-  const interval = setInterval(() => {
-    const memory = process.memoryUsage();
-
-    const activeHandlesCount = typeof (process as any)._getActiveHandles === "function"
-      ? (process as any)._getActiveHandles().length
-      : null;
-
-    const activeRequestsCount = typeof (process as any)._getActiveRequests === "function"
-      ? (process as any)._getActiveRequests().length
-      : null;
-
-    const diagnosticsLog = {
-      event: "runtime.memory_diagnostics",
-      ts: new Date().toISOString(),
-      pid: process.pid,
-      uptimeSec: Math.round(process.uptime()),
-      memoryBytes: {
-        rss: memory.rss,
-        heapUsed: memory.heapUsed,
-        heapTotal: memory.heapTotal,
-        external: memory.external,
-      },
-      runtime: {
-        activeHandlesCount,
-        activeRequestsCount,
-      },
-      auth: getAuthDiagnostics(),
-      sockets: {
-        connectionCount: socketServer?.engine.clientsCount ?? null,
-      },
-    };
-
-    log(JSON.stringify(diagnosticsLog));
-  }, MEMORY_DIAGNOSTICS_INTERVAL_MS);
-
-  interval.unref();
-
-  log(
-    JSON.stringify({
-      event: "runtime.memory_diagnostics_enabled",
-      ts: new Date().toISOString(),
-      intervalMs: MEMORY_DIAGNOSTICS_INTERVAL_MS,
-    }),
-  );
-}
-
 (async () => {
   await initializeDatabase();
   const server = await registerRoutes(app);
@@ -106,20 +44,14 @@ function setupMemoryDiagnostics(server: HttpServer) {
     throw err;
   });
 
-  const isProduction = process.env.NODE_ENV === "production";
-
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (!isProduction) {
-    log("Starting in development mode with Vite middleware", "server");
+  if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
-    const staticPath = serveStatic(app);
-    log(`Starting in production mode serving static assets from ${staticPath}`, "server");
+    serveStatic(app);
   }
-
-  setupMemoryDiagnostics(server);
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.

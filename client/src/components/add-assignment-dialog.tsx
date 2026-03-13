@@ -6,7 +6,6 @@ import { z } from "zod";
 import { CheckCircle, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { insertAssignmentSchema, type Task, type Assignment, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { applyAssignmentUpsert } from "@/lib/assignment-cache";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
@@ -35,7 +34,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useToast } from "@/hooks/use-toast";
 import { startOfWeek, addDays, addWeeks, addMonths, format, parse, isToday, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter } from "date-fns";
 import { cn } from "@/lib/utils";
-import { assignmentKeys } from "@/lib/queryKeys";
 
 type RepeatUnit = "days" | "weeks" | "months";
 type EndType = "never" | "date" | "occurrences";
@@ -218,8 +216,10 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       
       return res.json();
     },
-    onSuccess: (createdAssignment: Assignment) => {
-      applyAssignmentUpsert(queryClient, createdAssignment);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Assignment created",
         description: "Task assigned successfully",
@@ -341,7 +341,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           }
         }
         
-        queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+        });
         toast({
           title: "Recurring assignments created",
           description: `Created ${allDates.length} assignment(s)`,
@@ -379,7 +381,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
       try {
         await Promise.all(promises);
-        queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
+        queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
         toast({
           title: "Assignments created",
           description: `Task assigned to ${daysArray.length} day(s)`,
@@ -426,7 +430,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
     try {
       await Promise.all(promises);
-      queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Assignments created",
         description: `Task assigned to all 5 days`,
@@ -536,13 +542,39 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                               });
                               return;
                             }
+                            const task = tasks.find(t => t.id === selectedTaskId);
+                            if (!task) return;
+                            
                             try {
                               setIsGeneratingBatchId(true);
-                              const res = await apiRequest("GET", `/api/assignments/next-batch-id?taskId=${encodeURIComponent(selectedTaskId)}`);
-                              const { batchId } = await res.json();
-                              if (!batchId) throw new Error("No batch ID returned");
-
-                              form.setValue("batchNumber", batchId);
+                              const res = await apiRequest("GET", "/api/assignments");
+                              const allAssignments: Assignment[] = await res.json();
+                              
+                              // Extract 4-letter prefix
+                              const words = task.name.trim().split(/\s+/);
+                              let prefix = "";
+                              if (words.length >= 2) {
+                                prefix = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
+                              } else {
+                                prefix = words[0].substring(0, 4).toUpperCase();
+                              }
+                              
+                              if (!prefix) return;
+                              
+                              // Find existing sequence numbers for this task prefix
+                              const sequenceNumbers = allAssignments
+                                .filter(a => a.batchNumber?.startsWith(`${prefix}-`))
+                                .map(a => {
+                                  const parts = a.batchNumber?.split("-") || [];
+                                  const lastPart = parts[parts.length - 1];
+                                  return parseInt(lastPart, 10);
+                                })
+                                .filter(n => !isNaN(n));
+                              
+                              const nextSeq = sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) + 1 : 1;
+                              const newBatchId = `${prefix}-${String(nextSeq).padStart(3, '0')}`;
+                              
+                              form.setValue("batchNumber", newBatchId);
                             } catch (e) {
                               toast({
                                 title: "Error",

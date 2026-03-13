@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
-import { queryClient, setClientIdentifier } from "./lib/queryClient";
+import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,117 +7,57 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-import type { Assignment, Person, PremadeFilter, Task } from "@shared/schema";
-import {
-  applyAssignmentDelete,
-  applyAssignmentReorder,
-  applyAssignmentUpsert,
-} from "@/lib/assignment-cache";
+import type { Assignment } from "@shared/schema";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
 import ALReporting from "@/pages/al-reporting";
 import MyDay from "@/pages/my-day";
-import { assignmentKeys } from "@/lib/queryKeys";
 import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import NotFound from "@/pages/not-found";
 
-const WORKSPACE_REFRESH_CHANNEL = "workspace-refresh";
-const VISIBILITY_REFRESH_THRESHOLD_MS = 60_000;
+// Predicate that matches any cached query whose key starts with "/api/assignments"
+const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
+  const k = query.queryKey[0];
+  return typeof k === "string" && k.startsWith("/api/assignments");
+};
 
-function getWorkspaceRefreshStorageKey(workspaceId: string) {
-  return `workspace-refresh:${workspaceId}`;
-}
-
-function useRealTimeUpdates(workspaceId: string | null, clientId: string) {
+function useRealTimeUpdates(workspaceId: string | null) {
   const socketRef = useRef<Socket | null>(null);
-  const missedEventsRef = useRef(false);
-  const lastRefreshRef = useRef(0);
 
-  type UpdatePayload = {
-    type?: string;
-    action?: string;
-    record?: Record<string, unknown> & { id?: string };
-    weekStartDate?: string;
-    personId?: string;
-    day?: Assignment["day"];
-    orderedAssignmentIds?: string[];
-  };
-
-  const handleUpdate = (data: UpdatePayload) => {
-    const { type, action, record, weekStartDate, personId, day, orderedAssignmentIds } = data ?? {};
+  const handleUpdate = (data: { type?: string; action?: string; record?: Assignment & { id: string; weekStartDate?: string } }) => {
+    const { type, action, record } = data ?? {};
 
     if (type === "assignments") {
-      const assignmentRecord = record as Assignment;
-
-      if (action === "reorder" && weekStartDate && personId && day && Array.isArray(orderedAssignmentIds)) {
-        applyAssignmentReorder(queryClient, {
-          weekStartDate,
-          personId,
-          day,
-          orderedAssignmentIds,
+      if ((action === "create" || action === "update") && record?.weekStartDate) {
+        // Fix Issues 1 & 2: update the specific week's cache directly — zero HTTP requests
+        const weekKey = `/api/assignments?weekStartDate=${record.weekStartDate}`;
+        queryClient.setQueryData<Assignment[]>([weekKey], (old) => {
+          if (!old) return old; // week not in cache — nothing to update
+          if (action === "create") {
+            // Guard against duplicate (creator already has it via their own mutation)
+            return old.some((a) => a.id === record.id) ? old : [...old, record];
+          }
+          return old.map((a) => (a.id === record.id ? record : a));
         });
-      } else if ((action === "create" || action === "update") && assignmentRecord?.weekStartDate) {
-        applyAssignmentUpsert(queryClient, assignmentRecord);
       } else if (action === "delete" && record?.id) {
-        applyAssignmentDelete(queryClient, record.id, (record as Assignment | undefined)?.weekStartDate);
-      } else if (weekStartDate) {
-        queryClient.invalidateQueries({ queryKey: assignmentKeys.week(weekStartDate) });
+        // Remove from every cached assignment list (week view, month view, reporting)
+        queryClient.setQueriesData<Assignment[]>(
+          { predicate: isAssignmentQuery },
+          (old) => (old ? old.filter((a) => a.id !== record.id) : old),
+        );
       } else {
-        queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
+        // Fallback for reorder-cell and any future ops: predicate invalidation
+        // Fixes Issue 2: catches all compound query keys like "?weekStartDate=..."
+        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
       }
     } else if (type === "people") {
-      if ((action === "create" || action === "update") && record?.id) {
-        const personRecord = record as Person;
-        queryClient.setQueryData<Person[]>(["/api/people"], (old) => {
-          if (!old) return old;
-          if (action === "create") {
-            return old.some((person) => person.id === personRecord.id) ? old : [...old, personRecord];
-          }
-          return old.map((person) => (person.id === personRecord.id ? personRecord : person));
-        });
-      } else if (action === "delete" && record?.id) {
-        queryClient.setQueryData<Person[]>(["/api/people"], (old) =>
-          old ? old.filter((person) => person.id !== record.id) : old,
-        );
-      } else {
-        queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      }
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
     } else if (type === "tasks") {
-      if ((action === "create" || action === "update") && record?.id) {
-        const taskRecord = record as Task;
-        queryClient.setQueryData<Task[]>(["/api/tasks"], (old) => {
-          if (!old) return old;
-          if (action === "create") {
-            return old.some((task) => task.id === taskRecord.id) ? old : [...old, taskRecord];
-          }
-          return old.map((task) => (task.id === taskRecord.id ? taskRecord : task));
-        });
-      } else if (action === "delete" && record?.id) {
-        queryClient.setQueryData<Task[]>(["/api/tasks"], (old) =>
-          old ? old.filter((task) => task.id !== record.id) : old,
-        );
-      } else {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      }
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
     } else if (type === "premade-filters") {
-      if ((action === "create" || action === "update") && record?.id) {
-        const filterRecord = record as PremadeFilter;
-        queryClient.setQueryData<PremadeFilter[]>(["/api/premade-filters"], (old) => {
-          if (!old) return old;
-          if (action === "create") {
-            return old.some((filter) => filter.id === filterRecord.id) ? old : [...old, filterRecord];
-          }
-          return old.map((filter) => (filter.id === filterRecord.id ? filterRecord : filter));
-        });
-      } else if (action === "delete" && record?.id) {
-        queryClient.setQueryData<PremadeFilter[]>(["/api/premade-filters"], (old) =>
-          old ? old.filter((filter) => filter.id !== record.id) : old,
-        );
-      } else {
-        queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
-      }
+      queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
     }
   };
 
@@ -149,106 +89,35 @@ function useRealTimeUpdates(workspaceId: string | null, clientId: string) {
       socketRef.current = null;
     };
 
-    const readLastRefresh = () => {
-      const rawTimestamp = localStorage.getItem(getWorkspaceRefreshStorageKey(workspaceId));
-      const parsedTimestamp = rawTimestamp ? Number(rawTimestamp) : 0;
-      return Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0;
-    };
-
-    const updateLastRefresh = (timestamp: number) => {
-      lastRefreshRef.current = Math.max(lastRefreshRef.current, timestamp);
-      localStorage.setItem(getWorkspaceRefreshStorageKey(workspaceId), String(timestamp));
-    };
-
-    const broadcastChannel = typeof BroadcastChannel !== "undefined"
-      ? new BroadcastChannel(WORKSPACE_REFRESH_CHANNEL)
-      : null;
-
-    const publishRefresh = (timestamp: number) => {
-      updateLastRefresh(timestamp);
-      broadcastChannel?.postMessage({ workspaceId, refreshedAt: timestamp });
-    };
-
-    const refreshOnVisible = async (mode: "targeted" | "full") => {
-      if (mode === "targeted") {
-        await queryClient.refetchQueries({ queryKey: assignmentKeys.all, type: "active" });
-        await queryClient.refetchQueries({ queryKey: ["/api/people"], type: "active" });
-        await queryClient.refetchQueries({ queryKey: ["/api/tasks"], type: "active" });
-        await queryClient.refetchQueries({ queryKey: ["/api/premade-filters"], type: "active" });
-        return;
-      }
-
-      queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
-      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
-    };
-
-    const maybeRefresh = async () => {
-      const now = Date.now();
-      const lastKnownRefresh = Math.max(lastRefreshRef.current, readLastRefresh());
-      const refreshAge = now - lastKnownRefresh;
-      const shouldRefresh = missedEventsRef.current || refreshAge > VISIBILITY_REFRESH_THRESHOLD_MS;
-
-      if (!shouldRefresh) return;
-
-      try {
-        await refreshOnVisible("targeted");
-      } catch {
-        await refreshOnVisible("full");
-      }
-
-      missedEventsRef.current = false;
-      publishRefresh(Date.now());
-    };
-
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== getWorkspaceRefreshStorageKey(workspaceId) || !event.newValue) return;
-      const timestamp = Number(event.newValue);
-      if (!Number.isFinite(timestamp)) return;
-      lastRefreshRef.current = Math.max(lastRefreshRef.current, timestamp);
-    };
-
-    const onBroadcastMessage = (event: MessageEvent) => {
-      const payload = event.data as { workspaceId?: string; refreshedAt?: number } | undefined;
-      if (!payload || payload.workspaceId !== workspaceId || !payload.refreshedAt) return;
-      lastRefreshRef.current = Math.max(lastRefreshRef.current, payload.refreshedAt);
-    };
-
     // Fix 4: pause the socket while the tab is hidden so the server stops
     // sending heartbeats to a screen nobody is looking at. Reconnect the
     // moment the tab becomes visible again (and refetch stale data so the
     // user sees fresh content immediately).
     const onVisibilityChange = () => {
       if (document.hidden) {
-        missedEventsRef.current = true;
         disconnect();
       } else {
         connect();
-        void maybeRefresh();
+        // Refresh everything that may have changed while the tab was away
+        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
+        queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
       }
     };
 
     // Only connect if the tab is currently visible
     if (!document.hidden) {
       connect();
-      void maybeRefresh();
     }
 
-    lastRefreshRef.current = Math.max(lastRefreshRef.current, readLastRefresh());
-
-    window.addEventListener("storage", onStorage);
-    broadcastChannel?.addEventListener("message", onBroadcastMessage);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      window.removeEventListener("storage", onStorage);
-      broadcastChannel?.removeEventListener("message", onBroadcastMessage);
-      broadcastChannel?.close();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       disconnect();
     };
-  }, [workspaceId, clientId]);
+  }, [workspaceId]);
 }
 
 function useIsMobile() {
@@ -273,29 +142,12 @@ function useIsMobile() {
 
 function Router() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const {
-    activeWorkspace,
-    availableWorkspaces,
-    isLoading: workspaceLoading,
-    setWorkspace,
-    isSettingWorkspace,
-  } = useWorkspace();
+  const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [hasRedirected, setHasRedirected] = useState(false);
-  const [isAutoSelectingWorkspace, setIsAutoSelectingWorkspace] = useState(false);
-  const [clientId] = useState(() => {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return crypto.randomUUID();
-    }
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  });
 
-  useEffect(() => {
-    setClientIdentifier(clientId);
-  }, [clientId]);
-
-  useRealTimeUpdates(activeWorkspace?.id ?? null, clientId);
+  useRealTimeUpdates(activeWorkspace?.id ?? null);
 
   useEffect(() => {
     if (!authLoading && !workspaceLoading && isAuthenticated && activeWorkspace && isMobile && !location.startsWith("/my-day") && !hasRedirected) {
@@ -303,24 +155,6 @@ function Router() {
       setLocation("/my-day");
     }
   }, [authLoading, workspaceLoading, isAuthenticated, activeWorkspace, isMobile, location, hasRedirected, setLocation]);
-
-  const shouldAutoSelectWorkspace =
-    !authLoading &&
-    !workspaceLoading &&
-    isAuthenticated &&
-    !activeWorkspace &&
-    availableWorkspaces.length === 1;
-
-  useEffect(() => {
-    if (!shouldAutoSelectWorkspace || isSettingWorkspace) {
-      return;
-    }
-
-    setIsAutoSelectingWorkspace(true);
-    void setWorkspace(availableWorkspaces[0].id).finally(() => {
-      setIsAutoSelectingWorkspace(false);
-    });
-  }, [availableWorkspaces, isSettingWorkspace, setWorkspace, shouldAutoSelectWorkspace]);
 
   if (authLoading || (isAuthenticated && workspaceLoading)) {
     return (
@@ -332,14 +166,6 @@ function Router() {
 
   if (!isAuthenticated) {
     return <Landing />;
-  }
-
-  if (shouldAutoSelectWorkspace || isAutoSelectingWorkspace || isSettingWorkspace) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
   }
 
   // Authenticated but no workspace selected

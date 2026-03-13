@@ -1,8 +1,5 @@
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { addDays } from "date-fns";
-import { Eye, EyeOff } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
 
 interface PipelineViewProps {
   weekStartDate: string;
@@ -37,35 +34,13 @@ export function PipelineView({
   onAssignmentClick,
   isCompactView,
 }: PipelineViewProps) {
-  const [hideEmptyRows, setHideEmptyRows] = useState(false);
-  const pipelineTasks = useMemo(() => tasks.filter((t) => t.showInPipelineView), [tasks]);
-
-  const assignmentsByTaskAndDay = useMemo(() => {
-    const index = new Map<string, Map<string, Assignment[]>>();
-
-    assignments.forEach((assignment) => {
-      let assignmentsByDay = index.get(assignment.taskId);
-      if (!assignmentsByDay) {
-        assignmentsByDay = new Map<string, Assignment[]>();
-        index.set(assignment.taskId, assignmentsByDay);
-      }
-
-      const dayAssignments = assignmentsByDay.get(assignment.day) ?? [];
-      dayAssignments.push(assignment);
-      assignmentsByDay.set(assignment.day, dayAssignments);
-    });
-
-    return index;
-  }, [assignments]);
-
-  const visiblePipelineTasks = useMemo(() => {
-    if (!hideEmptyRows) return pipelineTasks;
-    return pipelineTasks.filter((task) => (assignmentsByTaskAndDay.get(task.id)?.size ?? 0) > 0);
-  }, [assignmentsByTaskAndDay, hideEmptyRows, pipelineTasks]);
+  const pipelineTasks = tasks.filter((t) => t.showInPipelineView);
 
   const weekStart = new Date(weekStartDate + "T00:00:00");
 
   const personMap = new Map<string, Person>(people.map((p) => [p.id, p]));
+  const taskMap = new Map<string, Task>(tasks.map((t) => [t.id, t]));
+
   const cellHeight = isCompactView ? "min-h-[56px]" : "min-h-[80px]";
   const nameColWidth = isCompactView ? "140px" : "200px";
 
@@ -88,20 +63,8 @@ export function PipelineView({
         }}
       >
         {/* Header row */}
-        <div className="sticky left-0 z-20 bg-background border-b border-r flex items-center justify-between gap-2 px-3 py-2">
+        <div className="sticky left-0 z-20 bg-background border-b border-r flex items-center px-3 py-2">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pipeline</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground"
-            onClick={() => setHideEmptyRows((current) => !current)}
-            aria-label={hideEmptyRows ? "Show empty pipeline rows" : "Hide empty pipeline rows"}
-            title={hideEmptyRows ? "Show empty rows" : "Hide empty rows"}
-            data-testid="pipeline-hide-empty-toggle"
-          >
-            {hideEmptyRows ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </Button>
         </div>
         {DAYS.map((day, idx) => (
           <div
@@ -116,8 +79,8 @@ export function PipelineView({
         ))}
 
         {/* Task rows */}
-        {visiblePipelineTasks.map((task) => (
-          <div key={task.id} className="contents">
+        {pipelineTasks.map((task) => (
+          <>
             {/* Task name cell */}
             <div
               key={`task-${task.id}`}
@@ -136,7 +99,9 @@ export function PipelineView({
 
             {/* Day cells for this task */}
             {DAYS.map((day, idx) => {
-              const dayAssignments = assignmentsByTaskAndDay.get(task.id)?.get(day) ?? [];
+              const dayAssignments = assignments.filter(
+                (a) => a.taskId === task.id && a.day === day
+              );
 
               return (
                 <div
@@ -172,7 +137,7 @@ export function PipelineView({
                 </div>
               );
             })}
-          </div>
+          </>
         ))}
       </div>
     </div>

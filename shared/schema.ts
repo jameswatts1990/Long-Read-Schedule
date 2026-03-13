@@ -38,94 +38,62 @@ export const workspaces = pgTable("workspaces", {
 });
 
 // Workspace membership — which users belong to which workspaces
-export const workspaceUsers = pgTable(
-  "workspace_users",
-  {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    userId: varchar("user_id").notNull(),
-    workspaceId: varchar("workspace_id").notNull(),
-    role: varchar("role").notNull().default("member"), // "admin" | "member"
-    createdAt: timestamp("created_at").defaultNow(),
-  },
-  (table) => [
-    index("workspace_users_user_workspace_idx").on(table.userId, table.workspaceId),
-    index("workspace_users_workspace_user_idx").on(table.workspaceId, table.userId),
-  ],
-);
+export const workspaceUsers = pgTable("workspace_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  workspaceId: varchar("workspace_id").notNull(),
+  role: varchar("role").notNull().default("member"), // "admin" | "member"
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
-export const people = pgTable(
-  "people",
-  {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    name: text("name").notNull(),
-    color: text("color").notNull(),
-    order: integer("order").default(0),
-    excluded: integer("excluded").default(0),
-    userId: varchar("user_id"),
-    workspaceId: varchar("workspace_id").notNull().default("default"),
-  },
-  (table) => [index("people_workspace_id_idx").on(table.workspaceId)],
-);
+export const people = pgTable("people", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  color: text("color").notNull(),
+  order: integer("order").default(0),
+  excluded: integer("excluded").default(0),
+  userId: varchar("user_id"),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
+});
 
-export const tasks = pgTable(
-  "tasks",
-  {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    name: text("name").notNull(),
-    color: text("color").notNull(),
-    description: text("description"),
-    order: integer("order").default(0),
-    batchSize: integer("batch_size"),
-    isProduction: integer("is_production").default(1),
-    requiredDaily: integer("required_daily").default(0),
-    showInPipelineView: integer("show_in_pipeline_view").default(0),
-    workspaceId: varchar("workspace_id").notNull().default("default"),
-  },
-  (table) => [index("tasks_workspace_id_idx").on(table.workspaceId)],
-);
+export const tasks = pgTable("tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  color: text("color").notNull(),
+  description: text("description"),
+  order: integer("order").default(0),
+  batchSize: integer("batch_size"),
+  isProduction: integer("is_production").default(1),
+  requiredDaily: integer("required_daily").default(0),
+  showInPipelineView: integer("show_in_pipeline_view").default(0),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
+});
 
-export const assignments = pgTable(
-  "assignments",
-  {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    taskId: varchar("task_id").notNull(),
-    personId: varchar("person_id").notNull(),
-    day: text("day").notNull(),
-    weekStartDate: text("week_start_date").notNull(),
-    batchNumber: text("batch_number"),
-    batchSize: integer("batch_size"),
-    notes: text("notes"),
-    date: text("date"),
-    order: integer("order").default(0),
-    customName: text("custom_name"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-    createdById: varchar("created_by_id"),
-    workspaceId: varchar("workspace_id").notNull().default("default"),
-  },
-  (table) => [
-    index("assignments_workspace_id_idx").on(table.workspaceId),
-    index("assignments_workspace_week_start_idx").on(table.workspaceId, table.weekStartDate),
-    index("assignments_workspace_person_day_week_idx").on(
-      table.workspaceId,
-      table.personId,
-      table.day,
-      table.weekStartDate,
-    ),
-  ],
-);
+export const assignments = pgTable("assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull(),
+  personId: varchar("person_id").notNull(),
+  day: text("day").notNull(),
+  weekStartDate: text("week_start_date").notNull(),
+  batchNumber: text("batch_number"),
+  batchSize: integer("batch_size"),
+  notes: text("notes"),
+  date: text("date"),
+  order: integer("order").default(0),
+  customName: text("custom_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdById: varchar("created_by_id"),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
+});
 
-export const premadeFilters = pgTable(
-  "premade_filters",
-  {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    name: text("name").notNull(),
-    personIds: text("person_ids").array().notNull().default([]),
-    taskIds: text("task_ids").array().notNull().default([]),
-    workspaceId: varchar("workspace_id").notNull().default("default"),
-  },
-  (table) => [index("premade_filters_workspace_id_idx").on(table.workspaceId)],
-);
+export const premadeFilters = pgTable("premade_filters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  personIds: text("person_ids").array().notNull().default([]),
+  taskIds: text("task_ids").array().notNull().default([]),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
+});
 
 export const isoDateString = z.string()
   .trim()

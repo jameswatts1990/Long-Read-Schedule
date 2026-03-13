@@ -1,14 +1,13 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CalendarDays, FileText, Hash, User, UserRound } from "lucide-react";
+import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { applyAssignmentDelete, applyAssignmentReorderCell, applyAssignmentUpsert } from "@/lib/assignment-cache";
 import { useToast } from "@/hooks/use-toast";
-import { parse, addDays, format, isToday, startOfWeek, endOfWeek } from "date-fns";
+import { parse, addDays, format, isToday, isSameDay } from "date-fns";
 
 import { Info } from "lucide-react";
 import {
@@ -18,382 +17,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface CalendarDayCellProps {
-  person: Person;
-  day: string;
-  dayIndex: number;
-  personIndex: number;
+interface WeeklyCalendarProps {
+  weekStartDate: string;
   assignments: Assignment[];
-  assignmentIdsKey: string;
-  isCompactView: boolean;
-  draggedAssignment: Assignment | null;
+  people: Person[];
+  tasks: Task[];
   onAssignmentClick: (assignment: Assignment) => void;
-  onAddAssignment: (personId: string, day: string) => void;
-  onDropAssignment: (personId: string, day: string, cellAssignmentIds: string[]) => void;
-  onDragStartAssignment: (assignment: Assignment) => void;
-  onDragEndAssignment: () => void;
-  getTaskById: (taskId: string) => Task | undefined;
-  getDateForDay: (dayIndex: number) => string;
-  getWeekRangeLabel: () => string;
-  isCurrentDay: (dayIndex: number) => boolean;
-  isCurrentWeekDisplay: boolean;
-  hasLeave: boolean;
+  isCompactView?: boolean;
 }
-
-interface CalendarPersonRowProps {
-  person: Person;
-  personIndex: number;
-  isCompactView: boolean;
-  hidePersonColumn: boolean;
-  draggedAssignment: Assignment | null;
-  personHasFullWeekScheduled: boolean;
-  getAssignmentsForCell: (personId: string, day: string) => Assignment[];
-  getTaskById: (taskId: string) => Task | undefined;
-  getDateForDay: (dayIndex: number) => string;
-  getWeekRangeLabel: () => string;
-  isCurrentDay: (dayIndex: number) => boolean;
-  isCurrentWeekDisplay: boolean;
-  hasAnnualLeave: (personId: string, day: string) => boolean;
-  onAssignmentClick: (assignment: Assignment) => void;
-  onAddAssignment: (personId: string, day: string) => void;
-  onDropAssignment: (personId: string, day: string, cellAssignmentIds: string[]) => void;
-  onDragStartAssignment: (assignment: Assignment) => void;
-  onDragEndAssignment: () => void;
-  onDropDeleteAssignment: (assignment: Assignment) => void;
-}
-
-const CalendarDayCell = memo(function CalendarDayCell({
-  person,
-  day,
-  dayIndex,
-  personIndex,
-  assignments,
-  isCompactView,
-  draggedAssignment,
-  onAssignmentClick,
-  onAddAssignment,
-  onDropAssignment,
-  onDragStartAssignment,
-  onDragEndAssignment,
-  getTaskById,
-  getDateForDay,
-  getWeekRangeLabel,
-  isCurrentDay,
-  isCurrentWeekDisplay,
-  hasLeave,
-}: CalendarDayCellProps) {
-  const [isDropHover, setIsDropHover] = useState(false);
-  const isTodayDay = isCurrentDay(dayIndex);
-
-  useEffect(() => {
-    if (!draggedAssignment) {
-      setIsDropHover(false);
-    }
-  }, [draggedAssignment]);
-
-  return (
-    <td
-      className={cn(
-        "border-b border-l hover-elevate relative align-top",
-        isCompactView ? "p-0.5" : "p-1.5",
-        hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
-        isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" :
-        (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
-        (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
-        personIndex % 2 === 0 && "bg-muted/20",
-        isDropHover && "bg-primary/10 border-2 border-primary",
-        assignments.length === 0 && !hasLeave && "empty-cell-pattern"
-      )}
-      style={{ minHeight: isCompactView ? undefined : "120px" }}
-      onDragOver={(e) => {
-        if (draggedAssignment) {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          if (!isDropHover) {
-            setIsDropHover(true);
-          }
-        }
-      }}
-      onDragLeave={() => {
-        if (isDropHover) {
-          setIsDropHover(false);
-        }
-      }}
-      onDrop={() => {
-        onDropAssignment(person.id, day, assignments.map((assignment) => assignment.id));
-        setIsDropHover(false);
-      }}
-      data-testid={`cell-${person.id}-${day.toLowerCase()}`}
-    >
-      <div className={cn("space-y-1", isCompactView && "space-y-0.5")}>
-        {assignments.map((assignment) => {
-          const task = getTaskById(assignment.taskId);
-          if (!task) return null;
-
-          const isTaskDark = isDarkColor(task.color);
-
-          const hasNotes = Boolean(assignment.notes?.trim());
-
-          return (
-            <div
-              key={assignment.id}
-              className={cn(
-                "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
-                isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
-                draggedAssignment?.id === assignment.id && "opacity-50"
-              )}
-              style={{
-                backgroundColor: task.color,
-                borderColor: person.color,
-              }}
-              draggable
-              onDragStart={(e) => {
-                onDragStartAssignment(assignment);
-                e.dataTransfer.effectAllowed = "move";
-              }}
-              onDragEnd={onDragEndAssignment}
-              onClick={() => onAssignmentClick(assignment)}
-              data-testid={`assignment-${assignment.id}`}
-            >
-              <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
-                {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
-                <div className="flex-1 min-w-0">
-                  <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
-                    <span className="truncate">{assignment.customName || task.name}</span>
-                    {!isCompactView && hasNotes && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className={cn(
-                                "rounded-md border p-1 transition-colors cursor-help",
-                                isTaskDark
-                                  ? "border-white/30 hover:bg-white/20"
-                                  : "border-foreground/15 hover:bg-black/10"
-                              )}
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label={`View notes for ${assignment.customName || task.name}`}
-                            >
-                              <Info className={cn("h-3.5 w-3.5", isTaskDark ? "text-white/90" : "text-foreground/80")} />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent
-                            side="right"
-                            align="start"
-                            sideOffset={10}
-                            className="max-w-sm rounded-xl p-4"
-                          >
-                            <div className="space-y-3">
-                              <div>
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Quick overview</p>
-                                <p className="text-sm font-semibold leading-tight mt-1">{assignment.customName || task.name}</p>
-                              </div>
-
-                              <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-2 text-sm">
-                                <span className="text-muted-foreground mt-0.5"><User className="h-3.5 w-3.5" /></span>
-                                <div>
-                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assigned to</p>
-                                  <p className="font-medium">{person.name}</p>
-                                </div>
-
-                                <span className="text-muted-foreground mt-0.5"><CalendarDays className="h-3.5 w-3.5" /></span>
-                                <div>
-                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Time slot</p>
-                                  <p>{day}, {getDateForDay(dayIndex)} <span className="text-muted-foreground">({getWeekRangeLabel()})</span></p>
-                                </div>
-
-                                {(assignment.batchNumber || assignment.batchSize) && (
-                                  <>
-                                    <span className="text-muted-foreground mt-0.5"><Hash className="h-3.5 w-3.5" /></span>
-                                    <div>
-                                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Batch</p>
-                                      <p className="font-mono">{assignment.batchNumber ? `#${assignment.batchNumber}` : "-"} {assignment.batchSize ? `(${assignment.batchSize})` : ""}</p>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-
-                              {assignment.notes?.trim() && (
-                                <div className="rounded-md border bg-muted/30 p-2.5">
-                                  <div className="flex items-start gap-2">
-                                    <FileText className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                                    <div>
-                                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
-                                      <p className="text-sm leading-snug mt-0.5 whitespace-pre-wrap break-words">
-                                        {assignment.notes.trim()}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                  {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
-                    <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
-                      {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
-                      {assignment.batchSize && <span>({assignment.batchSize})</span>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {!isCompactView && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1"
-            onClick={() => onAddAssignment(person.id, day)}
-            data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
-          >
-            <Plus className="w-3 h-3 mr-1" />
-            <span className="text-xs">Add</span>
-          </Button>
-        )}
-      </div>
-    </td>
-  );
-}, (prev, next) => (
-  prev.person.id === next.person.id
-  && prev.day === next.day
-  && prev.assignmentIdsKey === next.assignmentIdsKey
-  && prev.isCompactView === next.isCompactView
-  && prev.draggedAssignment?.id === next.draggedAssignment?.id
-  && prev.person.color === next.person.color
-  && prev.person.name === next.person.name
-  && prev.personIndex === next.personIndex
-  && prev.isCurrentWeekDisplay === next.isCurrentWeekDisplay
-  && prev.hasLeave === next.hasLeave
-));
-
-const CalendarPersonRow = memo(function CalendarPersonRow({
-  person,
-  personIndex,
-  isCompactView,
-  hidePersonColumn,
-  draggedAssignment,
-  personHasFullWeekScheduled,
-  getAssignmentsForCell,
-  getTaskById,
-  getDateForDay,
-  getWeekRangeLabel,
-  isCurrentDay,
-  isCurrentWeekDisplay,
-  hasAnnualLeave,
-  onAssignmentClick,
-  onAddAssignment,
-  onDropAssignment,
-  onDragStartAssignment,
-  onDragEndAssignment,
-  onDropDeleteAssignment,
-}: CalendarPersonRowProps) {
-  const [isDeleteHover, setIsDeleteHover] = useState(false);
-
-  useEffect(() => {
-    if (!draggedAssignment) {
-      setIsDeleteHover(false);
-    }
-  }, [draggedAssignment]);
-
-  return (
-    <tr style={{ minHeight: isCompactView ? undefined : "120px" }}>
-      {!hidePersonColumn && (
-        <td
-          className={cn(
-            "sticky left-0 z-30 border-r border-b p-2 align-middle cursor-pointer min-w-0",
-            personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
-            isDeleteHover && "bg-destructive/10 border-2 border-destructive"
-          )}
-          style={{ minHeight: isCompactView ? undefined : "120px" }}
-          data-testid={`person-row-${person.id}`}
-          onDragOver={(e) => {
-            if (draggedAssignment) {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-              if (!isDeleteHover) {
-                setIsDeleteHover(true);
-              }
-            }
-          }}
-          onDragLeave={() => {
-            if (isDeleteHover) {
-              setIsDeleteHover(false);
-            }
-          }}
-          onDrop={() => {
-            if (draggedAssignment) {
-              onDropDeleteAssignment(draggedAssignment);
-            }
-            setIsDeleteHover(false);
-          }}
-        >
-          <div className="flex items-center gap-1.5">
-            <div
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: person.color }}
-              data-testid={`person-indicator-${person.id}`}
-            />
-            <div className="flex items-center gap-1 flex-1 min-w-0">
-              <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
-                {person.name}
-              </span>
-              {personHasFullWeekScheduled && (
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-              )}
-            </div>
-          </div>
-        </td>
-      )}
-
-      {DAYS.map((day, dayIndex) => {
-        const cellAssignments = getAssignmentsForCell(person.id, day);
-        const assignmentIdsKey = cellAssignments.map((assignment) => assignment.id).join("|");
-
-        return (
-          <CalendarDayCell
-            key={`${person.id}-${day}`}
-            person={person}
-            day={day}
-            dayIndex={dayIndex}
-            personIndex={personIndex}
-            assignments={cellAssignments}
-            assignmentIdsKey={assignmentIdsKey}
-            isCompactView={isCompactView}
-            draggedAssignment={draggedAssignment}
-            onAssignmentClick={onAssignmentClick}
-            onAddAssignment={onAddAssignment}
-            onDropAssignment={onDropAssignment}
-            onDragStartAssignment={onDragStartAssignment}
-            onDragEndAssignment={onDragEndAssignment}
-            getTaskById={getTaskById}
-            getDateForDay={getDateForDay}
-            getWeekRangeLabel={getWeekRangeLabel}
-            isCurrentDay={isCurrentDay}
-            isCurrentWeekDisplay={isCurrentWeekDisplay}
-            hasLeave={hasAnnualLeave(person.id, day)}
-          />
-        );
-      })}
-    </tr>
-  );
-}, (prev, next) => (
-  prev.person.id === next.person.id
-  && prev.person.name === next.person.name
-  && prev.person.color === next.person.color
-  && prev.personIndex === next.personIndex
-  && prev.isCompactView === next.isCompactView
-  && prev.hidePersonColumn === next.hidePersonColumn
-  && prev.draggedAssignment?.id === next.draggedAssignment?.id
-  && prev.personHasFullWeekScheduled === next.personHasFullWeekScheduled
-  && prev.isCurrentWeekDisplay === next.isCurrentWeekDisplay
-));
 
 interface CellData {
   personId: string;
@@ -427,9 +58,6 @@ interface WeeklyCalendarProps {
   isCompactView?: boolean;
   hidePersonColumn?: boolean;
   showColumnHeader?: boolean;
-  isMyScheduleOnly?: boolean;
-  canToggleMySchedule?: boolean;
-  onToggleMySchedule?: () => void;
 }
 
 export function WeeklyCalendar({ 
@@ -440,15 +68,13 @@ export function WeeklyCalendar({
   onAssignmentClick, 
   isCompactView = false,
   hidePersonColumn = false,
-  showColumnHeader = true,
-  isMyScheduleOnly = false,
-  canToggleMySchedule = false,
-  onToggleMySchedule,
+  showColumnHeader = true
 }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
+  const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
+  const [deleteDragTarget, setDeleteDragTarget] = useState<string | null>(null);
   const { toast } = useToast();
-  const tasksById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const updateAssignmentMutation = useMutation({
     mutationFn: async (data: { assignmentId: string; personId: string; day: string }) => {
@@ -459,9 +85,10 @@ export function WeeklyCalendar({
       });
       return res.json();
     },
-    onSuccess: (updatedAssignment: Assignment) => {
-      const previousWeekStartDate = draggedAssignment?.weekStartDate;
-      applyAssignmentUpsert(queryClient, updatedAssignment, previousWeekStartDate);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Task moved",
         description: "Assignment updated successfully",
@@ -487,12 +114,9 @@ export function WeeklyCalendar({
       });
       return res.json();
     },
-    onSuccess: (_result, variables) => {
-      applyAssignmentReorderCell(queryClient, {
-        weekStartDate,
-        personId: variables.personId,
-        day: variables.day,
-        assignmentIds: variables.assignmentIds,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
       });
     },
     onError: (error) => {
@@ -506,11 +130,13 @@ export function WeeklyCalendar({
   });
 
   const deleteAssignmentMutation = useMutation({
-    mutationFn: async (assignment: Assignment) => {
-      return apiRequest("DELETE", `/api/assignments/${assignment.id}`);
+    mutationFn: async (assignmentId: string) => {
+      return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
     },
-    onSuccess: (_data, deletedAssignment) => {
-      applyAssignmentDelete(queryClient, deletedAssignment.id, deletedAssignment.weekStartDate);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({
         title: "Task deleted",
         description: "Assignment has been removed",
@@ -526,96 +152,33 @@ export function WeeklyCalendar({
     },
   });
 
-  const scheduleIndexes = useMemo(() => {
-    const assignmentsByCell = new Map<string, Assignment[]>();
-    const taskIdsByDay = new Map<string, Set<string>>();
-    const daysByPerson = new Map<string, Set<string>>();
-    const annualLeaveByCell = new Map<string, boolean>();
-    for (const assignment of assignments) {
-      const cellKey = `${assignment.personId}-${assignment.day}`;
-      const cellAssignments = assignmentsByCell.get(cellKey);
-      if (cellAssignments) {
-        cellAssignments.push(assignment);
-      } else {
-        assignmentsByCell.set(cellKey, [assignment]);
+  // Pre-group assignments by person+day for O(1) lookup instead of O(A) per cell
+  const assignmentsByCell = useMemo(() => {
+    const map = new Map<string, Assignment[]>();
+    for (const a of assignments) {
+      const key = `${a.personId}-${a.day}`;
+      if (!map.has(key)) {
+        map.set(key, []);
       }
-
-      const taskIdsForDay = taskIdsByDay.get(assignment.day);
-      if (taskIdsForDay) {
-        taskIdsForDay.add(assignment.taskId);
-      } else {
-        taskIdsByDay.set(assignment.day, new Set([assignment.taskId]));
-      }
-
-      const personDays = daysByPerson.get(assignment.personId);
-      if (personDays) {
-        personDays.add(assignment.day);
-      } else {
-        daysByPerson.set(assignment.personId, new Set([assignment.day]));
-      }
-
-      if (!annualLeaveByCell.get(cellKey)) {
-        const task = tasksById.get(assignment.taskId);
-        if (task?.name.includes("Annual Leave")) {
-          annualLeaveByCell.set(cellKey, true);
-        }
-      }
+      map.get(key)!.push(a);
     }
-
-    assignmentsByCell.forEach((cellAssignments) => {
-      cellAssignments.sort((x: Assignment, y: Assignment) => ((x as any).order ?? 0) - ((y as any).order ?? 0));
+    // Sort each cell's assignments by order
+    map.forEach((arr: Assignment[]) => {
+      arr.sort((x: Assignment, y: Assignment) => ((x as any).order ?? 0) - ((y as any).order ?? 0));
     });
-
-    const requiredDailyTasks = tasks.filter((task) => (task as any).requiredDaily === 1);
-    const missingRequiredTasksByDay = new Map<string, Task[]>();
-
-    for (const day of DAYS) {
-      const scheduledTaskIds = taskIdsByDay.get(day) ?? new Set<string>();
-      missingRequiredTasksByDay.set(
-        day,
-        requiredDailyTasks.filter((task) => !scheduledTaskIds.has(task.id))
-      );
-    }
-
-    return {
-      assignmentsByCell,
-      taskIdsByDay,
-      daysByPerson,
-      annualLeaveByCell,
-      requiredDailyTasks,
-      missingRequiredTasksByDay,
-    };
-  }, [assignments, tasks, tasksById]);
+    return map;
+  }, [assignments]);
 
   const getAssignmentsForCell = (personId: string, day: string) => {
-    return scheduleIndexes.assignmentsByCell.get(`${personId}-${day}`) || [];
+    return assignmentsByCell.get(`${personId}-${day}`) || [];
   };
 
-  const getTaskById = (taskId: string) => tasksById.get(taskId);
-
-  const personHasFullWeekScheduled = useMemo(() => {
-    return people.reduce<Record<string, boolean>>((acc, person) => {
-      const scheduledDays = scheduleIndexes.daysByPerson.get(person.id);
-      acc[person.id] = DAYS.every((day) => scheduledDays?.has(day));
-      return acc;
-    }, {});
-  }, [people, scheduleIndexes.daysByPerson]);
+  const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
   const getDateForDay = (dayIndex: number) => {
     const startDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
     const dayDate = addDays(startDate, dayIndex);
     return format(dayDate, "MMM d");
-  };
-
-  const getWeekRangeLabel = () => {
-    const startDate = startOfWeek(parse(weekStartDate, "yyyy-MM-dd", new Date()), { weekStartsOn: 1 });
-    const endDate = endOfWeek(startDate, { weekStartsOn: 1 });
-
-    if (format(startDate, "MMM") === format(endDate, "MMM")) {
-      return `${format(startDate, "MMM d")}–${format(endDate, "d")}`;
-    }
-
-    return `${format(startDate, "MMM d")}–${format(endDate, "MMM d")}`;
   };
 
   const getDateObjectForDay = (dayIndex: number) => {
@@ -635,49 +198,38 @@ export function WeeklyCalendar({
     return today >= startDate && today <= endDate;
   };
 
-  const hasAnnualLeave = (personId: string, day: string) => {
-    return scheduleIndexes.annualLeaveByCell.get(`${personId}-${day}`) ?? false;
+  const hasAssignmentEveryDay = (personId: string) => {
+    return DAYS.every(day => {
+      const cellAssignments = getAssignmentsForCell(personId, day);
+      return cellAssignments.length > 0;
+    });
   };
 
+  const hasAnnualLeave = (personId: string, day: string) => {
+    const cellAssignments = getAssignmentsForCell(personId, day);
+    return cellAssignments.some(assignment => {
+      const task = getTaskById(assignment.taskId);
+      return task?.name.includes("Annual Leave");
+    });
+  };
+
+  const requiredDailyTasks = useMemo(() => {
+    return tasks.filter(t => (t as any).requiredDaily === 1);
+  }, [tasks]);
+
   const getMissingRequiredTasks = (day: string) => {
-    if (scheduleIndexes.requiredDailyTasks.length === 0) return [];
-    return scheduleIndexes.missingRequiredTasksByDay.get(day) ?? [];
+    if (requiredDailyTasks.length === 0) return [];
+    const scheduledTaskIds = new Set<string>();
+    for (const a of assignments) {
+      if (a.day === day) {
+        scheduledTaskIds.add(a.taskId);
+      }
+    }
+    return requiredDailyTasks.filter(t => !scheduledTaskIds.has(t.id));
   };
 
   // Number of columns: 1 for person (when shown) + 5 for days
   const numCols = hidePersonColumn ? 5 : 6;
-  const isCurrentWeekDisplay = isCurrentWeek();
-
-  const handleDropAssignment = (personId: string, day: string, cellAssignmentIds: string[]) => {
-    if (!draggedAssignment) return;
-
-    if (draggedAssignment.personId !== personId || draggedAssignment.day !== day) {
-      updateAssignmentMutation.mutate({
-        assignmentId: draggedAssignment.id,
-        personId,
-        day,
-      });
-    } else {
-      const reorderedIds = [...cellAssignmentIds];
-      const draggedIndex = reorderedIds.indexOf(draggedAssignment.id);
-      if (draggedIndex >= 0) {
-        reorderedIds.splice(draggedIndex, 1);
-        reorderedIds.unshift(draggedAssignment.id);
-        reorderAssignmentsMutation.mutate({
-          personId,
-          day,
-          assignmentIds: reorderedIds,
-        });
-      }
-    }
-
-    setDraggedAssignment(null);
-  };
-
-  const handleDropDeleteAssignment = (assignment: Assignment) => {
-    deleteAssignmentMutation.mutate(assignment);
-    setDraggedAssignment(null);
-  };
 
   return (
     <>
@@ -697,31 +249,7 @@ export function WeeklyCalendar({
                 <tr>
                   {!hidePersonColumn && (
                     <th className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2 text-left">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className={cn(
-                            "h-7 w-7",
-                            isMyScheduleOnly ? "text-primary" : "text-muted-foreground"
-                          )}
-                          onClick={onToggleMySchedule}
-                          disabled={!canToggleMySchedule}
-                          title={
-                            !canToggleMySchedule
-                              ? "Cannot find your linked person record"
-                              : isMyScheduleOnly
-                                ? "Show all people"
-                                : "Show only my schedule"
-                          }
-                          aria-label={isMyScheduleOnly ? "Show all people" : "Show only my schedule"}
-                          data-testid="button-toggle-my-schedule"
-                        >
-                          <UserRound className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
                     </th>
                   )}
                   {DAYS.map((day, dayIndex) => {
@@ -782,28 +310,213 @@ export function WeeklyCalendar({
             {/* Person Rows */}
             <tbody>
               {people.map((person, personIndex) => (
-                <CalendarPersonRow
+                <tr 
                   key={person.id}
-                  person={person}
-                  personIndex={personIndex}
-                  isCompactView={isCompactView}
-                  hidePersonColumn={hidePersonColumn}
-                  draggedAssignment={draggedAssignment}
-                  personHasFullWeekScheduled={personHasFullWeekScheduled[person.id]}
-                  getAssignmentsForCell={getAssignmentsForCell}
-                  getTaskById={getTaskById}
-                  getDateForDay={getDateForDay}
-                  getWeekRangeLabel={getWeekRangeLabel}
-                  isCurrentDay={isCurrentDay}
-                  isCurrentWeekDisplay={isCurrentWeekDisplay}
-                  hasAnnualLeave={hasAnnualLeave}
-                  onAssignmentClick={onAssignmentClick}
-                  onAddAssignment={(personId, day) => setSelectedCell({ personId, day })}
-                  onDropAssignment={handleDropAssignment}
-                  onDragStartAssignment={setDraggedAssignment}
-                  onDragEndAssignment={() => setDraggedAssignment(null)}
-                  onDropDeleteAssignment={handleDropDeleteAssignment}
-                />
+                  style={{ minHeight: isCompactView ? undefined : '120px' }}
+                >
+                  {/* Person Name Cell - Sticky (Drop zone for deletion) */}
+                  {!hidePersonColumn && (
+                    <td
+                      className={cn(
+                        "sticky left-0 z-30 border-r border-b p-2 align-middle cursor-pointer min-w-0",
+                        personIndex % 2 === 0 ? "bg-muted/50" : "bg-card",
+                        deleteDragTarget === person.id && "bg-destructive/10 border-2 border-destructive"
+                      )}
+                      style={{ minHeight: isCompactView ? undefined : '120px' }}
+                      data-testid={`person-row-${person.id}`}
+                      onDragOver={(e) => {
+                        if (draggedAssignment) {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          setDeleteDragTarget(person.id);
+                        }
+                      }}
+                      onDragLeave={() => setDeleteDragTarget(null)}
+                      onDrop={() => {
+                        if (draggedAssignment) {
+                          deleteAssignmentMutation.mutate(draggedAssignment.id);
+                        }
+                        setDeleteDragTarget(null);
+                        setDraggedAssignment(null);
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: person.color }}
+                          data-testid={`person-indicator-${person.id}`}
+                        />
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
+                            {person.name}
+                          </span>
+                          {assignments.some(a => a.personId === person.id) && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  )}
+
+                  {/* Day Cells */}
+                  {DAYS.map((day, dayIndex) => {
+                    const cellAssignments = getAssignmentsForCell(person.id, day);
+                    
+                    const currentCell = { personId: person.id, day };
+                    const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day;
+                    const isTodayDay = isCurrentDay(dayIndex);
+                    const isCurrentWeekDisplay = isCurrentWeek();
+                    const hasLeave = hasAnnualLeave(person.id, day);
+
+                    return (
+                      <td
+                        key={`${person.id}-${day}`}
+                        className={cn(
+                          "border-b border-l hover-elevate relative align-top",
+                          isCompactView ? "p-0.5" : "p-1.5",
+                          hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
+                          isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
+                          (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
+                          (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
+                          personIndex % 2 === 0 && "bg-muted/20",
+                          isDropTarget && "bg-primary/10 border-2 border-primary",
+                          cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
+                        )}
+                        style={{ minHeight: isCompactView ? undefined : '120px' }}
+                        onDragOver={(e) => {
+                          if (draggedAssignment) {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            setDropTargetCell(currentCell);
+                          }
+                        }}
+                        onDragLeave={() => setDropTargetCell(null)}
+                        onDrop={() => {
+                          if (draggedAssignment) {
+                            if (draggedAssignment.personId !== person.id || draggedAssignment.day !== day) {
+                              updateAssignmentMutation.mutate({
+                                assignmentId: draggedAssignment.id,
+                                personId: person.id,
+                                day,
+                              });
+                            } else {
+                              const reorderedIds = cellAssignments.map(a => a.id);
+                              const draggedIndex = reorderedIds.indexOf(draggedAssignment.id);
+                              if (draggedIndex >= 0) {
+                                reorderedIds.splice(draggedIndex, 1);
+                                reorderedIds.unshift(draggedAssignment.id);
+                                reorderAssignmentsMutation.mutate({
+                                  personId: person.id,
+                                  day,
+                                  assignmentIds: reorderedIds,
+                                });
+                              }
+                            }
+                          }
+                          setDropTargetCell(null);
+                          setDraggedAssignment(null);
+                        }}
+                        data-testid={`cell-${person.id}-${day.toLowerCase()}`}
+                      >
+                        <div className={cn("space-y-1", isCompactView && "space-y-0.5")}>
+                          {cellAssignments.map(assignment => {
+                            const task = getTaskById(assignment.taskId);
+                            if (!task) return null;
+                            
+                            const isTaskDark = isDarkColor(task.color);
+
+                            return (
+                              <div
+                                key={assignment.id}
+                                className={cn(
+                                  "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
+                                  isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
+                                  draggedAssignment?.id === assignment.id && "opacity-50"
+                                )}
+                                style={{ 
+                                  backgroundColor: task.color,
+                                  borderColor: person.color,
+                                }}
+                                draggable
+                                onDragStart={(e) => {
+                                  setDraggedAssignment(assignment);
+                                  e.dataTransfer.effectAllowed = "move";
+                                }}
+                                onDragEnd={() => {
+                                  setDraggedAssignment(null);
+                                  setDeleteDragTarget(null);
+                                }}
+                                onClick={() => onAssignmentClick(assignment)}
+                                data-testid={`assignment-${assignment.id}`}
+                              >
+                                <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
+                                  {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
+                                  <div className="flex-1 min-w-0">
+                                    <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
+                                      <span className="truncate">{assignment.customName || task.name}</span>
+                                      {!isCompactView && (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className="p-0.5 hover:bg-black/10 rounded cursor-help">
+                                                <Info className="w-3 h-3 opacity-70" />
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="p-3 max-w-xs">
+                                              <div className="space-y-2">
+                                                <div>
+                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
+                                                  <p className="text-sm font-medium">{assignment.customName || task.name}</p>
+                                                </div>
+                                                <div>
+                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>
+                                                  <p className="text-sm">{person.name}</p>
+                                                </div>
+                                                <div>
+                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Time Slot</p>
+                                                  <p className="text-sm">{day}, {getDateForDay(dayIndex)}</p>
+                                                </div>
+                                                {assignment.notes && (
+                                                  <div>
+                                                    <p className="text-xs font-bold text-muted-foreground uppercase">Notes</p>
+                                                    <p className="text-sm italic">{assignment.notes}</p>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      )}
+                                    </div>
+                                    {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
+                                      <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
+                                        {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
+                                        {assignment.batchSize && <span>({assignment.batchSize})</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {!isCompactView && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1"
+                              onClick={() => setSelectedCell({ personId: person.id, day })}
+                              data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              <span className="text-xs">Add</span>
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
               ))}
             </tbody>
           </table>

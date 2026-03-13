@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, Info, UserRound } from "lucide-react";
+import { Plus, GripVertical, Info } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -11,7 +11,6 @@ import {
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { applyAssignmentDelete, applyAssignmentUpsert } from "@/lib/assignment-cache";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useMemo } from "react";
 import { parse, addDays, format, isToday } from "date-fns";
@@ -24,9 +23,6 @@ interface MonthViewProps {
   onAssignmentClick: (assignment: Assignment) => void;
   isCompactView?: boolean;
   formatDate: (date: Date) => string;
-  isMyScheduleOnly?: boolean;
-  canToggleMySchedule?: boolean;
-  onToggleMySchedule?: () => void;
 }
 
 interface CellData {
@@ -53,10 +49,7 @@ export function MonthView({
   tasks, 
   onAssignmentClick, 
   isCompactView = false,
-  formatDate: formatDateFn,
-  isMyScheduleOnly = false,
-  canToggleMySchedule = false,
-  onToggleMySchedule,
+  formatDate: formatDateFn
 }: MonthViewProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -73,9 +66,10 @@ export function MonthView({
       });
       return res.json();
     },
-    onSuccess: (updatedAssignment: Assignment) => {
-      const previousWeekStartDate = draggedAssignment?.weekStartDate;
-      applyAssignmentUpsert(queryClient, updatedAssignment, previousWeekStartDate);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({ title: "Task moved", description: "Assignment updated successfully" });
     },
     onError: () => {
@@ -84,11 +78,13 @@ export function MonthView({
   });
 
   const deleteAssignmentMutation = useMutation({
-    mutationFn: async (assignment: Assignment) => {
-      return apiRequest("DELETE", `/api/assignments/${assignment.id}`);
+    mutationFn: async (assignmentId: string) => {
+      return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
     },
-    onSuccess: (_data, deletedAssignment) => {
-      applyAssignmentDelete(queryClient, deletedAssignment.id, deletedAssignment.weekStartDate);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
       toast({ title: "Task deleted", description: "Assignment has been removed" });
     },
     onError: () => {
@@ -111,7 +107,7 @@ export function MonthView({
     return assignmentsByCell.get(`${weekStartDate}-${personId}-${day}`) || [];
   };
 
-  const taskById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
+  const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
   const getDateForDay = (weekStartDate: string, dayIndex: number) => {
     const startDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
@@ -141,28 +137,7 @@ export function MonthView({
             className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2 flex items-center shadow-[2px_2px_0_0_hsl(var(--muted))]"
             style={{ width: '200px', left: 0 }}
           >
-            <div className="flex w-full items-center justify-between gap-2">
-              <span className="font-semibold text-sm text-foreground">Person</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn("h-7 w-7", isMyScheduleOnly ? "text-primary" : "text-muted-foreground")}
-                onClick={onToggleMySchedule}
-                disabled={!canToggleMySchedule}
-                title={
-                  !canToggleMySchedule
-                    ? "Cannot find your linked person record"
-                    : isMyScheduleOnly
-                      ? "Show all people"
-                      : "Show only my schedule"
-                }
-                aria-label={isMyScheduleOnly ? "Show all people" : "Show only my schedule"}
-                data-testid="button-toggle-my-schedule"
-              >
-                <UserRound className="h-4 w-4" />
-              </Button>
-            </div>
+            <span className="font-semibold text-sm text-foreground">Person</span>
           </div>
           
           {weeksInMonth.map((weekStart) => {
@@ -216,7 +191,7 @@ export function MonthView({
                 onDragLeave={() => setDeleteDragTarget(null)}
                 onDrop={() => {
                   if (draggedAssignment) {
-                    deleteAssignmentMutation.mutate(draggedAssignment);
+                    deleteAssignmentMutation.mutate(draggedAssignment.id);
                   }
                   setDeleteDragTarget(null);
                   setDraggedAssignment(null);
@@ -277,11 +252,9 @@ export function MonthView({
                     >
                       <div className={cn("space-y-1", isCompactView && "space-y-0.5")}>
                         {cellAssignments.map(assignment => {
-                          const task = taskById.get(assignment.taskId);
+                          const task = getTaskById(assignment.taskId);
                           if (!task) return null;
                           const isTaskDark = isDarkColor(task.color);
-
-                          const hasNotes = Boolean(assignment.notes?.trim());
 
                           return (
                             <div
@@ -311,7 +284,7 @@ export function MonthView({
                                 <div className="flex-1 min-w-0">
                                   <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                     <span className="truncate">{assignment.customName || task.name}</span>
-                                    {!isCompactView && hasNotes && (
+                                    {!isCompactView && (
                                       <TooltipProvider>
                                         <Tooltip>
                                           <TooltipTrigger asChild>

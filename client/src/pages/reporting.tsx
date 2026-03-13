@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, Filter, Layers } from "lucide-react";
 import { Link } from "wouter";
@@ -20,11 +20,10 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, parseISO, subMonths } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { assignmentKeys } from "@/lib/queryKeys";
 
 export default function Reporting() {
   const { activeWorkspace } = useWorkspace();
@@ -38,52 +37,27 @@ export default function Reporting() {
     to: defaultTo,
   });
 
-  // Keep reporting scoped to a sensible default window, even while a range is being edited.
-  const effectiveFrom = dateRange.from ?? defaultFrom;
-  const effectiveTo = dateRange.to ?? defaultTo;
-  const startDate = format(effectiveFrom, "yyyy-MM-dd");
-  const endDate = format(effectiveTo, "yyyy-MM-dd");
+  // Build query key from date range — server handles the date filtering
+  const startDate = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : "";
+  const endDate = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : "";
+  const assignmentQueryKey = startDate && endDate
+    ? `/api/assignments?startDate=${startDate}&endDate=${endDate}`
+    : "/api/assignments";
 
-  const {
-    data: assignments = [],
-    isLoading: isAssignmentsLoading,
-    error: assignmentsError,
-    refetch: refetchAssignments,
-  } = useQuery<Assignment[]>({
-    queryKey: assignmentKeys.range(startDate, endDate),
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments?startDate=${startDate}&endDate=${endDate}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch assignments");
-      return res.json();
-    },
-  });
-  const {
-    data: allTasks = [],
-    isLoading: isTasksLoading,
-    error: tasksError,
-    refetch: refetchTasks,
-  } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: [assignmentQueryKey] });
+  const { data: allTasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
-  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
-  const isLoading = isAssignmentsLoading || isTasksLoading;
-  const hasError = Boolean(assignmentsError || tasksError);
-
-  const retryReportingQueries = () => {
-    void refetchAssignments();
-    void refetchTasks();
-  };
 
   // Filter to only production tasks
   const productionTasks = useMemo(() => allTasks.filter(t => (t as any).isProduction !== 0), [allTasks]);
 
   // Initialize selected tasks if empty
-  useEffect(() => {
-    if (!hasInitializedSelection && selectedTaskIds.length === 0 && productionTasks.length > 0) {
+  useMemo(() => {
+    if (selectedTaskIds.length === 0 && productionTasks.length > 0) {
       setSelectedTaskIds(productionTasks.map(t => t.id));
-      setHasInitializedSelection(true);
     }
-  }, [hasInitializedSelection, productionTasks, selectedTaskIds.length]);
+  }, [productionTasks]);
 
   // Server already scoped by date range — only filter by selected tasks client-side
   const filteredAssignments = useMemo(() => {
@@ -101,52 +75,36 @@ export default function Reporting() {
     }, {} as Record<string, Assignment[]>);
   }, [filteredAssignments]);
 
-  // Pre-aggregate totals by week and task for quick lookups in charts/table
-  const totalsByWeekAndTask = useMemo(() => {
-    const totals: Record<string, Record<string, number>> = {};
-
-    filteredAssignments.forEach((assignment) => {
-      if (!totals[assignment.weekStartDate]) {
-        totals[assignment.weekStartDate] = {};
-      }
-
-      if (!totals[assignment.weekStartDate][assignment.taskId]) {
-        totals[assignment.weekStartDate][assignment.taskId] = 0;
-      }
-    });
-
-    Object.entries(assignmentsByWeek).forEach(([weekDate, weekAssignments]) => {
-      const assignmentsByTask = weekAssignments.reduce((acc, assignment) => {
-        if (!acc[assignment.taskId]) {
-          acc[assignment.taskId] = [];
-        }
-        acc[assignment.taskId].push(assignment);
-        return acc;
-      }, {} as Record<string, Assignment[]>);
-
-      Object.entries(assignmentsByTask).forEach(([taskId, taskAssignments]) => {
-        const uniqueBatches = new Map<string, number>();
-
-        taskAssignments.forEach((assignment) => {
-          const batchKey = assignment.batchNumber ? `batch-${assignment.batchNumber}` : `assignment-${assignment.id}`;
-          if (!uniqueBatches.has(batchKey) && assignment.batchSize) {
-            uniqueBatches.set(batchKey, assignment.batchSize);
-          }
-        });
-
-        totals[weekDate][taskId] = Array.from(uniqueBatches.values()).reduce((sum, size) => sum + size, 0);
-      });
-    });
-
-    return totals;
-  }, [filteredAssignments, assignmentsByWeek]);
-
   // Get sorted unique weeks
   const weeks = useMemo(() => Object.keys(assignmentsByWeek).sort(), [assignmentsByWeek]);
 
-  // Format week date deterministically from API yyyy-MM-dd values.
+  // Calculate totals: for each week/task combo, count unique batch IDs and their sizes
+  const getWeekTotal = (weekDate: string, taskId: string): number => {
+    const weekAssignments = assignmentsByWeek[weekDate] || [];
+    const taskAssignments = weekAssignments.filter(a => a.taskId === taskId);
+    
+    const uniqueBatches = new Map<string, number>();
+    
+    taskAssignments.forEach(assignment => {
+      // If batchNumber is provided, use it as key to count capacity once per week per batch
+      // If no batchNumber, treat as unique to ensure capacity is still counted
+      const batchKey = assignment.batchNumber ? `batch-${assignment.batchNumber}` : `assignment-${assignment.id}`;
+      if (!uniqueBatches.has(batchKey) && assignment.batchSize) {
+        uniqueBatches.set(batchKey, assignment.batchSize);
+      }
+    });
+    
+    return Array.from(uniqueBatches.values()).reduce((sum, size) => sum + size, 0);
+  };
+
+  // Format date for display (e.g., "Dec 01, 2024")
   const formatWeekDate = (dateStr: string): string => {
-    return format(parseISO(`${dateStr}T00:00:00Z`), "MMM dd, yyyy");
+    const date = new Date(dateStr + "T00:00:00Z");
+    return date.toLocaleDateString("en-US", { 
+      month: "short", 
+      day: "2-digit", 
+      year: "numeric" 
+    });
   };
 
   // Prepare chart data
@@ -158,12 +116,12 @@ export default function Reporting() {
       };
       productionTasks.forEach(task => {
         if (selectedTaskIds.includes(task.id)) {
-          dataPoint[task.id] = totalsByWeekAndTask[week]?.[task.id] ?? 0;
+          dataPoint[task.id] = getWeekTotal(week, task.id);
         }
       });
       return dataPoint;
     });
-  }, [weeks, productionTasks, selectedTaskIds, totalsByWeekAndTask]);
+  }, [weeks, productionTasks, selectedTaskIds, assignmentsByWeek]);
 
   // Prepare chart config for Shadcn Chart
   const chartConfig = useMemo(() => {
@@ -237,12 +195,12 @@ export default function Reporting() {
                   mode="range"
                   defaultMonth={dateRange.from}
                   selected={{ from: dateRange.from, to: dateRange.to }}
-                  onSelect={(range: any) => setDateRange(range || { from: defaultFrom, to: defaultTo })}
+                  onSelect={(range: any) => setDateRange(range || { from: undefined, to: undefined })}
                   numberOfMonths={2}
                   weekStartsOn={1}
                 />
                 <div className="p-3 border-t flex justify-end">
-                  <Button variant="ghost" size="sm" onClick={() => setDateRange({ from: defaultFrom, to: defaultTo })}>
+                  <Button variant="ghost" size="sm" onClick={() => setDateRange({ from: undefined, to: undefined })}>
                     Reset
                   </Button>
                 </div>
@@ -301,92 +259,75 @@ export default function Reporting() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-0 pb-0 h-[400px] w-full">
-              {isLoading ? (
-                <div className="h-full w-full rounded-md border border-dashed border-muted p-6 animate-pulse">
-                  <div className="h-4 w-40 bg-muted rounded mb-6" />
-                  <div className="h-[280px] w-full bg-muted/70 rounded" />
-                  <p className="text-xs text-muted-foreground mt-4">Loading capacity trends...</p>
-                </div>
-              ) : hasError ? (
-                <div className="h-full w-full rounded-md border border-dashed border-muted p-6 flex flex-col items-center justify-center text-center gap-3">
-                  <p className="text-sm text-muted-foreground">Couldn&apos;t load reporting data right now.</p>
-                  <Button variant="outline" size="sm" onClick={retryReportingQueries}>Retry</Button>
-                </div>
-              ) : selectedTaskIds.length === 0 ? (
-                <div className="h-full w-full rounded-md border border-dashed border-muted p-6 flex items-center justify-center text-center">
-                  <p className="text-sm text-muted-foreground">Select at least one task to view capacity trends.</p>
-                </div>
-              ) : (
-                <ChartContainer config={chartConfig} className="w-full h-full">
-                  {chartType === "bar" ? (
-                    <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis
-                        dataKey="formattedDate"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12 }}
-                        dy={10}
+              <ChartContainer config={chartConfig} className="w-full h-full">
+                {chartType === "bar" ? (
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="formattedDate" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 12 }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 12 }}
+                    />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Legend 
+                      verticalAlign="top" 
+                      height={36} 
+                      iconType="circle"
+                      formatter={(value) => <span className="text-xs font-medium">{chartConfig[value]?.label || value}</span>}
+                    />
+                    {productionTasks.map(task => selectedTaskIds.includes(task.id) && (
+                      <Bar 
+                        key={task.id} 
+                        dataKey={task.id} 
+                        fill={`var(--color-${task.id})`}
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={40}
                       />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12 }}
+                    ))}
+                  </BarChart>
+                ) : (
+                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="formattedDate" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 12 }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 12 }}
+                    />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Legend 
+                      verticalAlign="top" 
+                      height={36} 
+                      iconType="circle"
+                      formatter={(value) => <span className="text-xs font-medium">{chartConfig[value]?.label || value}</span>}
+                    />
+                    {productionTasks.map(task => selectedTaskIds.includes(task.id) && (
+                      <Line 
+                        key={task.id} 
+                        type="monotone"
+                        dataKey={task.id} 
+                        stroke={`var(--color-${task.id})`}
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
                       />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Legend
-                        verticalAlign="top"
-                        height={36}
-                        iconType="circle"
-                        formatter={(value) => <span className="text-xs font-medium">{chartConfig[value]?.label || value}</span>}
-                      />
-                      {productionTasks.map(task => selectedTaskIds.includes(task.id) && (
-                        <Bar
-                          key={task.id}
-                          dataKey={task.id}
-                          fill={`var(--color-${task.id})`}
-                          radius={[4, 4, 0, 0]}
-                          maxBarSize={40}
-                        />
-                      ))}
-                    </BarChart>
-                  ) : (
-                    <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis
-                        dataKey="formattedDate"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12 }}
-                        dy={10}
-                      />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12 }}
-                      />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Legend
-                        verticalAlign="top"
-                        height={36}
-                        iconType="circle"
-                        formatter={(value) => <span className="text-xs font-medium">{chartConfig[value]?.label || value}</span>}
-                      />
-                      {productionTasks.map(task => selectedTaskIds.includes(task.id) && (
-                        <Line
-                          key={task.id}
-                          type="monotone"
-                          dataKey={task.id}
-                          stroke={`var(--color-${task.id})`}
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                          activeDot={{ r: 6 }}
-                        />
-                      ))}
-                    </LineChart>
-                  )}
-                </ChartContainer>
-              )}
+                    ))}
+                  </LineChart>
+                )}
+              </ChartContainer>
             </CardContent>
           </Card>
         </div>
@@ -397,24 +338,7 @@ export default function Reporting() {
             <CardTitle>Data Table</CardTitle>
           </CardHeader>
           <div className="overflow-x-auto overflow-y-auto max-h-96">
-            {isLoading ? (
-              <div className="p-4 space-y-3 animate-pulse">
-                <div className="h-4 w-32 bg-muted rounded" />
-                <div className="h-10 w-full bg-muted/70 rounded" />
-                <div className="h-10 w-full bg-muted/70 rounded" />
-                <div className="h-10 w-full bg-muted/70 rounded" />
-                <p className="text-xs text-muted-foreground text-center">Loading table data...</p>
-              </div>
-            ) : hasError ? (
-              <div className="p-4">
-                <div className="rounded-md border border-dashed border-muted p-4 text-center space-y-3">
-                  <p className="text-sm text-muted-foreground">Unable to load table data.</p>
-                  <Button variant="outline" size="sm" onClick={retryReportingQueries}>Retry</Button>
-                </div>
-              </div>
-            ) : selectedTaskIds.length === 0 ? (
-              <p className="text-muted-foreground p-4 text-center">Select at least one task to view capacity trends.</p>
-            ) : weeks.length === 0 ? (
+            {weeks.length === 0 ? (
               <p className="text-muted-foreground p-4 text-center">No assignments match your filters</p>
             ) : (
               <table className="w-full border-collapse">
@@ -445,19 +369,13 @@ export default function Reporting() {
                         {formatWeekDate(week)}
                       </td>
                       {productionTasks.map((task) => selectedTaskIds.includes(task.id) && (
-                        (() => {
-                          const weekTotal = totalsByWeekAndTask[week]?.[task.id] ?? 0;
-
-                          return (
-                            <td
-                              key={`${week}-${task.id}`}
-                              className="p-3"
-                              data-testid={`cell-${week}-${task.id}`}
-                            >
-                              {weekTotal > 0 ? weekTotal : "-"}
-                            </td>
-                          );
-                        })()
+                        <td 
+                          key={`${week}-${task.id}`} 
+                          className="p-3"
+                          data-testid={`cell-${week}-${task.id}`}
+                        >
+                          {getWeekTotal(week, task.id) > 0 ? getWeekTotal(week, task.id) : "-"}
+                        </td>
                       ))}
                     </tr>
                   ))}

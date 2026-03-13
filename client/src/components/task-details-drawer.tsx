@@ -3,7 +3,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { X, Save, Copy, Trash2, CheckCircle, AlertCircle } from "lucide-react";
 import { type Assignment, type Person, type Task, type User } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { applyAssignmentDelete, applyAssignmentUpsert } from "@/lib/assignment-cache";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,12 +45,13 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<Assignment>) => {
       if (!assignment) return;
-      const res = await apiRequest("PATCH", `/api/assignments/${assignment.id}`, data);
-      return res.json();
+      return apiRequest("PATCH", `/api/assignments/${assignment.id}`, data);
     },
-    onSuccess: (updatedAssignment: Assignment) => {
+    onSuccess: () => {
       if (assignment) {
-        applyAssignmentUpsert(queryClient, updatedAssignment, assignment.weekStartDate);
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+        });
       }
       toast({
         title: "Assignment updated",
@@ -76,7 +76,9 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
     },
     onSuccess: () => {
       if (assignment) {
-        applyAssignmentDelete(queryClient, assignment.id, assignment.weekStartDate);
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+        });
       }
       toast({
         title: "Assignment deleted",
@@ -138,7 +140,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   return (
     <div
       className={cn(
-        "fixed inset-y-0 right-0 w-full max-w-[28rem] bg-card border-l shadow-xl transform transition-transform duration-300 z-50",
+        "fixed inset-y-0 right-0 w-96 bg-card border-l shadow-xl transform transition-transform duration-300 z-50",
         open ? "translate-x-0" : "translate-x-full"
       )}
       data-testid="drawer-task-details"
@@ -223,11 +225,33 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
                     
                     try {
                       setIsGeneratingBatchId(true);
-                      const res = await apiRequest("GET", `/api/assignments/next-batch-id?taskId=${encodeURIComponent(task.id)}`);
-                      const { batchId } = await res.json();
-                      if (!batchId) throw new Error("No batch ID returned");
+                      const res = await apiRequest("GET", "/api/assignments");
+                      const allAssignments: Assignment[] = await res.json();
+                      
+                      // Extract 4-letter prefix
+                      const words = task.name.trim().split(/\s+/);
+                      let prefix = "";
+                      if (words.length >= 2) {
+                        prefix = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
+                      } else {
+                        prefix = words[0].substring(0, 4).toUpperCase();
+                      }
+                      
+                      if (!prefix) return;
 
-                      setBatchNumber(batchId);
+                      const sequenceNumbers = allAssignments
+                        .filter(a => a.batchNumber?.startsWith(`${prefix}-`))
+                        .map(a => {
+                          const parts = a.batchNumber?.split("-") || [];
+                          const lastPart = parts[parts.length - 1];
+                          return parseInt(lastPart, 10);
+                        })
+                        .filter(n => !isNaN(n));
+                      
+                      const nextSeq = sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) + 1 : 1;
+                      const newBatchId = `${prefix}-${String(nextSeq).padStart(3, '0')}`;
+                      
+                      setBatchNumber(newBatchId);
                     } catch (e) {
                       toast({
                         title: "Error",
@@ -311,7 +335,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
           </div>
         </div>
 
-        <div className="border-t flex flex-wrap items-center justify-between gap-2 px-4 py-2 shrink-0">
+        <div className="h-14 border-t flex items-center justify-between gap-2 px-4 shrink-0">
           <Button
             variant="outline"
             onClick={handleDelete}
@@ -321,7 +345,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
             <Trash2 className="w-4 h-4" />
             <span>Delete</span>
           </Button>
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex gap-2">
             <Button
               variant="outline"
               onClick={() => setShowDuplicateDialog(true)}

@@ -1,11 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-let clientIdentifier: string | null = null;
-
-export function setClientIdentifier(identifier: string) {
-  clientIdentifier = identifier;
-}
-
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -18,27 +12,10 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const isMutationMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
-  const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
-
-  if (isMutationMethod && clientIdentifier) {
-    headers["X-Client-Id"] = clientIdentifier;
-  }
-
-  const bodyPayload =
-    isMutationMethod &&
-    clientIdentifier &&
-    data &&
-    typeof data === "object" &&
-    !Array.isArray(data) &&
-    !(data instanceof FormData)
-      ? { ...(data as Record<string, unknown>), originClientId: (data as Record<string, unknown>).originClientId ?? clientIdentifier }
-      : data;
-
   const res = await fetch(url, {
     method,
-    headers,
-    body: bodyPayload ? JSON.stringify(bodyPayload) : undefined,
+    headers: data ? { "Content-Type": "application/json" } : {},
+    body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
 

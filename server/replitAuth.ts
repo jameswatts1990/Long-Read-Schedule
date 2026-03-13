@@ -8,41 +8,6 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage, pool } from "./storage";
 
-const AUTH_STRATEGY_NAME = "replitauth";
-
-function getCanonicalAuthOrigin(): URL {
-  const rawOrigin = process.env.AUTH_PUBLIC_ORIGIN ?? process.env.REPLIT_APP_URL;
-  if (!rawOrigin) {
-    throw new Error(
-      "Missing AUTH_PUBLIC_ORIGIN (or REPLIT_APP_URL fallback) for canonical auth origin"
-    );
-  }
-
-  return new URL(rawOrigin);
-}
-
-function getRecognizedAuthHostnames(canonicalOrigin: URL): Set<string> {
-  const hostnames = new Set([canonicalOrigin.hostname]);
-  const rawHostnames = process.env.AUTH_ALLOWED_HOSTNAMES;
-
-  if (!rawHostnames) {
-    return hostnames;
-  }
-
-  for (const hostname of rawHostnames.split(",").map((value) => value.trim().toLowerCase())) {
-    if (hostname) {
-      hostnames.add(hostname);
-    }
-  }
-
-  return hostnames;
-}
-
-function getStrategyCount(): number {
-  const strategies = (passport as any)._strategies ?? {};
-  return Object.keys(strategies).length;
-}
-
 const getOidcConfig = memoize(
   async () => {
     return await client.discovery(
@@ -78,10 +43,6 @@ export function getSession() {
     },
   });
 }
-
-export const sessionMiddleware = getSession();
-export const passportInitializeMiddleware = passport.initialize();
-export const passportSessionMiddleware = passport.session();
 
 function updateUserSession(
   user: any,
@@ -143,13 +104,11 @@ async function upsertUser(
 
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
-  app.use(sessionMiddleware);
-  app.use(passportInitializeMiddleware);
-  app.use(passportSessionMiddleware);
+  app.use(getSession());
+  app.use(passport.initialize());
+  app.use(passport.session());
 
   const config = await getOidcConfig();
-  const canonicalOrigin = getCanonicalAuthOrigin();
-  const recognizedHostnames = getRecognizedAuthHostnames(canonicalOrigin);
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
@@ -166,38 +125,24 @@ export async function setupAuth(app: Express) {
     }
   };
 
-  const strategy = new Strategy(
-    {
-      name: AUTH_STRATEGY_NAME,
-      config,
-      scope: "openid email profile offline_access",
-      callbackURL: new URL("/api/callback", canonicalOrigin).toString(),
-    },
-    verify,
-  );
-  passport.use(strategy);
+  // Keep track of registered strategies
+  const registeredStrategies = new Set<string>();
 
-  const expectedStrategyCount = getStrategyCount();
-
-  const validateRequestHostname = (hostname: string): boolean => {
-    const normalizedHostname = hostname.toLowerCase();
-    const isRecognized = recognizedHostnames.has(normalizedHostname);
-    if (!isRecognized) {
-      console.warn(
-        `[auth] Rejected auth request for unrecognized hostname: ${hostname}. ` +
-          `Expected one of: ${Array.from(recognizedHostnames).join(", ")}`
+  // Helper function to ensure strategy exists for a domain
+  const ensureStrategy = (domain: string) => {
+    const strategyName = `replitauth:${domain}`;
+    if (!registeredStrategies.has(strategyName)) {
+      const strategy = new Strategy(
+        {
+          name: strategyName,
+          config,
+          scope: "openid email profile offline_access",
+          callbackURL: `https://${domain}/api/callback`,
+        },
+        verify,
       );
-    }
-    return isRecognized;
-  };
-
-  const assertStrategyCount = () => {
-    const strategyCount = getStrategyCount();
-    if (strategyCount !== expectedStrategyCount) {
-      console.error(
-        `[auth] Strategy count changed unexpectedly: expected ${expectedStrategyCount}, got ${strategyCount}`
-      );
-      throw new Error("Auth strategy count changed unexpectedly");
+      passport.use(strategy);
+      registeredStrategies.add(strategyName);
     }
   };
 
@@ -205,24 +150,16 @@ export async function setupAuth(app: Express) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    if (!validateRequestHostname(req.hostname)) {
-      return res.status(400).json({ message: "Invalid authentication host" });
-    }
-    assertStrategyCount();
-
-    passport.authenticate(AUTH_STRATEGY_NAME, {
+    ensureStrategy(req.hostname);
+    passport.authenticate(`replitauth:${req.hostname}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    if (!validateRequestHostname(req.hostname)) {
-      return res.status(400).json({ message: "Invalid authentication host" });
-    }
-    assertStrategyCount();
-
-    passport.authenticate(AUTH_STRATEGY_NAME, {
+    ensureStrategy(req.hostname);
+    passport.authenticate(`replitauth:${req.hostname}`, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
       failureFlash: true,
@@ -234,7 +171,7 @@ export async function setupAuth(app: Express) {
       res.redirect(
         client.buildEndSessionUrl(config, {
           client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: canonicalOrigin.toString(),
+          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
         }).href
       );
     });
@@ -269,21 +206,3 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return;
   }
 };
-
-export function getAuthDiagnostics() {
-  const strategies = (passport as any)._strategies as Record<string, unknown> | undefined;
-  if (!strategies) {
-    return {
-      strategyCount: null,
-      replitStrategyCount: null,
-    };
-  }
-
-  const strategyNames = Object.keys(strategies);
-  const replitStrategyCount = strategyNames.filter((name) => name.startsWith("replitauth:")).length;
-
-  return {
-    strategyCount: strategyNames.length,
-    replitStrategyCount,
-  };
-}
