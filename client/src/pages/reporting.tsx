@@ -20,7 +20,7 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, subMonths } from "date-fns";
+import { format, parseISO, subMonths } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -120,14 +120,9 @@ export default function Reporting() {
   // Get sorted unique weeks
   const weeks = useMemo(() => Object.keys(assignmentsByWeek).sort(), [assignmentsByWeek]);
 
-  // Format date for display (e.g., "Dec 01, 2024")
+  // Format week date deterministically from API yyyy-MM-dd values.
   const formatWeekDate = (dateStr: string): string => {
-    const date = new Date(dateStr + "T00:00:00Z");
-    return date.toLocaleDateString("en-US", { 
-      month: "short", 
-      day: "2-digit", 
-      year: "numeric" 
-    });
+    return format(parseISO(`${dateStr}T00:00:00Z`), "MMM dd, yyyy");
   };
 
   // Prepare chart data
