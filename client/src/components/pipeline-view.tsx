@@ -1,5 +1,8 @@
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { addDays } from "date-fns";
+import { Eye, EyeOff } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 interface PipelineViewProps {
   weekStartDate: string;
@@ -34,7 +37,13 @@ export function PipelineView({
   onAssignmentClick,
   isCompactView,
 }: PipelineViewProps) {
+  const [hideEmptyRows, setHideEmptyRows] = useState(false);
   const pipelineTasks = tasks.filter((t) => t.showInPipelineView);
+
+  const visiblePipelineTasks = useMemo(() => {
+    if (!hideEmptyRows) return pipelineTasks;
+    return pipelineTasks.filter((task) => assignments.some((a) => a.taskId === task.id));
+  }, [assignments, hideEmptyRows, pipelineTasks]);
 
   const weekStart = new Date(weekStartDate + "T00:00:00");
 
@@ -63,8 +72,20 @@ export function PipelineView({
         }}
       >
         {/* Header row */}
-        <div className="sticky left-0 z-20 bg-background border-b border-r flex items-center px-3 py-2">
+        <div className="sticky left-0 z-20 bg-background border-b border-r flex items-center justify-between gap-2 px-3 py-2">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pipeline</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground"
+            onClick={() => setHideEmptyRows((current) => !current)}
+            aria-label={hideEmptyRows ? "Show empty pipeline rows" : "Hide empty pipeline rows"}
+            title={hideEmptyRows ? "Show empty rows" : "Hide empty rows"}
+            data-testid="pipeline-hide-empty-toggle"
+          >
+            {hideEmptyRows ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
         </div>
         {DAYS.map((day, idx) => (
           <div
@@ -79,8 +100,8 @@ export function PipelineView({
         ))}
 
         {/* Task rows */}
-        {pipelineTasks.map((task) => (
-          <>
+        {visiblePipelineTasks.map((task) => (
+          <div key={task.id} className="contents">
             {/* Task name cell */}
             <div
               key={`task-${task.id}`}
@@ -137,7 +158,7 @@ export function PipelineView({
                 </div>
               );
             })}
-          </>
+          </div>
         ))}
       </div>
     </div>
