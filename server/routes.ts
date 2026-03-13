@@ -260,7 +260,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertPersonSchema.parse({ ...req.body, workspaceId: req.workspaceId });
       const person = await storage.createPerson(data);
-      broadcastUpdate("people", req.workspaceId);
+      broadcastUpdate("people", req.workspaceId, { action: "create", record: person });
       res.json(person);
     } catch (error) {
       res.status(400).json({ error: "Invalid person data" });
@@ -271,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertPersonSchema.partial().parse(req.body);
       const person = await storage.updatePerson(req.params.id, data);
-      broadcastUpdate("people", req.workspaceId);
+      broadcastUpdate("people", req.workspaceId, { action: "update", record: person });
       res.json(person);
     } catch (error) {
       res.status(400).json({ error: "Invalid person data" });
@@ -281,7 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/people/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       await storage.deletePerson(req.params.id);
-      broadcastUpdate("people", req.workspaceId);
+      broadcastUpdate("people", req.workspaceId, { action: "delete", record: { id: req.params.id } });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete person" });
@@ -303,7 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/people/:id/toggle-excluded", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const person = await storage.togglePersonExcluded(req.params.id);
-      broadcastUpdate("people", req.workspaceId);
+      broadcastUpdate("people", req.workspaceId, { action: "update", record: person });
       res.json(person);
     } catch (error) {
       res.status(500).json({ error: "Failed to toggle excluded status" });
@@ -326,7 +326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const person = await storage.updatePerson(personId, { userId });
-      broadcastUpdate("people", req.workspaceId);
+      broadcastUpdate("people", req.workspaceId, { action: "update", record: person });
       res.json(person);
     } catch (error) {
       console.error("Link user error:", error);
@@ -349,7 +349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertTaskSchema.parse({ ...req.body, workspaceId: req.workspaceId });
       const task = await storage.createTask(data);
-      broadcastUpdate("tasks", req.workspaceId);
+      broadcastUpdate("tasks", req.workspaceId, { action: "create", record: task });
       res.json(task);
     } catch (error) {
       res.status(400).json({ error: "Invalid task data" });
@@ -360,7 +360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertTaskSchema.partial().parse(req.body);
       const task = await storage.updateTask(req.params.id, data);
-      broadcastUpdate("tasks", req.workspaceId);
+      broadcastUpdate("tasks", req.workspaceId, { action: "update", record: task });
       res.json(task);
     } catch (error) {
       res.status(400).json({ error: "Invalid task data" });
@@ -370,7 +370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/tasks/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       await storage.deleteTask(req.params.id);
-      broadcastUpdate("tasks", req.workspaceId);
+      broadcastUpdate("tasks", req.workspaceId, { action: "delete", record: { id: req.params.id } });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete task" });
@@ -499,7 +499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertPremadeFilterSchema.parse({ ...req.body, workspaceId: req.workspaceId });
       const filter = await storage.createPremadeFilter(data);
-      broadcastUpdate("premade-filters", req.workspaceId);
+      broadcastUpdate("premade-filters", req.workspaceId, { action: "create", record: filter });
       res.json(filter);
     } catch (error) {
       res.status(400).json({ error: "Invalid filter data" });
@@ -509,7 +509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/premade-filters/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const filter = await storage.updatePremadeFilter(req.params.id, req.body);
-      broadcastUpdate("premade-filters", req.workspaceId);
+      broadcastUpdate("premade-filters", req.workspaceId, { action: "update", record: filter });
       res.json(filter);
     } catch (error) {
       res.status(400).json({ error: "Failed to update premade filter" });
@@ -519,7 +519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/premade-filters/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       await storage.deletePremadeFilter(req.params.id);
-      broadcastUpdate("premade-filters", req.workspaceId);
+      broadcastUpdate("premade-filters", req.workspaceId, { action: "delete", record: { id: req.params.id } });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete premade filter" });
