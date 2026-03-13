@@ -210,3 +210,21 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return;
   }
 };
+
+export function getAuthDiagnostics() {
+  const strategies = (passport as any)._strategies as Record<string, unknown> | undefined;
+  if (!strategies) {
+    return {
+      strategyCount: null,
+      replitStrategyCount: null,
+    };
+  }
+
+  const strategyNames = Object.keys(strategies);
+  const replitStrategyCount = strategyNames.filter((name) => name.startsWith("replitauth:")).length;
+
+  return {
+    strategyCount: strategyNames.length,
+    replitStrategyCount,
+  };
+}

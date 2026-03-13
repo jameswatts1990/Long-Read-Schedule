@@ -144,6 +144,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  (httpServer as Server & { socketServer?: SocketServer }).socketServer = io;
+
   io.on("connection", (socket) => {
     const workspaceId = socket.data.workspaceId as string | undefined;
     if (!workspaceId) {
