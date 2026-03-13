@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
 
 export function useAuth() {
   const { toast } = useToast();
@@ -28,16 +27,11 @@ export function useAuth() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  // Periodic polling only when authenticated
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    
-    const interval = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-    }, 5 * 60 * 1000); // Check every 5 minutes
-
-    return () => clearInterval(interval);
-  }, [isAuthenticated]);
+  // No polling needed — session expiry is detected reactively via the 401
+  // handler in queryClient.ts (apiRequest / getQueryFn both call
+  // setQueryData(["/api/auth/user"], null) on any 401 response).
+  // A setInterval here was firing 2 DB queries every 5 minutes per open tab
+  // for zero benefit.
 
   return {
     user,

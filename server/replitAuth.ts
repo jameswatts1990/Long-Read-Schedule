@@ -6,7 +6,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
-import { storage } from "./storage";
+import { storage, pool } from "./storage";
 
 const getOidcConfig = memoize(
   async () => {
@@ -21,17 +21,15 @@ const getOidcConfig = memoize(
 export function getSession() {
   const sessionTtl = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
   const pgStore = connectPg(session);
+  // Share the same Neon pool that Drizzle uses — avoids a second independent
+  // WebSocket cluster to the database just for session reads/writes.
   const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
+    pool: pool as unknown as import("pg").Pool,
     createTableIfMissing: false,
     ttl: sessionTtl,
     tableName: "sessions",
-    // Fix 1: prune expired sessions once per day instead of every 15 minutes.
-    // Default is 900 s (15 min) which runs a DELETE query around the clock.
-    pruneSessionInterval: 24 * 60 * 60, // 86400 s = once per day
-    // Fix 3: stop re-writing the session row on every request just to extend TTL.
-    // Sessions last 30 days; touching on every request adds ~1 pointless DB write per API call.
-    disableTouch: true,
+    pruneSessionInterval: 24 * 60 * 60, // once per day, not every 15 min
+    disableTouch: true,                  // no TTL-refresh write on every request
   });
   return session({
     secret: process.env.SESSION_SECRET!,
