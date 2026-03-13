@@ -8,6 +8,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import type { Assignment, Person, PremadeFilter, Task } from "@shared/schema";
+import { applyAssignmentDelete, applyAssignmentUpsert, isAssignmentQuery } from "@/lib/assignment-cache";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
@@ -16,12 +17,6 @@ import MyDay from "@/pages/my-day";
 import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import NotFound from "@/pages/not-found";
-
-// Predicate that matches any cached query whose key starts with "/api/assignments"
-const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
-  const k = query.queryKey[0];
-  return typeof k === "string" && k.startsWith("/api/assignments");
-};
 
 function useRealTimeUpdates(workspaceId: string | null) {
   const socketRef = useRef<Socket | null>(null);
@@ -33,22 +28,9 @@ function useRealTimeUpdates(workspaceId: string | null) {
       const assignmentRecord = record as Assignment;
 
       if ((action === "create" || action === "update") && assignmentRecord?.weekStartDate) {
-        // Fix Issues 1 & 2: update the specific week's cache directly — zero HTTP requests
-        const weekKey = `/api/assignments?weekStartDate=${assignmentRecord.weekStartDate}`;
-        queryClient.setQueryData<Assignment[]>([weekKey], (old) => {
-          if (!old) return old; // week not in cache — nothing to update
-          if (action === "create") {
-            // Guard against duplicate (creator already has it via their own mutation)
-            return old.some((a) => a.id === assignmentRecord.id) ? old : [...old, assignmentRecord];
-          }
-          return old.map((a) => (a.id === assignmentRecord.id ? assignmentRecord : a));
-        });
+        applyAssignmentUpsert(queryClient, assignmentRecord);
       } else if (action === "delete" && record?.id) {
-        // Remove from every cached assignment list (week view, month view, reporting)
-        queryClient.setQueriesData<Assignment[]>(
-          { predicate: isAssignmentQuery },
-          (old) => (old ? old.filter((a) => a.id !== record.id) : old),
-        );
+        applyAssignmentDelete(queryClient, record.id, (record as Assignment | undefined)?.weekStartDate);
       } else {
         // Fallback for reorder-cell and any future ops: predicate invalidation
         // Fixes Issue 2: catches all compound query keys like "?weekStartDate=..."

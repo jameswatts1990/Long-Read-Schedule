@@ -6,6 +6,7 @@ import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, Calen
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { applyAssignmentDelete, applyAssignmentUpsert, isAssignmentQuery } from "@/lib/assignment-cache";
 import { useToast } from "@/hooks/use-toast";
 import { parse, addDays, format, isToday, isSameDay, startOfWeek, endOfWeek } from "date-fns";
 
@@ -85,10 +86,9 @@ export function WeeklyCalendar({
       });
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-      });
+    onSuccess: (updatedAssignment: Assignment) => {
+      const previousWeekStartDate = draggedAssignment?.weekStartDate;
+      applyAssignmentUpsert(queryClient, updatedAssignment, previousWeekStartDate);
       toast({
         title: "Task moved",
         description: "Assignment updated successfully",
@@ -115,9 +115,8 @@ export function WeeklyCalendar({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-      });
+      // Reorder impact can span more than a single row ordering projection.
+      queryClient.invalidateQueries({ predicate: isAssignmentQuery });
     },
     onError: (error) => {
       console.error("Reorder failed:", error);
@@ -130,13 +129,11 @@ export function WeeklyCalendar({
   });
 
   const deleteAssignmentMutation = useMutation({
-    mutationFn: async (assignmentId: string) => {
-      return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
+    mutationFn: async (assignment: Assignment) => {
+      return apiRequest("DELETE", `/api/assignments/${assignment.id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-      });
+    onSuccess: (_data, deletedAssignment) => {
+      applyAssignmentDelete(queryClient, deletedAssignment.id, deletedAssignment.weekStartDate);
       toast({
         title: "Task deleted",
         description: "Assignment has been removed",
@@ -347,7 +344,7 @@ export function WeeklyCalendar({
                       onDragLeave={() => setDeleteDragTarget(null)}
                       onDrop={() => {
                         if (draggedAssignment) {
-                          deleteAssignmentMutation.mutate(draggedAssignment.id);
+                          deleteAssignmentMutation.mutate(draggedAssignment);
                         }
                         setDeleteDragTarget(null);
                         setDraggedAssignment(null);

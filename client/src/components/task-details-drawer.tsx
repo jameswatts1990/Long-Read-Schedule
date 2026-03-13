@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { X, Save, Copy, Trash2, CheckCircle, AlertCircle } from "lucide-react";
 import { type Assignment, type Person, type Task, type User } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { applyAssignmentDelete, applyAssignmentUpsert } from "@/lib/assignment-cache";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,13 +46,12 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<Assignment>) => {
       if (!assignment) return;
-      return apiRequest("PATCH", `/api/assignments/${assignment.id}`, data);
+      const res = await apiRequest("PATCH", `/api/assignments/${assignment.id}`, data);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedAssignment: Assignment) => {
       if (assignment) {
-        queryClient.invalidateQueries({ predicate: (query) => 
-          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-        });
+        applyAssignmentUpsert(queryClient, updatedAssignment, assignment.weekStartDate);
       }
       toast({
         title: "Assignment updated",
@@ -76,9 +76,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
     },
     onSuccess: () => {
       if (assignment) {
-        queryClient.invalidateQueries({ predicate: (query) => 
-          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-        });
+        applyAssignmentDelete(queryClient, assignment.id, assignment.weekStartDate);
       }
       toast({
         title: "Assignment deleted",

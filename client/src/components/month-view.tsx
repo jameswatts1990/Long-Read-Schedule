@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { applyAssignmentDelete, applyAssignmentUpsert } from "@/lib/assignment-cache";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useMemo } from "react";
 import { parse, addDays, format, isToday } from "date-fns";
@@ -66,10 +67,9 @@ export function MonthView({
       });
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-      });
+    onSuccess: (updatedAssignment: Assignment) => {
+      const previousWeekStartDate = draggedAssignment?.weekStartDate;
+      applyAssignmentUpsert(queryClient, updatedAssignment, previousWeekStartDate);
       toast({ title: "Task moved", description: "Assignment updated successfully" });
     },
     onError: () => {
@@ -78,13 +78,11 @@ export function MonthView({
   });
 
   const deleteAssignmentMutation = useMutation({
-    mutationFn: async (assignmentId: string) => {
-      return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
+    mutationFn: async (assignment: Assignment) => {
+      return apiRequest("DELETE", `/api/assignments/${assignment.id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-      });
+    onSuccess: (_data, deletedAssignment) => {
+      applyAssignmentDelete(queryClient, deletedAssignment.id, deletedAssignment.weekStartDate);
       toast({ title: "Task deleted", description: "Assignment has been removed" });
     },
     onError: () => {
@@ -191,7 +189,7 @@ export function MonthView({
                 onDragLeave={() => setDeleteDragTarget(null)}
                 onDrop={() => {
                   if (draggedAssignment) {
-                    deleteAssignmentMutation.mutate(draggedAssignment.id);
+                    deleteAssignmentMutation.mutate(draggedAssignment);
                   }
                   setDeleteDragTarget(null);
                   setDraggedAssignment(null);
