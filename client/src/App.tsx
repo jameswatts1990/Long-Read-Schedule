@@ -12,14 +12,13 @@ import {
   applyAssignmentDelete,
   applyAssignmentReorder,
   applyAssignmentUpsert,
-  isAssignmentQuery,
-  queryContainsDate,
 } from "@/lib/assignment-cache";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
 import ALReporting from "@/pages/al-reporting";
 import MyDay from "@/pages/my-day";
+import { assignmentKeys } from "@/lib/queryKeys";
 import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import NotFound from "@/pages/not-found";
@@ -64,11 +63,9 @@ function useRealTimeUpdates(workspaceId: string | null, clientId: string) {
       } else if (action === "delete" && record?.id) {
         applyAssignmentDelete(queryClient, record.id, (record as Assignment | undefined)?.weekStartDate);
       } else if (weekStartDate) {
-        queryClient.invalidateQueries({
-          predicate: (query) => isAssignmentQuery(query) && queryContainsDate(query.queryKey, weekStartDate),
-        });
+        queryClient.invalidateQueries({ queryKey: assignmentKeys.week(weekStartDate) });
       } else {
-        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
+        queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
       }
     } else if (type === "people") {
       if ((action === "create" || action === "update") && record?.id) {
@@ -174,14 +171,14 @@ function useRealTimeUpdates(workspaceId: string | null, clientId: string) {
 
     const refreshOnVisible = async (mode: "targeted" | "full") => {
       if (mode === "targeted") {
-        await queryClient.refetchQueries({ predicate: isAssignmentQuery, type: "active" });
+        await queryClient.refetchQueries({ queryKey: assignmentKeys.all, type: "active" });
         await queryClient.refetchQueries({ queryKey: ["/api/people"], type: "active" });
         await queryClient.refetchQueries({ queryKey: ["/api/tasks"], type: "active" });
         await queryClient.refetchQueries({ queryKey: ["/api/premade-filters"], type: "active" });
         return;
       }
 
-      queryClient.invalidateQueries({ predicate: isAssignmentQuery });
+      queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });

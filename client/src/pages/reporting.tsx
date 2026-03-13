@@ -24,6 +24,7 @@ import { format, parseISO, subMonths } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { assignmentKeys } from "@/lib/queryKeys";
 
 export default function Reporting() {
   const { activeWorkspace } = useWorkspace();
@@ -42,14 +43,20 @@ export default function Reporting() {
   const effectiveTo = dateRange.to ?? defaultTo;
   const startDate = format(effectiveFrom, "yyyy-MM-dd");
   const endDate = format(effectiveTo, "yyyy-MM-dd");
-  const assignmentQueryKey = `/api/assignments?startDate=${startDate}&endDate=${endDate}`;
 
   const {
     data: assignments = [],
     isLoading: isAssignmentsLoading,
     error: assignmentsError,
     refetch: refetchAssignments,
-  } = useQuery<Assignment[]>({ queryKey: [assignmentQueryKey] });
+  } = useQuery<Assignment[]>({
+    queryKey: assignmentKeys.range(startDate, endDate),
+    queryFn: async () => {
+      const res = await fetch(`/api/assignments?startDate=${startDate}&endDate=${endDate}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch assignments");
+      return res.json();
+    },
+  });
   const {
     data: allTasks = [],
     isLoading: isTasksLoading,

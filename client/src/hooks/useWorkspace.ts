@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { assignmentKeys } from "@/lib/queryKeys";
 import type { Workspace } from "@shared/schema";
 
 export function useWorkspace() {
@@ -25,7 +26,7 @@ export function useWorkspace() {
       queryClient.invalidateQueries({ queryKey: ["/api/my-workspaces"] });
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
       queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
     },
   });
