@@ -12,6 +12,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { getDiagnosticsSnapshot } from "./diagnostics";
 
 // Super-admin email list — these users can manage workspaces
 export const SUPER_ADMIN_EMAILS = new Set<string>([
@@ -120,6 +121,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(users);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.get("/api/admin/diagnostics/memory", isAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      res.json(getDiagnosticsSnapshot(true));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to collect diagnostics" });
     }
   });
 
