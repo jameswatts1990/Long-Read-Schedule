@@ -6,6 +6,7 @@ import { z } from "zod";
 import { CheckCircle, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { insertAssignmentSchema, type Task, type Assignment, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { applyAssignmentUpsert, isAssignmentQuery } from "@/lib/assignment-cache";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
@@ -216,10 +217,8 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-      });
+    onSuccess: (createdAssignment: Assignment) => {
+      applyAssignmentUpsert(queryClient, createdAssignment);
       toast({
         title: "Assignment created",
         description: "Task assigned successfully",
@@ -341,9 +340,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           }
         }
         
-        queryClient.invalidateQueries({ predicate: (query) => 
-          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-        });
+        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
         toast({
           title: "Recurring assignments created",
           description: `Created ${allDates.length} assignment(s)`,
@@ -381,9 +378,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
       try {
         await Promise.all(promises);
-        queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-      });
+        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
         toast({
           title: "Assignments created",
           description: `Task assigned to ${daysArray.length} day(s)`,
@@ -430,9 +425,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
     try {
       await Promise.all(promises);
-      queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-      });
+      queryClient.invalidateQueries({ predicate: isAssignmentQuery });
       toast({
         title: "Assignments created",
         description: `Task assigned to all 5 days`,
