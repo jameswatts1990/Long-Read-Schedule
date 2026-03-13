@@ -37,12 +37,12 @@ export default function Reporting() {
     to: defaultTo,
   });
 
-  // Build query key from date range — server handles the date filtering
-  const startDate = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : "";
-  const endDate = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : "";
-  const assignmentQueryKey = startDate && endDate
-    ? `/api/assignments?startDate=${startDate}&endDate=${endDate}`
-    : "/api/assignments";
+  // Keep reporting scoped to a sensible default window, even while a range is being edited.
+  const effectiveFrom = dateRange.from ?? defaultFrom;
+  const effectiveTo = dateRange.to ?? defaultTo;
+  const startDate = format(effectiveFrom, "yyyy-MM-dd");
+  const endDate = format(effectiveTo, "yyyy-MM-dd");
+  const assignmentQueryKey = `/api/assignments?startDate=${startDate}&endDate=${endDate}`;
 
   const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: [assignmentQueryKey] });
   const { data: allTasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -218,12 +218,12 @@ export default function Reporting() {
                   mode="range"
                   defaultMonth={dateRange.from}
                   selected={{ from: dateRange.from, to: dateRange.to }}
-                  onSelect={(range: any) => setDateRange(range || { from: undefined, to: undefined })}
+                  onSelect={(range: any) => setDateRange(range || { from: defaultFrom, to: defaultTo })}
                   numberOfMonths={2}
                   weekStartsOn={1}
                 />
                 <div className="p-3 border-t flex justify-end">
-                  <Button variant="ghost" size="sm" onClick={() => setDateRange({ from: undefined, to: undefined })}>
+                  <Button variant="ghost" size="sm" onClick={() => setDateRange({ from: defaultFrom, to: defaultTo })}>
                     Reset
                   </Button>
                 </div>
