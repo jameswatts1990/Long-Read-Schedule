@@ -26,6 +26,41 @@ const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
 function useRealTimeUpdates(workspaceId: string | null) {
   const socketRef = useRef<Socket | null>(null);
 
+  const handleUpdate = (data: { type?: string; action?: string; record?: Assignment & { id: string; weekStartDate?: string } }) => {
+    const { type, action, record } = data ?? {};
+
+    if (type === "assignments") {
+      if ((action === "create" || action === "update") && record?.weekStartDate) {
+        // Fix Issues 1 & 2: update the specific week's cache directly — zero HTTP requests
+        const weekKey = `/api/assignments?weekStartDate=${record.weekStartDate}`;
+        queryClient.setQueryData<Assignment[]>([weekKey], (old) => {
+          if (!old) return old; // week not in cache — nothing to update
+          if (action === "create") {
+            // Guard against duplicate (creator already has it via their own mutation)
+            return old.some((a) => a.id === record.id) ? old : [...old, record];
+          }
+          return old.map((a) => (a.id === record.id ? record : a));
+        });
+      } else if (action === "delete" && record?.id) {
+        // Remove from every cached assignment list (week view, month view, reporting)
+        queryClient.setQueriesData<Assignment[]>(
+          { predicate: isAssignmentQuery },
+          (old) => (old ? old.filter((a) => a.id !== record.id) : old),
+        );
+      } else {
+        // Fallback for reorder-cell and any future ops: predicate invalidation
+        // Fixes Issue 2: catches all compound query keys like "?weekStartDate=..."
+        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
+      }
+    } else if (type === "people") {
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+    } else if (type === "tasks") {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+    } else if (type === "premade-filters") {
+      queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+    }
+  };
+
   useEffect(() => {
     if (socketRef.current) {
       socketRef.current.disconnect();
@@ -36,51 +71,51 @@ function useRealTimeUpdates(workspaceId: string | null) {
     // unauthenticated visitors, or users who haven't picked a workspace yet)
     if (!workspaceId) return;
 
-    const socket = io({
-      path: "/socket.io",
-      transports: ["websocket"],
-      query: { workspaceId },
-    });
+    const connect = () => {
+      if (socketRef.current?.connected) return; // already live
 
-    socket.on("update", (data: { type?: string; action?: string; record?: Assignment & { id: string; weekStartDate?: string } }) => {
-      const { type, action, record } = data ?? {};
+      const socket = io({
+        path: "/socket.io",
+        transports: ["websocket"],
+        query: { workspaceId },
+      });
 
-      if (type === "assignments") {
-        if ((action === "create" || action === "update") && record?.weekStartDate) {
-          // Fix Issues 1 & 2: update the specific week's cache directly — zero HTTP requests
-          const weekKey = `/api/assignments?weekStartDate=${record.weekStartDate}`;
-          queryClient.setQueryData<Assignment[]>([weekKey], (old) => {
-            if (!old) return old; // week not in cache — nothing to update
-            if (action === "create") {
-              // Guard against duplicate (creator already has it via their own mutation)
-              return old.some((a) => a.id === record.id) ? old : [...old, record];
-            }
-            return old.map((a) => (a.id === record.id ? record : a));
-          });
-        } else if (action === "delete" && record?.id) {
-          // Remove from every cached assignment list (week view, month view, reporting)
-          queryClient.setQueriesData<Assignment[]>(
-            { predicate: isAssignmentQuery },
-            (old) => (old ? old.filter((a) => a.id !== record.id) : old),
-          );
-        } else {
-          // Fallback for reorder-cell and any future ops: predicate invalidation
-          // Fixes Issue 2: catches all compound query keys like "?weekStartDate=..."
-          queryClient.invalidateQueries({ predicate: isAssignmentQuery });
-        }
-      } else if (type === "people") {
+      socket.on("update", handleUpdate);
+      socketRef.current = socket;
+    };
+
+    const disconnect = () => {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
+
+    // Fix 4: pause the socket while the tab is hidden so the server stops
+    // sending heartbeats to a screen nobody is looking at. Reconnect the
+    // moment the tab becomes visible again (and refetch stale data so the
+    // user sees fresh content immediately).
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        disconnect();
+      } else {
+        connect();
+        // Refresh everything that may have changed while the tab was away
+        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
         queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      } else if (type === "tasks") {
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      } else if (type === "premade-filters") {
         queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
       }
-    });
+    };
 
-    socketRef.current = socket;
+    // Only connect if the tab is currently visible
+    if (!document.hidden) {
+      connect();
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      socket.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      disconnect();
     };
   }, [workspaceId]);
 }

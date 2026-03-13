@@ -19,13 +19,19 @@ const getOidcConfig = memoize(
 );
 
 export function getSession() {
-  const sessionTtl = 30 * 24 * 60 * 60 * 1000; // 30 days
+  const sessionTtl = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
     createTableIfMissing: false,
     ttl: sessionTtl,
     tableName: "sessions",
+    // Fix 1: prune expired sessions once per day instead of every 15 minutes.
+    // Default is 900 s (15 min) which runs a DELETE query around the clock.
+    pruneSessionInterval: 24 * 60 * 60, // 86400 s = once per day
+    // Fix 3: stop re-writing the session row on every request just to extend TTL.
+    // Sessions last 30 days; touching on every request adds ~1 pointless DB write per API call.
+    disableTouch: true,
   });
   return session({
     secret: process.env.SESSION_SECRET!,

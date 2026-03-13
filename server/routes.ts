@@ -62,9 +62,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   const httpServer = createServer(app);
+  // Fix 2: increase heartbeat interval from the 25 s default to 60 s.
+  // Every open browser tab triggers a ping/pong cycle at the default rate —
+  // 60 s means 2.4× fewer server wake-ups for idle connections.
+  // pingTimeout raised to 30 s so a slow round-trip doesn't falsely evict connections.
   const io = new SocketServer(httpServer, {
     path: "/socket.io",
     cors: { origin: "*", methods: ["GET", "POST"] },
+    pingInterval: 60_000,
+    pingTimeout:  30_000,
   });
 
   io.on("connection", (socket) => {
