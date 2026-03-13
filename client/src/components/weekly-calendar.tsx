@@ -212,17 +212,19 @@ const CalendarDayCell = memo(function CalendarDayCell({
                                 )}
                               </div>
 
-                              <div className="rounded-md border bg-muted/30 p-2.5">
-                                <div className="flex items-start gap-2">
-                                  <FileText className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                                  <div>
-                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
-                                    <p className="text-sm leading-snug mt-0.5 whitespace-pre-wrap break-words">
-                                      {assignment.notes?.trim() || "No notes added for this task yet."}
-                                    </p>
+                              {assignment.notes?.trim() && (
+                                <div className="rounded-md border bg-muted/30 p-2.5">
+                                  <div className="flex items-start gap-2">
+                                    <FileText className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                                    <div>
+                                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
+                                      <p className="text-sm leading-snug mt-0.5 whitespace-pre-wrap break-words">
+                                        {assignment.notes.trim()}
+                                      </p>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           </TooltipContent>
                         </Tooltip>
