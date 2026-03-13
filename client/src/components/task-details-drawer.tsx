@@ -138,7 +138,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   return (
     <div
       className={cn(
-        "fixed inset-y-0 right-0 w-96 bg-card border-l shadow-xl transform transition-transform duration-300 z-50",
+        "fixed inset-y-0 right-0 w-full max-w-[28rem] bg-card border-l shadow-xl transform transition-transform duration-300 z-50",
         open ? "translate-x-0" : "translate-x-full"
       )}
       data-testid="drawer-task-details"
@@ -311,7 +311,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
           </div>
         </div>
 
-        <div className="h-14 border-t flex items-center justify-between gap-2 px-4 shrink-0">
+        <div className="border-t flex flex-wrap items-center justify-between gap-2 px-4 py-2 shrink-0">
           <Button
             variant="outline"
             onClick={handleDelete}
@@ -321,7 +321,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
             <Trash2 className="w-4 h-4" />
             <span>Delete</span>
           </Button>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => setShowDuplicateDialog(true)}
