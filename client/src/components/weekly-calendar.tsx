@@ -6,7 +6,7 @@ import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, Calen
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { applyAssignmentDelete, applyAssignmentUpsert, isAssignmentQuery } from "@/lib/assignment-cache";
+import { applyAssignmentDelete, applyAssignmentReorderCell, applyAssignmentUpsert } from "@/lib/assignment-cache";
 import { useToast } from "@/hooks/use-toast";
 import { parse, addDays, format, isToday, isSameDay, startOfWeek, endOfWeek } from "date-fns";
 
@@ -114,9 +114,13 @@ export function WeeklyCalendar({
       });
       return res.json();
     },
-    onSuccess: () => {
-      // Reorder impact can span more than a single row ordering projection.
-      queryClient.invalidateQueries({ predicate: isAssignmentQuery });
+    onSuccess: (_result, variables) => {
+      applyAssignmentReorderCell(queryClient, {
+        weekStartDate,
+        personId: variables.personId,
+        day: variables.day,
+        assignmentIds: variables.assignmentIds,
+      });
     },
     onError: (error) => {
       console.error("Reorder failed:", error);
