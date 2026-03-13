@@ -24,6 +24,13 @@ import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import NotFound from "@/pages/not-found";
 
+const WORKSPACE_REFRESH_CHANNEL = "workspace-refresh";
+const VISIBILITY_REFRESH_THRESHOLD_MS = 60_000;
+
+function getWorkspaceRefreshStorageKey(workspaceId: string) {
+  return `workspace-refresh:${workspaceId}`;
+}
+
 function useRealTimeUpdates(workspaceId: string | null, clientId: string) {
   const socketRef = useRef<Socket | null>(null);
   const missedEventsRef = useRef(false);
