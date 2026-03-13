@@ -212,6 +212,36 @@ DELETE /api/premade-filters/:id - Delete premade filter
 **Build & Deployment:**
 - Development: `npm run dev` - Runs Express server with Vite middleware
 - Build: `npm run build` - Bundles client (Vite) and server (esbuild)
-- Production start: `npm run start` - Runs bundled Express server serving static assets from `dist/public`
-- Production deploy command: `npm run build && npm run start`
+- Production: `npm start` - Runs bundled Express server serving static assets
 - Type checking: `npm run check` - TypeScript validation without emitting files
+## Runtime Memory Diagnostics
+
+To help isolate long-term memory growth in production-like runs, the Node server supports an optional periodic diagnostics logger.
+
+### Enable
+
+Set environment variables before starting the server:
+
+- `ENABLE_MEMORY_DIAGNOSTICS=true`
+- `MEMORY_DIAGNOSTICS_INTERVAL_MS=60000` (optional, defaults to 60000 ms)
+
+### Logged metrics
+
+Every interval, the server emits a structured JSON log entry with:
+
+- `process.memoryUsage()` fields: `rss`, `heapUsed`, `heapTotal`, `external`
+- Active runtime pressure: `activeHandlesCount`, `activeRequestsCount`
+- Dynamic auth strategy counts: `strategyCount`, `replitStrategyCount`
+- Socket.IO connection count: `connectionCount`
+
+All values are grouped under stable keys (`memoryBytes`, `runtime`, `auth`, `sockets`) so they can be graphed directly in log tooling.
+
+### 30–60 minute baseline comparison workflow
+
+1. Run the server with diagnostics enabled and no user traffic for 30–60 minutes.
+2. Capture/graph at least: `memoryBytes.rss`, `memoryBytes.heapUsed`, `runtime.activeHandlesCount`, and `sockets.connectionCount`.
+3. Apply your fix and repeat the same idle run window under the same environment settings.
+4. Compare the slopes/trends:
+   - Healthy baseline: values stabilize or oscillate in a narrow band.
+   - Leak signal: steady upward trend in `rss`/`heapUsed`, often mirrored by rising handles/requests/strategies/connections.
+5. Keep diagnostics disabled in normal operation by leaving `ENABLE_MEMORY_DIAGNOSTICS` unset (or set to anything other than `true`).
