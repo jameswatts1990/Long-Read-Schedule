@@ -2,12 +2,12 @@ import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle } from "lucide-react";
+import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, CalendarDays, FileText, Hash, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { parse, addDays, format, isToday, isSameDay } from "date-fns";
+import { parse, addDays, format, isToday, isSameDay, startOfWeek, endOfWeek } from "date-fns";
 
 import { Info } from "lucide-react";
 import {
@@ -188,6 +188,17 @@ export function WeeklyCalendar({
     const startDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
     const dayDate = addDays(startDate, dayIndex);
     return format(dayDate, "MMM d");
+  };
+
+  const getWeekRangeLabel = () => {
+    const startDate = startOfWeek(parse(weekStartDate, "yyyy-MM-dd", new Date()), { weekStartsOn: 1 });
+    const endDate = endOfWeek(startDate, { weekStartsOn: 1 });
+
+    if (format(startDate, "MMM") === format(endDate, "MMM")) {
+      return `${format(startDate, "MMM d")}–${format(endDate, "d")}`;
+    }
+
+    return `${format(startDate, "MMM d")}–${format(endDate, "MMM d")}`;
   };
 
   const getDateObjectForDay = (dayIndex: number) => {
@@ -460,30 +471,67 @@ export function WeeklyCalendar({
                                         <TooltipProvider>
                                           <Tooltip>
                                             <TooltipTrigger asChild>
-                                              <div className="p-0.5 hover:bg-black/10 rounded cursor-help">
-                                                <Info className="w-3 h-3 opacity-70" />
-                                              </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="p-3 max-w-xs">
-                                              <div className="space-y-2">
-                                                <div>
-                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
-                                                  <p className="text-sm font-medium">{assignment.customName || task.name}</p>
-                                                </div>
-                                                <div>
-                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>
-                                                  <p className="text-sm">{person.name}</p>
-                                                </div>
-                                                <div>
-                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Time Slot</p>
-                                                  <p className="text-sm">{day}, {getDateForDay(dayIndex)}</p>
-                                                </div>
-                                                {assignment.notes && (
-                                                  <div>
-                                                    <p className="text-xs font-bold text-muted-foreground uppercase">Notes</p>
-                                                    <p className="text-sm italic">{assignment.notes}</p>
-                                                  </div>
+                                              <button
+                                                type="button"
+                                                className={cn(
+                                                  "rounded-md border p-1 transition-colors cursor-help",
+                                                  isTaskDark
+                                                    ? "border-white/30 hover:bg-white/20"
+                                                    : "border-foreground/15 hover:bg-black/10"
                                                 )}
+                                                onClick={(e) => e.stopPropagation()}
+                                                aria-label={`View quick details for ${assignment.customName || task.name}`}
+                                              >
+                                                <Info className={cn("h-3.5 w-3.5", isTaskDark ? "text-white/90" : "text-foreground/80")} />
+                                              </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent
+                                              side="right"
+                                              align="start"
+                                              sideOffset={10}
+                                              className="max-w-sm rounded-xl p-4"
+                                            >
+                                              <div className="space-y-3">
+                                                <div>
+                                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Quick overview</p>
+                                                  <p className="text-sm font-semibold leading-tight mt-1">{assignment.customName || task.name}</p>
+                                                </div>
+
+                                                <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-2 text-sm">
+                                                  <span className="text-muted-foreground mt-0.5"><User className="h-3.5 w-3.5" /></span>
+                                                  <div>
+                                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assigned to</p>
+                                                    <p className="font-medium">{person.name}</p>
+                                                  </div>
+
+                                                  <span className="text-muted-foreground mt-0.5"><CalendarDays className="h-3.5 w-3.5" /></span>
+                                                  <div>
+                                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Time slot</p>
+                                                    <p>{day}, {getDateForDay(dayIndex)} <span className="text-muted-foreground">({getWeekRangeLabel()})</span></p>
+                                                  </div>
+
+                                                  {(assignment.batchNumber || assignment.batchSize) && (
+                                                    <>
+                                                      <span className="text-muted-foreground mt-0.5"><Hash className="h-3.5 w-3.5" /></span>
+                                                      <div>
+                                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Batch</p>
+                                                        <p className="font-mono">{assignment.batchNumber ? `#${assignment.batchNumber}` : "-"} {assignment.batchSize ? `(${assignment.batchSize})` : ""}</p>
+                                                      </div>
+                                                    </>
+                                                  )}
+                                                </div>
+
+                                                <div className="rounded-md border bg-muted/30 p-2.5">
+                                                  <div className="flex items-start gap-2">
+                                                    <FileText className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                                                    <div>
+                                                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
+                                                      <p className="text-sm leading-snug mt-0.5 whitespace-pre-wrap break-words">
+                                                        {assignment.notes?.trim() || "No notes added for this task yet."}
+                                                      </p>
+                                                    </div>
+                                                  </div>
+                                                </div>
                                               </div>
                                             </TooltipContent>
                                           </Tooltip>
