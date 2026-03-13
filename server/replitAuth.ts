@@ -44,6 +44,10 @@ export function getSession() {
   });
 }
 
+export const sessionMiddleware = getSession();
+export const passportInitializeMiddleware = passport.initialize();
+export const passportSessionMiddleware = passport.session();
+
 function updateUserSession(
   user: any,
   tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
@@ -104,9 +108,9 @@ async function upsertUser(
 
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
-  app.use(getSession());
-  app.use(passport.initialize());
-  app.use(passport.session());
+  app.use(sessionMiddleware);
+  app.use(passportInitializeMiddleware);
+  app.use(passportSessionMiddleware);
 
   const config = await getOidcConfig();
 
