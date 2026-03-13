@@ -132,6 +132,8 @@ const CalendarDayCell = memo(function CalendarDayCell({
 
           const isTaskDark = isDarkColor(task.color);
 
+          const hasNotes = Boolean(assignment.notes?.trim());
+
           return (
             <div
               key={assignment.id}
@@ -158,7 +160,7 @@ const CalendarDayCell = memo(function CalendarDayCell({
                 <div className="flex-1 min-w-0">
                   <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                     <span className="truncate">{assignment.customName || task.name}</span>
-                    {!isCompactView && (
+                    {!isCompactView && hasNotes && (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -171,7 +173,7 @@ const CalendarDayCell = memo(function CalendarDayCell({
                                   : "border-foreground/15 hover:bg-black/10"
                               )}
                               onClick={(e) => e.stopPropagation()}
-                              aria-label={`View quick details for ${assignment.customName || task.name}`}
+                              aria-label={`View notes for ${assignment.customName || task.name}`}
                             >
                               <Info className={cn("h-3.5 w-3.5", isTaskDark ? "text-white/90" : "text-foreground/80")} />
                             </button>

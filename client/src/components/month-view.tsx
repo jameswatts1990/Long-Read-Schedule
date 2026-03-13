@@ -254,6 +254,8 @@ export function MonthView({
                           if (!task) return null;
                           const isTaskDark = isDarkColor(task.color);
 
+                          const hasNotes = Boolean(assignment.notes?.trim());
+
                           return (
                             <div
                               key={assignment.id}
@@ -282,7 +284,7 @@ export function MonthView({
                                 <div className="flex-1 min-w-0">
                                   <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                     <span className="truncate">{assignment.customName || task.name}</span>
-                                    {!isCompactView && (
+                                    {!isCompactView && hasNotes && (
                                       <TooltipProvider>
                                         <Tooltip>
                                           <TooltipTrigger asChild>
