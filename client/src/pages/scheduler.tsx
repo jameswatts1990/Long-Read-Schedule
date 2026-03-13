@@ -80,9 +80,23 @@ export default function Scheduler() {
   const { toast } = useToast();
   const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
 
-  const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
-  const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
-  const { data: premadeFilters = [] } = useQuery<PremadeFilter[]>({ queryKey: ["/api/premade-filters"] });
+  const workspaceId = activeWorkspace?.id;
+
+  const { data: people = [] } = useQuery<Person[]>({
+    queryKey: ["/api/people"],
+    enabled: !!workspaceId,
+    refetchOnMount: "always",
+  });
+  const { data: tasks = [] } = useQuery<Task[]>({
+    queryKey: ["/api/tasks"],
+    enabled: !!workspaceId,
+    refetchOnMount: "always",
+  });
+  const { data: premadeFilters = [] } = useQuery<PremadeFilter[]>({
+    queryKey: ["/api/premade-filters"],
+    enabled: !!workspaceId,
+    refetchOnMount: "always",
+  });
 
   const createFilterMutation = useMutation({
     mutationFn: async (data: { name: string; personIds: string[]; taskIds: string[] }) => {
@@ -124,24 +138,26 @@ export default function Scheduler() {
   
   // Fetch assignments filtered by week for week/pipeline view
   const { data: weekAssignmentsData = [] } = useQuery<Assignment[]>({ 
-    queryKey: assignmentKeys.week(weekStartStr),
+    queryKey: [...assignmentKeys.week(weekStartStr), workspaceId],
     queryFn: async () => {
       const res = await fetch(`/api/assignments?weekStartDate=${weekStartStr}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch weekly assignments");
       return res.json();
     },
-    enabled: viewMode === "week" || viewMode === "pipeline"
+    enabled: !!workspaceId && (viewMode === "week" || viewMode === "pipeline"),
+    refetchOnMount: "always",
   });
   
   // Fetch assignments for entire month range for month view
   const { data: monthAssignmentsData = [] } = useQuery<Assignment[]>({ 
-    queryKey: assignmentKeys.range(monthStartStr, monthEndStr),
+    queryKey: [...assignmentKeys.range(monthStartStr, monthEndStr), workspaceId],
     queryFn: async () => {
       const res = await fetch(`/api/assignments?startDate=${monthStartStr}&endDate=${monthEndStr}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch monthly assignments");
       return res.json();
     },
-    enabled: viewMode === "month"
+    enabled: !!workspaceId && viewMode === "month",
+    refetchOnMount: "always",
   });
   
   const weekAssignments = viewMode === "month" ? monthAssignmentsData : weekAssignmentsData;
