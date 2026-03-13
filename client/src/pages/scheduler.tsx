@@ -17,6 +17,7 @@ import { type Person, type Task, type Assignment, type PremadeFilter } from "@sh
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { assignmentKeys } from "@/lib/queryKeys";
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -123,13 +124,23 @@ export default function Scheduler() {
   
   // Fetch assignments filtered by week for week/pipeline view
   const { data: weekAssignmentsData = [] } = useQuery<Assignment[]>({ 
-    queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`],
+    queryKey: assignmentKeys.week(weekStartStr),
+    queryFn: async () => {
+      const res = await fetch(`/api/assignments?weekStartDate=${weekStartStr}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch weekly assignments");
+      return res.json();
+    },
     enabled: viewMode === "week" || viewMode === "pipeline"
   });
   
   // Fetch assignments for entire month range for month view
   const { data: monthAssignmentsData = [] } = useQuery<Assignment[]>({ 
-    queryKey: [`/api/assignments?startDate=${monthStartStr}&endDate=${monthEndStr}`],
+    queryKey: assignmentKeys.range(monthStartStr, monthEndStr),
+    queryFn: async () => {
+      const res = await fetch(`/api/assignments?startDate=${monthStartStr}&endDate=${monthEndStr}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch monthly assignments");
+      return res.json();
+    },
     enabled: viewMode === "month"
   });
   
@@ -278,11 +289,7 @@ export default function Scheduler() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/people"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }),
-        queryClient.invalidateQueries({ 
-          predicate: (query) => 
-            typeof query.queryKey[0] === 'string' && 
-            query.queryKey[0].startsWith('/api/assignments')
-        }),
+        queryClient.invalidateQueries({ queryKey: assignmentKeys.all }),
       ]);
 
       toast({

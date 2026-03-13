@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Assignment } from "@shared/schema";
+import { assignmentKeys } from "@/lib/queryKeys";
 
 const ASSIGNMENTS_PATH = "/api/assignments";
 
@@ -12,6 +13,11 @@ const toUrl = (key: string) => {
 };
 
 export const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
+  const [scope, mode] = query.queryKey;
+  if (scope === assignmentKeys.all[0]) {
+    return mode === undefined || mode === "week" || mode === "range";
+  }
+
   const key = query.queryKey[0];
   return typeof key === "string" && key.startsWith(ASSIGNMENTS_PATH);
 };
@@ -21,6 +27,16 @@ const isDateWithinRange = (date: string, startDate: string, endDate: string) => 
 };
 
 export const queryContainsDate = (queryKey: readonly unknown[], date: string) => {
+  const [scope, mode, start, end] = queryKey;
+
+  if (scope === assignmentKeys.all[0]) {
+    if (mode === "week" && typeof start === "string") return start === date;
+    if (mode === "range" && typeof start === "string" && typeof end === "string") {
+      return isDateWithinRange(date, start, end);
+    }
+    return mode === undefined;
+  }
+
   const key = queryKey[0];
   if (typeof key !== "string" || !key.startsWith(ASSIGNMENTS_PATH)) return false;
 
@@ -36,7 +52,6 @@ export const queryContainsDate = (queryKey: readonly unknown[], date: string) =>
     return isDateWithinRange(date, startDate, endDate);
   }
 
-  // /api/assignments with no date constraints can contain all dates.
   return url.search === "";
 };
 
@@ -175,9 +190,9 @@ const reorderCellAssignments = (
 
 export const applyAssignmentReorder = (client: QueryClient, payload: ReorderPayload) => {
   const { weekStartDate } = payload;
-  const weekKey = `${ASSIGNMENTS_PATH}?weekStartDate=${weekStartDate}`;
+  const weekKey = assignmentKeys.week(weekStartDate);
 
-  client.setQueryData<Assignment[]>([weekKey], (old) =>
+  client.setQueryData<Assignment[]>(weekKey, (old) =>
     old ? reorderCellAssignments(old, payload) : old,
   );
 
@@ -199,8 +214,8 @@ export const applyAssignmentDelete = (
     return;
   }
 
-  const weekKey = `${ASSIGNMENTS_PATH}?weekStartDate=${impactedDate}`;
-  client.setQueryData<Assignment[]>([weekKey], (old) =>
+  const weekKey = assignmentKeys.week(impactedDate);
+  client.setQueryData<Assignment[]>(weekKey, (old) =>
     old ? old.filter((assignment) => assignment.id !== assignmentId) : old,
   );
 
@@ -216,9 +231,9 @@ export const applyAssignmentReorderCell = (
   client: QueryClient,
   payload: ReorderCellPayload,
 ) => {
-  const weekKey = `${ASSIGNMENTS_PATH}?weekStartDate=${payload.weekStartDate}`;
+  const weekKey = assignmentKeys.week(payload.weekStartDate);
 
-  client.setQueryData<Assignment[]>([weekKey], (old) =>
+  client.setQueryData<Assignment[]>(weekKey, (old) =>
     old ? reorderCellAssignments(old, payload) : old,
   );
 
