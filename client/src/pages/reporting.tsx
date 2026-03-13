@@ -75,27 +75,48 @@ export default function Reporting() {
     }, {} as Record<string, Assignment[]>);
   }, [filteredAssignments]);
 
-  // Get sorted unique weeks
-  const weeks = useMemo(() => Object.keys(assignmentsByWeek).sort(), [assignmentsByWeek]);
+  // Pre-aggregate totals by week and task for quick lookups in charts/table
+  const totalsByWeekAndTask = useMemo(() => {
+    const totals: Record<string, Record<string, number>> = {};
 
-  // Calculate totals: for each week/task combo, count unique batch IDs and their sizes
-  const getWeekTotal = (weekDate: string, taskId: string): number => {
-    const weekAssignments = assignmentsByWeek[weekDate] || [];
-    const taskAssignments = weekAssignments.filter(a => a.taskId === taskId);
-    
-    const uniqueBatches = new Map<string, number>();
-    
-    taskAssignments.forEach(assignment => {
-      // If batchNumber is provided, use it as key to count capacity once per week per batch
-      // If no batchNumber, treat as unique to ensure capacity is still counted
-      const batchKey = assignment.batchNumber ? `batch-${assignment.batchNumber}` : `assignment-${assignment.id}`;
-      if (!uniqueBatches.has(batchKey) && assignment.batchSize) {
-        uniqueBatches.set(batchKey, assignment.batchSize);
+    filteredAssignments.forEach((assignment) => {
+      if (!totals[assignment.weekStartDate]) {
+        totals[assignment.weekStartDate] = {};
+      }
+
+      if (!totals[assignment.weekStartDate][assignment.taskId]) {
+        totals[assignment.weekStartDate][assignment.taskId] = 0;
       }
     });
-    
-    return Array.from(uniqueBatches.values()).reduce((sum, size) => sum + size, 0);
-  };
+
+    Object.entries(assignmentsByWeek).forEach(([weekDate, weekAssignments]) => {
+      const assignmentsByTask = weekAssignments.reduce((acc, assignment) => {
+        if (!acc[assignment.taskId]) {
+          acc[assignment.taskId] = [];
+        }
+        acc[assignment.taskId].push(assignment);
+        return acc;
+      }, {} as Record<string, Assignment[]>);
+
+      Object.entries(assignmentsByTask).forEach(([taskId, taskAssignments]) => {
+        const uniqueBatches = new Map<string, number>();
+
+        taskAssignments.forEach((assignment) => {
+          const batchKey = assignment.batchNumber ? `batch-${assignment.batchNumber}` : `assignment-${assignment.id}`;
+          if (!uniqueBatches.has(batchKey) && assignment.batchSize) {
+            uniqueBatches.set(batchKey, assignment.batchSize);
+          }
+        });
+
+        totals[weekDate][taskId] = Array.from(uniqueBatches.values()).reduce((sum, size) => sum + size, 0);
+      });
+    });
+
+    return totals;
+  }, [filteredAssignments, assignmentsByWeek]);
+
+  // Get sorted unique weeks
+  const weeks = useMemo(() => Object.keys(assignmentsByWeek).sort(), [assignmentsByWeek]);
 
   // Format date for display (e.g., "Dec 01, 2024")
   const formatWeekDate = (dateStr: string): string => {
@@ -116,12 +137,12 @@ export default function Reporting() {
       };
       productionTasks.forEach(task => {
         if (selectedTaskIds.includes(task.id)) {
-          dataPoint[task.id] = getWeekTotal(week, task.id);
+          dataPoint[task.id] = totalsByWeekAndTask[week]?.[task.id] ?? 0;
         }
       });
       return dataPoint;
     });
-  }, [weeks, productionTasks, selectedTaskIds, assignmentsByWeek]);
+  }, [weeks, productionTasks, selectedTaskIds, totalsByWeekAndTask]);
 
   // Prepare chart config for Shadcn Chart
   const chartConfig = useMemo(() => {
@@ -369,13 +390,19 @@ export default function Reporting() {
                         {formatWeekDate(week)}
                       </td>
                       {productionTasks.map((task) => selectedTaskIds.includes(task.id) && (
-                        <td 
-                          key={`${week}-${task.id}`} 
-                          className="p-3"
-                          data-testid={`cell-${week}-${task.id}`}
-                        >
-                          {getWeekTotal(week, task.id) > 0 ? getWeekTotal(week, task.id) : "-"}
-                        </td>
+                        (() => {
+                          const weekTotal = totalsByWeekAndTask[week]?.[task.id] ?? 0;
+
+                          return (
+                            <td
+                              key={`${week}-${task.id}`}
+                              className="p-3"
+                              data-testid={`cell-${week}-${task.id}`}
+                            >
+                              {weekTotal > 0 ? weekTotal : "-"}
+                            </td>
+                          );
+                        })()
                       ))}
                     </tr>
                   ))}
