@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -144,22 +144,33 @@ export default function Scheduler() {
     enabled: viewMode === "month"
   });
   
-  let weekAssignments = viewMode === "month" ? monthAssignmentsData : weekAssignmentsData;
+  const weekAssignments = viewMode === "month" ? monthAssignmentsData : weekAssignmentsData;
 
-  // Apply filters
-  if (filterPersonIds.size > 0) {
-    weekAssignments = weekAssignments.filter(a => filterPersonIds.has(a.personId));
-  }
-  if (filterTaskIds.size > 0) {
-    weekAssignments = weekAssignments.filter(a => filterTaskIds.has(a.taskId));
-  }
+  const filteredAssignments = useMemo(() => {
+    return weekAssignments.filter((assignment) => {
+      const matchesPerson = filterPersonIds.size === 0 || filterPersonIds.has(assignment.personId);
+      const matchesTask = filterTaskIds.size === 0 || filterTaskIds.has(assignment.taskId);
+      return matchesPerson && matchesTask;
+    });
+  }, [weekAssignments, filterPersonIds, filterTaskIds]);
+
+  const personIdsInFilteredAssignments = useMemo(
+    () => new Set(filteredAssignments.map((assignment) => assignment.personId)),
+    [filteredAssignments],
+  );
 
   const hasActiveFilters = filterPersonIds.size > 0 || filterTaskIds.size > 0;
 
   // When filters are active, only show people who have assignments in the filtered results
-  const displayPeople = hasActiveFilters
-    ? people.filter(p => !p.excluded && weekAssignments.some(a => a.personId === p.id))
-    : people.filter(p => !p.excluded);
+  const displayPeople = useMemo(() => {
+    if (!hasActiveFilters) {
+      return people.filter((person) => !person.excluded);
+    }
+
+    return people.filter(
+      (person) => !person.excluded && personIdsInFilteredAssignments.has(person.id),
+    );
+  }, [hasActiveFilters, people, personIdsInFilteredAssignments]);
 
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeekStart);
@@ -563,7 +574,7 @@ export default function Scheduler() {
         {viewMode === "week" && (
           <WeeklyCalendar
             weekStartDate={weekStartStr}
-            assignments={weekAssignments}
+            assignments={filteredAssignments}
             people={displayPeople}
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}
@@ -573,7 +584,7 @@ export default function Scheduler() {
         {viewMode === "month" && (
           <MonthView
             weeksInMonth={weeksInMonth}
-            weekAssignments={weekAssignments}
+            weekAssignments={filteredAssignments}
             people={displayPeople}
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}
@@ -584,7 +595,7 @@ export default function Scheduler() {
         {viewMode === "pipeline" && (
           <PipelineView
             weekStartDate={weekStartStr}
-            assignments={weekAssignments}
+            assignments={filteredAssignments}
             people={people}
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}
