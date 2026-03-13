@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, Filter, Layers } from "lucide-react";
 import { Link } from "wouter";
@@ -47,17 +47,19 @@ export default function Reporting() {
   const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: [assignmentQueryKey] });
   const { data: allTasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
   // Filter to only production tasks
   const productionTasks = useMemo(() => allTasks.filter(t => (t as any).isProduction !== 0), [allTasks]);
 
   // Initialize selected tasks if empty
-  useMemo(() => {
-    if (selectedTaskIds.length === 0 && productionTasks.length > 0) {
+  useEffect(() => {
+    if (!hasInitializedSelection && selectedTaskIds.length === 0 && productionTasks.length > 0) {
       setSelectedTaskIds(productionTasks.map(t => t.id));
+      setHasInitializedSelection(true);
     }
-  }, [productionTasks]);
+  }, [hasInitializedSelection, productionTasks, selectedTaskIds.length]);
 
   // Server already scoped by date range — only filter by selected tasks client-side
   const filteredAssignments = useMemo(() => {
