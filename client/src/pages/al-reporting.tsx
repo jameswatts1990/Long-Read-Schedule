@@ -12,10 +12,7 @@ import {
   startOfYear, 
   endOfYear, 
   eachDayOfInterval, 
-  isSameDay, 
   getDay, 
-  startOfWeek, 
-  endOfWeek,
   addDays,
   isWeekend
 } from "date-fns";
@@ -42,7 +39,11 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 export default function ALReporting() {
   const { activeWorkspace } = useWorkspace();
   const [year, setYear] = useState(new Date().getFullYear());
-  const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
+
+  // Fix Issue 7: scope to selected year only — server returns only that year's data
+  const { data: assignments = [] } = useQuery<Assignment[]>({
+    queryKey: [`/api/assignments?startDate=${year}-01-01&endDate=${year}-12-31`],
+  });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
 
@@ -51,40 +52,11 @@ export default function ALReporting() {
     tasks.find(t => t.name.toLowerCase().includes("al") || t.name.toLowerCase().includes("annual leave")), 
   [tasks]);
 
-  // Map day names to offsets from week start (Monday = 0)
-  const dayOffsetMap: Record<string, number> = {
-    "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4
-  };
-
-  // Filter assignments for the selected year and AL task
+  // Server already scoped to the selected year — just filter by AL task client-side
   const alAssignments = useMemo(() => {
     if (!alTask) return [];
-    const yearStart = startOfYear(new Date(year, 0, 1));
-    const yearEnd = endOfYear(new Date(year, 0, 1));
-    
-    return assignments.filter(a => {
-      if (a.taskId !== alTask.id) return false;
-      
-      // Calculate the actual date of the assignment
-      let actualDate: Date;
-      
-      if (a.date) {
-        // Use the specific date if available
-        actualDate = parse(a.date, "yyyy-MM-dd", new Date());
-      } else if (a.weekStartDate && a.day) {
-        // Calculate from weekStartDate + day offset
-        const weekStart = parse(a.weekStartDate, "yyyy-MM-dd", new Date());
-        const dayOffset = dayOffsetMap[a.day];
-        
-        if (dayOffset === undefined) return false;
-        actualDate = addDays(weekStart, dayOffset);
-      } else {
-        return false;
-      }
-      
-      return actualDate >= yearStart && actualDate <= yearEnd;
-    });
-  }, [assignments, alTask, year, dayOffsetMap]);
+    return assignments.filter(a => a.taskId === alTask.id);
+  }, [assignments, alTask]);
 
   // Count occurrences per day
   const dailyCounts = useMemo(() => {

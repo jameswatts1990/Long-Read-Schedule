@@ -20,20 +20,32 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, isWithinInterval, startOfDay } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Reporting() {
   const { activeWorkspace } = useWorkspace();
-  const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
-  const { data: allTasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
-  
+
+  // Fix Issue 7: default to last 12 months so we never fetch ALL assignments ever recorded
+  const defaultFrom = useMemo(() => subMonths(new Date(), 12), []);
+  const defaultTo = useMemo(() => new Date(), []);
+
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-    from: undefined,
-    to: undefined,
+    from: defaultFrom,
+    to: defaultTo,
   });
+
+  // Build query key from date range — server handles the date filtering
+  const startDate = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : "";
+  const endDate = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : "";
+  const assignmentQueryKey = startDate && endDate
+    ? `/api/assignments?startDate=${startDate}&endDate=${endDate}`
+    : "/api/assignments";
+
+  const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: [assignmentQueryKey] });
+  const { data: allTasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
@@ -47,21 +59,10 @@ export default function Reporting() {
     }
   }, [productionTasks]);
 
-  // Filter assignments based on date range and selected tasks
+  // Server already scoped by date range — only filter by selected tasks client-side
   const filteredAssignments = useMemo(() => {
-    return assignments.filter(a => {
-      const taskMatch = selectedTaskIds.includes(a.taskId);
-      if (!taskMatch) return false;
-
-      if (dateRange.from || dateRange.to) {
-        const assignmentDate = new Date(a.weekStartDate + "T00:00:00Z");
-        const from = dateRange.from ? startOfDay(dateRange.from) : new Date(0);
-        const to = dateRange.to ? startOfDay(dateRange.to) : new Date(8640000000000000);
-        return isWithinInterval(assignmentDate, { start: from, end: to });
-      }
-      return true;
-    });
-  }, [assignments, dateRange, selectedTaskIds]);
+    return assignments.filter(a => selectedTaskIds.includes(a.taskId));
+  }, [assignments, selectedTaskIds]);
 
   // Group assignments by week
   const assignmentsByWeek = useMemo(() => {

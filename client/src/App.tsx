@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
+import type { Assignment } from "@shared/schema";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
@@ -15,6 +16,12 @@ import MyDay from "@/pages/my-day";
 import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import NotFound from "@/pages/not-found";
+
+// Predicate that matches any cached query whose key starts with "/api/assignments"
+const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
+  const k = query.queryKey[0];
+  return typeof k === "string" && k.startsWith("/api/assignments");
+};
 
 function useRealTimeUpdates(workspaceId: string | null) {
   const socketRef = useRef<Socket | null>(null);
@@ -25,26 +32,48 @@ function useRealTimeUpdates(workspaceId: string | null) {
       socketRef.current = null;
     }
 
+    // Fix Issue 8: don't connect at all when there's no workspace (landing page,
+    // unauthenticated visitors, or users who haven't picked a workspace yet)
+    if (!workspaceId) return;
+
     const socket = io({
       path: "/socket.io",
       transports: ["websocket"],
-      query: workspaceId ? { workspaceId } : {},
+      query: { workspaceId },
     });
 
-    socket.on("update", (data: { type?: string }) => {
-      const type = data?.type;
+    socket.on("update", (data: { type?: string; action?: string; record?: Assignment & { id: string; weekStartDate?: string } }) => {
+      const { type, action, record } = data ?? {};
+
       if (type === "assignments") {
-        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+        if ((action === "create" || action === "update") && record?.weekStartDate) {
+          // Fix Issues 1 & 2: update the specific week's cache directly — zero HTTP requests
+          const weekKey = `/api/assignments?weekStartDate=${record.weekStartDate}`;
+          queryClient.setQueryData<Assignment[]>([weekKey], (old) => {
+            if (!old) return old; // week not in cache — nothing to update
+            if (action === "create") {
+              // Guard against duplicate (creator already has it via their own mutation)
+              return old.some((a) => a.id === record.id) ? old : [...old, record];
+            }
+            return old.map((a) => (a.id === record.id ? record : a));
+          });
+        } else if (action === "delete" && record?.id) {
+          // Remove from every cached assignment list (week view, month view, reporting)
+          queryClient.setQueriesData<Assignment[]>(
+            { predicate: isAssignmentQuery },
+            (old) => (old ? old.filter((a) => a.id !== record.id) : old),
+          );
+        } else {
+          // Fallback for reorder-cell and any future ops: predicate invalidation
+          // Fixes Issue 2: catches all compound query keys like "?weekStartDate=..."
+          queryClient.invalidateQueries({ predicate: isAssignmentQuery });
+        }
       } else if (type === "people") {
         queryClient.invalidateQueries({ queryKey: ["/api/people"] });
       } else if (type === "tasks") {
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       } else if (type === "premade-filters") {
         queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       }
     });
 

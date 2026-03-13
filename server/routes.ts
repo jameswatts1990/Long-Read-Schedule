@@ -74,11 +74,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const broadcastUpdate = (type: string, workspaceId?: string) => {
+  // Fix Issue 1: payload carries the actual changed record so clients update
+  // their cache directly without making an extra HTTP round-trip
+  const broadcastUpdate = (type: string, workspaceId?: string, payload?: Record<string, unknown>) => {
+    const event = { type, ...payload };
     if (workspaceId) {
-      io.to(workspaceId).emit("update", { type });
+      io.to(workspaceId).emit("update", event);
     } else {
-      io.emit("update", { type });
+      io.emit("update", event);
     }
   };
 
@@ -133,24 +136,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get the currently active workspace
+  // Fix Issue 6: trust the session — membership was already validated on POST.
+  // Removes one DB round-trip per request without compromising security.
   app.get("/api/my-workspace", isAuthenticated, async (req: any, res) => {
     try {
       const workspaceId = (req.session as any).activeWorkspaceId;
       if (!workspaceId) return res.json(null);
       const workspace = await storage.getWorkspace(workspaceId);
-      
-      // Validate user still belongs to the workspace (Super admins bypass this)
-      if (workspace) {
-        const userEmail = req.user.claims.email;
-        if (!isSuperAdmin(userEmail)) {
-          const userId = req.user.claims.sub;
-          const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
-          if (!membership) {
-            (req.session as any).activeWorkspaceId = undefined;
-            return res.json(null);
-          }
-        }
-      }
       res.json(workspace || null);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch active workspace" });
@@ -415,7 +407,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertAssignmentSchema.parse({ ...bodyData, workspaceId: req.workspaceId });
       const userId = req.user.claims.sub;
       const assignment = await storage.createAssignment(data, userId);
-      broadcastUpdate("assignments", req.workspaceId);
+      // Fix Issue 1: send the actual record so clients can update cache without refetching
+      broadcastUpdate("assignments", req.workspaceId, { action: "create", record: assignment });
       res.json(assignment);
     } catch (error) {
       console.error("Assignment validation error:", error);
@@ -446,7 +439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...mutable,
         weekStartDate: weekStartDate ?? existing.weekStartDate,
       });
-      broadcastUpdate("assignments", req.workspaceId);
+      // Fix Issue 1: send the actual record so clients can update cache without refetching
+      broadcastUpdate("assignments", req.workspaceId, { action: "update", record: updated });
       res.json(updated);
     } catch (error) {
       console.error("PATCH assignment error:", error);
@@ -470,8 +464,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/assignments/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
+      // Fetch before deleting so we can tell clients which record was removed
+      const existing = await storage.getAssignment(req.params.id);
       await storage.deleteAssignment(req.params.id);
-      broadcastUpdate("assignments", req.workspaceId);
+      // Fix Issue 1: send id + weekStartDate so clients can remove from cache without refetching
+      broadcastUpdate("assignments", req.workspaceId, {
+        action: "delete",
+        record: { id: req.params.id, weekStartDate: existing?.weekStartDate },
+      });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete assignment" });

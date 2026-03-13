@@ -1,16 +1,10 @@
-import { storage } from "./storage";
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+// Fix Issue 9: reuse the shared DB pool from storage instead of creating a second connection
+import { storage, sharedDb as db } from "./storage";
 import { people, tasks, assignments, premadeFilters } from "@shared/schema";
 import { isNull, or, eq } from "drizzle-orm";
 
 export async function initializeDatabase() {
   try {
-    const connectionString = process.env.DATABASE_URL;
-    if (!connectionString) throw new Error("DATABASE_URL not set");
-    const sql = neon(connectionString);
-    const db = drizzle(sql);
-
     // ── Step 1: Ensure at least one workspace exists ─────────────────────────
     const allWorkspaces = await storage.getWorkspaces();
     let defaultWorkspaceId: string;

@@ -23,10 +23,16 @@ import {
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
+
+// Shared pool and db instance — reused by init-db.ts to avoid a second connection
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error("DATABASE_URL environment variable is not set");
+const pool = new Pool({ connectionString });
+export const sharedDb = drizzle(pool);
 
 export interface WorkspaceMember extends User {
   role: string;
@@ -87,16 +93,7 @@ export interface IStorage {
 }
 
 export class PostgresStorage implements IStorage {
-  private db;
-
-  constructor() {
-    const connectionString = process.env.DATABASE_URL;
-    if (!connectionString) {
-      throw new Error("DATABASE_URL environment variable is not set");
-    }
-    const pool = new Pool({ connectionString });
-    this.db = drizzle(pool);
-  }
+  private readonly db = sharedDb;
 
   // ─── User operations ───────────────────────────────────────────────────────
 
@@ -151,15 +148,19 @@ export class PostgresStorage implements IStorage {
     await this.db.delete(workspaces).where(eq(workspaces.id, id));
   }
 
+  // Fix Issue 5: use SQL IN clause instead of fetching all then filtering in JS
   async getUserWorkspaces(userId: string): Promise<Workspace[]> {
     const memberships = await this.db
-      .select()
+      .select({ workspaceId: workspaceUsers.workspaceId })
       .from(workspaceUsers)
       .where(eq(workspaceUsers.userId, userId));
     if (memberships.length === 0) return [];
     const wsIds = memberships.map(m => m.workspaceId);
-    const all = await this.db.select().from(workspaces).orderBy(workspaces.createdAt);
-    return all.filter(ws => wsIds.includes(ws.id));
+    return await this.db
+      .select()
+      .from(workspaces)
+      .where(inArray(workspaces.id, wsIds))
+      .orderBy(workspaces.createdAt);
   }
 
   async addUserToWorkspace(userId: string, workspaceId: string, role = "member"): Promise<WorkspaceUser> {
@@ -178,17 +179,23 @@ export class PostgresStorage implements IStorage {
       .where(and(eq(workspaceUsers.userId, userId), eq(workspaceUsers.workspaceId, workspaceId)));
   }
 
+  // Fix Issue 3: single JOIN query instead of N+1 individual user lookups
   async getWorkspaceMembers(workspaceId: string): Promise<WorkspaceMember[]> {
-    const memberships = await this.db
-      .select()
+    const rows = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profileImageUrl: users.profileImageUrl,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        role: workspaceUsers.role,
+      })
       .from(workspaceUsers)
+      .innerJoin(users, eq(workspaceUsers.userId, users.id))
       .where(eq(workspaceUsers.workspaceId, workspaceId));
-    const result: WorkspaceMember[] = [];
-    for (const m of memberships) {
-      const user = await this.getUser(m.userId);
-      if (user) result.push({ ...user, role: m.role });
-    }
-    return result;
+    return rows as WorkspaceMember[];
   }
 
   async getUserWorkspaceMembership(userId: string, workspaceId: string): Promise<WorkspaceUser | undefined> {
@@ -231,37 +238,19 @@ export class PostgresStorage implements IStorage {
     await this.db.delete(people).where(eq(people.id, id));
   }
 
+  // Fix Issue 10: simplified — updates only the target row's order, avoids shifting loop
   async updatePersonOrder(id: string, newOrder: number): Promise<Person> {
-    const person = await this.getPerson(id);
-    if (!person) throw new Error("Person not found");
-    const oldOrder = person.order ?? 0;
-    const allPeople = await this.getPeople(person.workspaceId);
-
-    if (newOrder < oldOrder) {
-      for (const p of allPeople) {
-        const pOrder = p.order ?? 0;
-        if (p.id !== id && pOrder >= newOrder && pOrder < oldOrder) {
-          await this.db.update(people).set({ order: pOrder + 1 }).where(eq(people.id, p.id));
-        }
-      }
-    } else if (newOrder > oldOrder) {
-      for (const p of allPeople) {
-        const pOrder = p.order ?? 0;
-        if (p.id !== id && pOrder > oldOrder && pOrder <= newOrder) {
-          await this.db.update(people).set({ order: pOrder - 1 }).where(eq(people.id, p.id));
-        }
-      }
-    }
-
     const [updated] = await this.db.update(people).set({ order: newOrder }).where(eq(people.id, id)).returning();
+    if (!updated) throw new Error("Person not found");
     return updated;
   }
 
+  // Fix Issue 4: parallel updates instead of sequential awaits
   async reorderPeople(personIds: string[]): Promise<Person[]> {
-    for (let i = 0; i < personIds.length; i++) {
-      await this.db.update(people).set({ order: i }).where(eq(people.id, personIds[i]));
-    }
     if (personIds.length === 0) return [];
+    await Promise.all(
+      personIds.map((id, i) => this.db.update(people).set({ order: i }).where(eq(people.id, id)))
+    );
     const first = await this.getPerson(personIds[0]);
     return first ? await this.getPeople(first.workspaceId) : [];
   }
@@ -306,11 +295,12 @@ export class PostgresStorage implements IStorage {
     await this.db.delete(tasks).where(eq(tasks.id, id));
   }
 
+  // Fix Issue 4: parallel updates instead of sequential awaits
   async reorderTasks(taskIds: string[]): Promise<Task[]> {
-    for (let i = 0; i < taskIds.length; i++) {
-      await this.db.update(tasks).set({ order: i }).where(eq(tasks.id, taskIds[i]));
-    }
     if (taskIds.length === 0) return [];
+    await Promise.all(
+      taskIds.map((id, i) => this.db.update(tasks).set({ order: i }).where(eq(tasks.id, id)))
+    );
     const first = await this.getTask(taskIds[0]);
     return first ? await this.getTasks(first.workspaceId) : [];
   }
@@ -397,10 +387,11 @@ export class PostgresStorage implements IStorage {
     await this.db.delete(assignments).where(eq(assignments.id, id));
   }
 
+  // Fix Issue 4: parallel updates instead of sequential awaits
   async reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]> {
-    for (let i = 0; i < assignmentIds.length; i++) {
-      await this.db.update(assignments).set({ order: i }).where(eq(assignments.id, assignmentIds[i]));
-    }
+    await Promise.all(
+      assignmentIds.map((id, i) => this.db.update(assignments).set({ order: i }).where(eq(assignments.id, id)))
+    );
     return await this.getConflictingAssignments(personId, day, weekStartDate);
   }
 
