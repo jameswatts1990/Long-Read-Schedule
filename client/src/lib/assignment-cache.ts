@@ -40,6 +40,39 @@ export const queryContainsDate = (queryKey: readonly unknown[], date: string) =>
   return url.search === "";
 };
 
+
+interface ReorderCellPayload {
+  weekStartDate: string;
+  personId: string;
+  day: string;
+  assignmentIds: string[];
+}
+
+const reorderCellAssignments = (
+  assignments: Assignment[],
+  payload: ReorderCellPayload,
+) => {
+  const { personId, day, assignmentIds } = payload;
+  const targetIds = new Set(assignmentIds);
+
+  const untouched = assignments.filter((assignment) =>
+    assignment.personId !== personId || assignment.day !== day || !targetIds.has(assignment.id),
+  );
+
+  const byId = new Map(assignments.map((assignment) => [assignment.id, assignment]));
+
+  const reordered: Assignment[] = [];
+  assignmentIds.forEach((id, index) => {
+    const assignment = byId.get(id);
+    if (!assignment) return;
+    reordered.push({ ...assignment, order: index });
+  });
+
+  if (reordered.length === 0) return assignments;
+
+  return [...untouched, ...reordered];
+};
+
 const assignmentListUpdater = (
   old: Assignment[] | undefined,
   assignment: Assignment,
@@ -176,5 +209,23 @@ export const applyAssignmentDelete = (
       predicate: (query) => isAssignmentQuery(query) && queryContainsDate(query.queryKey, impactedDate),
     },
     (old) => (old ? old.filter((assignment) => assignment.id !== assignmentId) : old),
+  );
+};
+
+export const applyAssignmentReorderCell = (
+  client: QueryClient,
+  payload: ReorderCellPayload,
+) => {
+  const weekKey = `${ASSIGNMENTS_PATH}?weekStartDate=${payload.weekStartDate}`;
+
+  client.setQueryData<Assignment[]>([weekKey], (old) =>
+    old ? reorderCellAssignments(old, payload) : old,
+  );
+
+  client.setQueriesData<Assignment[]>(
+    {
+      predicate: (query) => isAssignmentQuery(query) && queryContainsDate(query.queryKey, payload.weekStartDate),
+    },
+    (old) => (old ? reorderCellAssignments(old, payload) : old),
   );
 };
