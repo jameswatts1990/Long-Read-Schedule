@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { queryClient, setClientIdentifier } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -18,27 +18,17 @@ import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import NotFound from "@/pages/not-found";
 
-const VISIBILITY_REFRESH_THRESHOLD_MS = 20_000;
-const WORKSPACE_REFRESH_CHANNEL = "workspace-refresh-sync";
-const WORKSPACE_REFRESH_STORAGE_PREFIX = "workspace-refresh:";
-
-const getWorkspaceRefreshStorageKey = (workspaceId: string) => `${WORKSPACE_REFRESH_STORAGE_PREFIX}${workspaceId}`;
-
-function useRealTimeUpdates(workspaceId: string | null) {
+function useRealTimeUpdates(workspaceId: string | null, clientId: string) {
   const socketRef = useRef<Socket | null>(null);
   const missedEventsRef = useRef(false);
   const lastRefreshRef = useRef(0);
 
-  const handleUpdate = (data: {
-    type?: string;
-    action?: string;
-    record?: (Record<string, unknown> & { id?: string });
-    weekStartDate?: string;
-    personId?: string;
-    day?: string;
-    assignmentIds?: string[];
-  }) => {
-    const { type, action, record, weekStartDate, personId, day, assignmentIds } = data ?? {};
+  const handleUpdate = (data: { type?: string; action?: string; record?: Record<string, unknown> & { id?: string }; originClientId?: string }) => {
+    const { type, action, record, originClientId } = data ?? {};
+
+    if (originClientId && originClientId === clientId) {
+      return;
+    }
 
     if (type === "assignments") {
       const assignmentRecord = record as Assignment;
@@ -239,7 +229,7 @@ function useRealTimeUpdates(workspaceId: string | null) {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       disconnect();
     };
-  }, [workspaceId]);
+  }, [workspaceId, clientId]);
 }
 
 function useIsMobile() {
@@ -268,8 +258,18 @@ function Router() {
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [hasRedirected, setHasRedirected] = useState(false);
+  const [clientId] = useState(() => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  });
 
-  useRealTimeUpdates(activeWorkspace?.id ?? null);
+  useEffect(() => {
+    setClientIdentifier(clientId);
+  }, [clientId]);
+
+  useRealTimeUpdates(activeWorkspace?.id ?? null, clientId);
 
   useEffect(() => {
     if (!authLoading && !workspaceLoading && isAuthenticated && activeWorkspace && isMobile && !location.startsWith("/my-day") && !hasRedirected) {
