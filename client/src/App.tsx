@@ -8,7 +8,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import type { Assignment, Person, PremadeFilter, Task } from "@shared/schema";
-import { applyAssignmentDelete, applyAssignmentUpsert, isAssignmentQuery } from "@/lib/assignment-cache";
+import { applyAssignmentDelete, applyAssignmentReorderCell, applyAssignmentUpsert, isAssignmentQuery } from "@/lib/assignment-cache";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
@@ -21,8 +21,16 @@ import NotFound from "@/pages/not-found";
 function useRealTimeUpdates(workspaceId: string | null) {
   const socketRef = useRef<Socket | null>(null);
 
-  const handleUpdate = (data: { type?: string; action?: string; record?: Record<string, unknown> & { id?: string } }) => {
-    const { type, action, record } = data ?? {};
+  const handleUpdate = (data: {
+    type?: string;
+    action?: string;
+    record?: (Record<string, unknown> & { id?: string });
+    weekStartDate?: string;
+    personId?: string;
+    day?: string;
+    assignmentIds?: string[];
+  }) => {
+    const { type, action, record, weekStartDate, personId, day, assignmentIds } = data ?? {};
 
     if (type === "assignments") {
       const assignmentRecord = record as Assignment;
@@ -31,9 +39,15 @@ function useRealTimeUpdates(workspaceId: string | null) {
         applyAssignmentUpsert(queryClient, assignmentRecord);
       } else if (action === "delete" && record?.id) {
         applyAssignmentDelete(queryClient, record.id, (record as Assignment | undefined)?.weekStartDate);
+      } else if (
+        action === "reorder-cell" &&
+        weekStartDate &&
+        personId &&
+        day &&
+        Array.isArray(assignmentIds)
+      ) {
+        applyAssignmentReorderCell(queryClient, { weekStartDate, personId, day, assignmentIds });
       } else {
-        // Fallback for reorder-cell and any future ops: predicate invalidation
-        // Fixes Issue 2: catches all compound query keys like "?weekStartDate=..."
         queryClient.invalidateQueries({ predicate: isAssignmentQuery });
       }
     } else if (type === "people") {
