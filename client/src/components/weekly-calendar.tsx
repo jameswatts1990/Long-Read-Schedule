@@ -76,6 +76,7 @@ export function WeeklyCalendar({
   const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
   const [deleteDragTarget, setDeleteDragTarget] = useState<string | null>(null);
   const { toast } = useToast();
+  const tasksById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const updateAssignmentMutation = useMutation({
     mutationFn: async (data: { assignmentId: string; personId: string; day: string }) => {
@@ -158,8 +159,6 @@ export function WeeklyCalendar({
     const taskIdsByDay = new Map<string, Set<string>>();
     const daysByPerson = new Map<string, Set<string>>();
     const annualLeaveByCell = new Map<string, boolean>();
-    const taskById = new Map(tasks.map((task) => [task.id, task]));
-
     for (const assignment of assignments) {
       const cellKey = `${assignment.personId}-${assignment.day}`;
       const cellAssignments = assignmentsByCell.get(cellKey);
@@ -184,7 +183,7 @@ export function WeeklyCalendar({
       }
 
       if (!annualLeaveByCell.get(cellKey)) {
-        const task = taskById.get(assignment.taskId);
+        const task = tasksById.get(assignment.taskId);
         if (task?.name.includes("Annual Leave")) {
           annualLeaveByCell.set(cellKey, true);
         }
@@ -213,15 +212,14 @@ export function WeeklyCalendar({
       annualLeaveByCell,
       requiredDailyTasks,
       missingRequiredTasksByDay,
-      taskById,
     };
-  }, [assignments, tasks]);
+  }, [assignments, tasks, tasksById]);
 
   const getAssignmentsForCell = (personId: string, day: string) => {
     return scheduleIndexes.assignmentsByCell.get(`${personId}-${day}`) || [];
   };
 
-  const getTaskById = (taskId: string) => scheduleIndexes.taskById.get(taskId);
+  const getTaskById = (taskId: string) => tasksById.get(taskId);
 
   const personHasFullWeekScheduled = useMemo(() => {
     return people.reduce<Record<string, boolean>>((acc, person) => {
