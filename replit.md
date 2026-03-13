@@ -212,5 +212,6 @@ DELETE /api/premade-filters/:id - Delete premade filter
 **Build & Deployment:**
 - Development: `npm run dev` - Runs Express server with Vite middleware
 - Build: `npm run build` - Bundles client (Vite) and server (esbuild)
-- Production: `npm start` - Runs bundled Express server serving static assets
+- Production start: `npm run start` - Runs bundled Express server serving static assets from `dist/public`
+- Production deploy command: `npm run build && npm run start`
 - Type checking: `npm run check` - TypeScript validation without emitting files
