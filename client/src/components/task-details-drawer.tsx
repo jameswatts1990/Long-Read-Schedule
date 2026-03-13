@@ -223,33 +223,11 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
                     
                     try {
                       setIsGeneratingBatchId(true);
-                      const res = await apiRequest("GET", "/api/assignments");
-                      const allAssignments: Assignment[] = await res.json();
-                      
-                      // Extract 4-letter prefix
-                      const words = task.name.trim().split(/\s+/);
-                      let prefix = "";
-                      if (words.length >= 2) {
-                        prefix = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
-                      } else {
-                        prefix = words[0].substring(0, 4).toUpperCase();
-                      }
-                      
-                      if (!prefix) return;
+                      const res = await apiRequest("GET", `/api/assignments/next-batch-id?taskId=${encodeURIComponent(task.id)}`);
+                      const { batchId } = await res.json();
+                      if (!batchId) throw new Error("No batch ID returned");
 
-                      const sequenceNumbers = allAssignments
-                        .filter(a => a.batchNumber?.startsWith(`${prefix}-`))
-                        .map(a => {
-                          const parts = a.batchNumber?.split("-") || [];
-                          const lastPart = parts[parts.length - 1];
-                          return parseInt(lastPart, 10);
-                        })
-                        .filter(n => !isNaN(n));
-                      
-                      const nextSeq = sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) + 1 : 1;
-                      const newBatchId = `${prefix}-${String(nextSeq).padStart(3, '0')}`;
-                      
-                      setBatchNumber(newBatchId);
+                      setBatchNumber(batchId);
                     } catch (e) {
                       toast({
                         title: "Error",

@@ -485,6 +485,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  app.get("/api/assignments/next-batch-id", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const taskId = typeof req.query.taskId === "string" ? req.query.taskId : "";
+      if (!taskId) return res.status(400).json({ error: "taskId is required" });
+
+      const task = await storage.getTask(taskId);
+      if (!task || task.workspaceId !== req.workspaceId) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      const words = task.name.trim().split(/\s+/);
+      const prefix = words.length >= 2
+        ? (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase()
+        : words[0]?.substring(0, 4).toUpperCase() ?? "";
+
+      if (!prefix) return res.status(400).json({ error: "Unable to derive batch prefix for task" });
+
+      const batchId = await storage.getNextBatchId(req.workspaceId!, prefix);
+      res.json({ batchId });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate next batch ID" });
+    }
+  });
+
   app.post("/api/assignments", isAuthenticated, requireWorkspace, async (req: any, res) => {
     try {
       const { override, ...bodyData } = req.body;

@@ -86,6 +86,7 @@ export interface IStorage {
   getAssignment(id: string): Promise<Assignment | undefined>;
   getConflictingAssignments(personId: string, day: string, weekStartDate: string): Promise<Assignment[]>;
   createAssignment(assignment: InsertAssignment, createdById?: string): Promise<Assignment>;
+  getNextBatchId(workspaceId: string, prefix: string): Promise<string>;
   updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment>;
   deleteAssignment(id: string): Promise<void>;
   reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]>;
@@ -374,6 +375,27 @@ export class PostgresStorage implements IStorage {
       createdById: createdById || null,
     }).returning();
     return a;
+  }
+
+  async getNextBatchId(workspaceId: string, prefix: string): Promise<string> {
+    const normalizedPrefix = prefix.trim().toUpperCase();
+    if (!normalizedPrefix) {
+      throw new Error("Batch prefix is required");
+    }
+
+    const escapedPrefix = normalizedPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = `^${escapedPrefix}-([0-9]+)$`;
+    const result = await this.db.execute(sql`
+      SELECT MAX((regexp_match(${assignments.batchNumber}, ${pattern}))[1]::int) AS "maxSeq"
+      FROM ${assignments}
+      WHERE ${assignments.workspaceId} = ${workspaceId}
+        AND ${assignments.batchNumber} ~ ${pattern}
+    `);
+
+    const row = (result as unknown as { rows?: Array<Record<string, unknown>> }).rows?.[0];
+    const maxSeq = typeof row?.maxSeq === "number" ? row.maxSeq : Number(row?.maxSeq ?? 0);
+    const nextSeq = (Number.isFinite(maxSeq) ? maxSeq : 0) + 1;
+    return `${normalizedPrefix}-${String(nextSeq).padStart(3, "0")}`;
   }
 
   async updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment> {
