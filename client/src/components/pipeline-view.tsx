@@ -38,18 +38,34 @@ export function PipelineView({
   isCompactView,
 }: PipelineViewProps) {
   const [hideEmptyRows, setHideEmptyRows] = useState(false);
-  const pipelineTasks = tasks.filter((t) => t.showInPipelineView);
+  const pipelineTasks = useMemo(() => tasks.filter((t) => t.showInPipelineView), [tasks]);
+
+  const assignmentsByTaskAndDay = useMemo(() => {
+    const index = new Map<string, Map<string, Assignment[]>>();
+
+    assignments.forEach((assignment) => {
+      let assignmentsByDay = index.get(assignment.taskId);
+      if (!assignmentsByDay) {
+        assignmentsByDay = new Map<string, Assignment[]>();
+        index.set(assignment.taskId, assignmentsByDay);
+      }
+
+      const dayAssignments = assignmentsByDay.get(assignment.day) ?? [];
+      dayAssignments.push(assignment);
+      assignmentsByDay.set(assignment.day, dayAssignments);
+    });
+
+    return index;
+  }, [assignments]);
 
   const visiblePipelineTasks = useMemo(() => {
     if (!hideEmptyRows) return pipelineTasks;
-    return pipelineTasks.filter((task) => assignments.some((a) => a.taskId === task.id));
-  }, [assignments, hideEmptyRows, pipelineTasks]);
+    return pipelineTasks.filter((task) => (assignmentsByTaskAndDay.get(task.id)?.size ?? 0) > 0);
+  }, [assignmentsByTaskAndDay, hideEmptyRows, pipelineTasks]);
 
   const weekStart = new Date(weekStartDate + "T00:00:00");
 
   const personMap = new Map<string, Person>(people.map((p) => [p.id, p]));
-  const taskMap = new Map<string, Task>(tasks.map((t) => [t.id, t]));
-
   const cellHeight = isCompactView ? "min-h-[56px]" : "min-h-[80px]";
   const nameColWidth = isCompactView ? "140px" : "200px";
 
@@ -120,9 +136,7 @@ export function PipelineView({
 
             {/* Day cells for this task */}
             {DAYS.map((day, idx) => {
-              const dayAssignments = assignments.filter(
-                (a) => a.taskId === task.id && a.day === day
-              );
+              const dayAssignments = assignmentsByTaskAndDay.get(task.id)?.get(day) ?? [];
 
               return (
                 <div
