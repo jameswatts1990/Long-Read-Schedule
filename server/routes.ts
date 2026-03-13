@@ -11,7 +11,13 @@ import {
   isoDateString,
 } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import {
+  setupAuth,
+  isAuthenticated,
+  sessionMiddleware,
+  passportInitializeMiddleware,
+  passportSessionMiddleware,
+} from "./replitAuth";
 
 // Super-admin email list — these users can manage workspaces
 export const SUPER_ADMIN_EMAILS = new Set<string>([
@@ -85,11 +91,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     pingTimeout:  30_000,
   });
 
+  io.use((socket, next) => {
+    sessionMiddleware(socket.request as Request, {} as Response, (sessionError: unknown) => {
+      if (sessionError) {
+        return next(new Error("Authentication failed"));
+      }
+
+      passportInitializeMiddleware(socket.request as Request, {} as Response, (initError: unknown) => {
+        if (initError) {
+          return next(new Error("Authentication failed"));
+        }
+
+        passportSessionMiddleware(socket.request as Request, {} as Response, async (authError: unknown) => {
+          if (authError) {
+            return next(new Error("Authentication failed"));
+          }
+
+          try {
+            const req = socket.request as Request & { user?: any };
+            const user = req.user;
+            if (!user?.claims?.sub || !user?.claims?.email) {
+              return next(new Error("Authentication required"));
+            }
+
+            const workspaceId =
+              typeof socket.handshake.query.workspaceId === "string"
+                ? socket.handshake.query.workspaceId
+                : undefined;
+
+            if (!workspaceId) {
+              return next(new Error("workspaceId required"));
+            }
+
+            const userId = user.claims.sub as string;
+            const userEmail = user.claims.email as string;
+
+            if (!isSuperAdmin(userEmail)) {
+              const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
+              if (!membership) {
+                return next(new Error("Unauthorized workspace access"));
+              }
+            }
+
+            socket.data.workspaceId = workspaceId;
+            socket.data.userId = userId;
+            next();
+          } catch (error) {
+            next(new Error("Authentication failed"));
+          }
+        });
+      });
+    });
+  });
+
   io.on("connection", (socket) => {
-    const workspaceId = socket.handshake.query.workspaceId as string | undefined;
-    if (workspaceId) {
-      socket.join(workspaceId);
+    const workspaceId = socket.data.workspaceId as string | undefined;
+    if (!workspaceId) {
+      socket.disconnect(true);
+      return;
     }
+    socket.join(workspaceId);
   });
 
   // Fix Issue 1: payload carries the actual changed record so clients update
