@@ -23,7 +23,7 @@ import {
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, sql } from "drizzle-orm";
 import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
@@ -253,9 +253,13 @@ export class PostgresStorage implements IStorage {
   // Fix Issue 4: parallel updates instead of sequential awaits
   async reorderPeople(personIds: string[]): Promise<Person[]> {
     if (personIds.length === 0) return [];
-    await Promise.all(
-      personIds.map((id, i) => this.db.update(people).set({ order: i }).where(eq(people.id, id)))
-    );
+    const values = personIds.map((id, i) => sql`(${id}, ${i})`);
+    await this.db.execute(sql`
+      UPDATE ${people} AS p
+      SET "order" = v.ord
+      FROM (VALUES ${sql.join(values, sql`, `)}) AS v(id, ord)
+      WHERE p.id = v.id
+    `);
     const first = await this.getPerson(personIds[0]);
     return first ? await this.getPeople(first.workspaceId) : [];
   }
@@ -303,9 +307,13 @@ export class PostgresStorage implements IStorage {
   // Fix Issue 4: parallel updates instead of sequential awaits
   async reorderTasks(taskIds: string[]): Promise<Task[]> {
     if (taskIds.length === 0) return [];
-    await Promise.all(
-      taskIds.map((id, i) => this.db.update(tasks).set({ order: i }).where(eq(tasks.id, id)))
-    );
+    const values = taskIds.map((id, i) => sql`(${id}, ${i})`);
+    await this.db.execute(sql`
+      UPDATE ${tasks} AS t
+      SET "order" = v.ord
+      FROM (VALUES ${sql.join(values, sql`, `)}) AS v(id, ord)
+      WHERE t.id = v.id
+    `);
     const first = await this.getTask(taskIds[0]);
     return first ? await this.getTasks(first.workspaceId) : [];
   }
@@ -394,9 +402,15 @@ export class PostgresStorage implements IStorage {
 
   // Fix Issue 4: parallel updates instead of sequential awaits
   async reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]> {
-    await Promise.all(
-      assignmentIds.map((id, i) => this.db.update(assignments).set({ order: i }).where(eq(assignments.id, id)))
-    );
+    if (assignmentIds.length > 0) {
+      const values = assignmentIds.map((id, i) => sql`(${id}, ${i})`);
+      await this.db.execute(sql`
+        UPDATE ${assignments} AS a
+        SET "order" = v.ord
+        FROM (VALUES ${sql.join(values, sql`, `)}) AS v(id, ord)
+        WHERE a.id = v.id
+      `);
+    }
     return await this.getConflictingAssignments(personId, day, weekStartDate);
   }
 
