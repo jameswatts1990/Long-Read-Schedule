@@ -44,11 +44,28 @@ export default function Reporting() {
   const endDate = format(effectiveTo, "yyyy-MM-dd");
   const assignmentQueryKey = `/api/assignments?startDate=${startDate}&endDate=${endDate}`;
 
-  const { data: assignments = [] } = useQuery<Assignment[]>({ queryKey: [assignmentQueryKey] });
-  const { data: allTasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const {
+    data: assignments = [],
+    isLoading: isAssignmentsLoading,
+    error: assignmentsError,
+    refetch: refetchAssignments,
+  } = useQuery<Assignment[]>({ queryKey: [assignmentQueryKey] });
+  const {
+    data: allTasks = [],
+    isLoading: isTasksLoading,
+    error: tasksError,
+    refetch: refetchTasks,
+  } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
+  const isLoading = isAssignmentsLoading || isTasksLoading;
+  const hasError = Boolean(assignmentsError || tasksError);
+
+  const retryReportingQueries = () => {
+    void refetchAssignments();
+    void refetchTasks();
+  };
 
   // Filter to only production tasks
   const productionTasks = useMemo(() => allTasks.filter(t => (t as any).isProduction !== 0), [allTasks]);
@@ -277,75 +294,92 @@ export default function Reporting() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-0 pb-0 h-[400px] w-full">
-              <ChartContainer config={chartConfig} className="w-full h-full">
-                {chartType === "bar" ? (
-                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis 
-                      dataKey="formattedDate" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 12 }}
-                      dy={10}
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 12 }}
-                    />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Legend 
-                      verticalAlign="top" 
-                      height={36} 
-                      iconType="circle"
-                      formatter={(value) => <span className="text-xs font-medium">{chartConfig[value]?.label || value}</span>}
-                    />
-                    {productionTasks.map(task => selectedTaskIds.includes(task.id) && (
-                      <Bar 
-                        key={task.id} 
-                        dataKey={task.id} 
-                        fill={`var(--color-${task.id})`}
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={40}
+              {isLoading ? (
+                <div className="h-full w-full rounded-md border border-dashed border-muted p-6 animate-pulse">
+                  <div className="h-4 w-40 bg-muted rounded mb-6" />
+                  <div className="h-[280px] w-full bg-muted/70 rounded" />
+                  <p className="text-xs text-muted-foreground mt-4">Loading capacity trends...</p>
+                </div>
+              ) : hasError ? (
+                <div className="h-full w-full rounded-md border border-dashed border-muted p-6 flex flex-col items-center justify-center text-center gap-3">
+                  <p className="text-sm text-muted-foreground">Couldn&apos;t load reporting data right now.</p>
+                  <Button variant="outline" size="sm" onClick={retryReportingQueries}>Retry</Button>
+                </div>
+              ) : selectedTaskIds.length === 0 ? (
+                <div className="h-full w-full rounded-md border border-dashed border-muted p-6 flex items-center justify-center text-center">
+                  <p className="text-sm text-muted-foreground">Select at least one task to view capacity trends.</p>
+                </div>
+              ) : (
+                <ChartContainer config={chartConfig} className="w-full h-full">
+                  {chartType === "bar" ? (
+                    <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis
+                        dataKey="formattedDate"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 12 }}
+                        dy={10}
                       />
-                    ))}
-                  </BarChart>
-                ) : (
-                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis 
-                      dataKey="formattedDate" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 12 }}
-                      dy={10}
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 12 }}
-                    />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Legend 
-                      verticalAlign="top" 
-                      height={36} 
-                      iconType="circle"
-                      formatter={(value) => <span className="text-xs font-medium">{chartConfig[value]?.label || value}</span>}
-                    />
-                    {productionTasks.map(task => selectedTaskIds.includes(task.id) && (
-                      <Line 
-                        key={task.id} 
-                        type="monotone"
-                        dataKey={task.id} 
-                        stroke={`var(--color-${task.id})`}
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                        activeDot={{ r: 6 }}
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 12 }}
                       />
-                    ))}
-                  </LineChart>
-                )}
-              </ChartContainer>
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Legend
+                        verticalAlign="top"
+                        height={36}
+                        iconType="circle"
+                        formatter={(value) => <span className="text-xs font-medium">{chartConfig[value]?.label || value}</span>}
+                      />
+                      {productionTasks.map(task => selectedTaskIds.includes(task.id) && (
+                        <Bar
+                          key={task.id}
+                          dataKey={task.id}
+                          fill={`var(--color-${task.id})`}
+                          radius={[4, 4, 0, 0]}
+                          maxBarSize={40}
+                        />
+                      ))}
+                    </BarChart>
+                  ) : (
+                    <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis
+                        dataKey="formattedDate"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 12 }}
+                        dy={10}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Legend
+                        verticalAlign="top"
+                        height={36}
+                        iconType="circle"
+                        formatter={(value) => <span className="text-xs font-medium">{chartConfig[value]?.label || value}</span>}
+                      />
+                      {productionTasks.map(task => selectedTaskIds.includes(task.id) && (
+                        <Line
+                          key={task.id}
+                          type="monotone"
+                          dataKey={task.id}
+                          stroke={`var(--color-${task.id})`}
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      ))}
+                    </LineChart>
+                  )}
+                </ChartContainer>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -356,7 +390,24 @@ export default function Reporting() {
             <CardTitle>Data Table</CardTitle>
           </CardHeader>
           <div className="overflow-x-auto overflow-y-auto max-h-96">
-            {weeks.length === 0 ? (
+            {isLoading ? (
+              <div className="p-4 space-y-3 animate-pulse">
+                <div className="h-4 w-32 bg-muted rounded" />
+                <div className="h-10 w-full bg-muted/70 rounded" />
+                <div className="h-10 w-full bg-muted/70 rounded" />
+                <div className="h-10 w-full bg-muted/70 rounded" />
+                <p className="text-xs text-muted-foreground text-center">Loading table data...</p>
+              </div>
+            ) : hasError ? (
+              <div className="p-4">
+                <div className="rounded-md border border-dashed border-muted p-4 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">Unable to load table data.</p>
+                  <Button variant="outline" size="sm" onClick={retryReportingQueries}>Retry</Button>
+                </div>
+              </div>
+            ) : selectedTaskIds.length === 0 ? (
+              <p className="text-muted-foreground p-4 text-center">Select at least one task to view capacity trends.</p>
+            ) : weeks.length === 0 ? (
               <p className="text-muted-foreground p-4 text-center">No assignments match your filters</p>
             ) : (
               <table className="w-full border-collapse">
