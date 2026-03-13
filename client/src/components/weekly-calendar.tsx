@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CalendarDays, FileText, Hash, User } from "lucide-react";
+import { Plus, GripVertical, CalendarDays, FileText, Hash, User, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -425,6 +425,9 @@ interface WeeklyCalendarProps {
   isCompactView?: boolean;
   hidePersonColumn?: boolean;
   showColumnHeader?: boolean;
+  isMyScheduleOnly?: boolean;
+  canToggleMySchedule?: boolean;
+  onToggleMySchedule?: () => void;
 }
 
 export function WeeklyCalendar({ 
@@ -435,7 +438,10 @@ export function WeeklyCalendar({
   onAssignmentClick, 
   isCompactView = false,
   hidePersonColumn = false,
-  showColumnHeader = true
+  showColumnHeader = true,
+  isMyScheduleOnly = false,
+  canToggleMySchedule = false,
+  onToggleMySchedule,
 }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -689,7 +695,31 @@ export function WeeklyCalendar({
                 <tr>
                   {!hidePersonColumn && (
                     <th className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2 text-left">
-                      <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-7 w-7",
+                            isMyScheduleOnly ? "text-primary" : "text-muted-foreground"
+                          )}
+                          onClick={onToggleMySchedule}
+                          disabled={!canToggleMySchedule}
+                          title={
+                            !canToggleMySchedule
+                              ? "Cannot find your linked person record"
+                              : isMyScheduleOnly
+                                ? "Show all people"
+                                : "Show only my schedule"
+                          }
+                          aria-label={isMyScheduleOnly ? "Show all people" : "Show only my schedule"}
+                          data-testid="button-toggle-my-schedule"
+                        >
+                          <UserRound className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </th>
                   )}
                   {DAYS.map((day, dayIndex) => {
