@@ -153,37 +153,83 @@ export function WeeklyCalendar({
     },
   });
 
-  // Pre-group assignments by person+day for O(1) lookup instead of O(A) per cell
-  const assignmentsByCell = useMemo(() => {
-    const map = new Map<string, Assignment[]>();
-    for (const a of assignments) {
-      const key = `${a.personId}-${a.day}`;
-      if (!map.has(key)) {
-        map.set(key, []);
+  const scheduleIndexes = useMemo(() => {
+    const assignmentsByCell = new Map<string, Assignment[]>();
+    const taskIdsByDay = new Map<string, Set<string>>();
+    const daysByPerson = new Map<string, Set<string>>();
+    const annualLeaveByCell = new Map<string, boolean>();
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+
+    for (const assignment of assignments) {
+      const cellKey = `${assignment.personId}-${assignment.day}`;
+      const cellAssignments = assignmentsByCell.get(cellKey);
+      if (cellAssignments) {
+        cellAssignments.push(assignment);
+      } else {
+        assignmentsByCell.set(cellKey, [assignment]);
       }
-      map.get(key)!.push(a);
+
+      const taskIdsForDay = taskIdsByDay.get(assignment.day);
+      if (taskIdsForDay) {
+        taskIdsForDay.add(assignment.taskId);
+      } else {
+        taskIdsByDay.set(assignment.day, new Set([assignment.taskId]));
+      }
+
+      const personDays = daysByPerson.get(assignment.personId);
+      if (personDays) {
+        personDays.add(assignment.day);
+      } else {
+        daysByPerson.set(assignment.personId, new Set([assignment.day]));
+      }
+
+      if (!annualLeaveByCell.get(cellKey)) {
+        const task = taskById.get(assignment.taskId);
+        if (task?.name.includes("Annual Leave")) {
+          annualLeaveByCell.set(cellKey, true);
+        }
+      }
     }
-    // Sort each cell's assignments by order
-    map.forEach((arr: Assignment[]) => {
-      arr.sort((x: Assignment, y: Assignment) => ((x as any).order ?? 0) - ((y as any).order ?? 0));
+
+    assignmentsByCell.forEach((cellAssignments) => {
+      cellAssignments.sort((x: Assignment, y: Assignment) => ((x as any).order ?? 0) - ((y as any).order ?? 0));
     });
-    return map;
-  }, [assignments]);
+
+    const requiredDailyTasks = tasks.filter((task) => (task as any).requiredDaily === 1);
+    const missingRequiredTasksByDay = new Map<string, Task[]>();
+
+    for (const day of DAYS) {
+      const scheduledTaskIds = taskIdsByDay.get(day) ?? new Set<string>();
+      missingRequiredTasksByDay.set(
+        day,
+        requiredDailyTasks.filter((task) => !scheduledTaskIds.has(task.id))
+      );
+    }
+
+    return {
+      assignmentsByCell,
+      taskIdsByDay,
+      daysByPerson,
+      annualLeaveByCell,
+      requiredDailyTasks,
+      missingRequiredTasksByDay,
+      taskById,
+    };
+  }, [assignments, tasks]);
 
   const getAssignmentsForCell = (personId: string, day: string) => {
-    return assignmentsByCell.get(`${personId}-${day}`) || [];
+    return scheduleIndexes.assignmentsByCell.get(`${personId}-${day}`) || [];
   };
+
+  const getTaskById = (taskId: string) => scheduleIndexes.taskById.get(taskId);
 
   const personHasFullWeekScheduled = useMemo(() => {
     return people.reduce<Record<string, boolean>>((acc, person) => {
-      acc[person.id] = DAYS.every((day) =>
-        assignments.some((assignment) => assignment.personId === person.id && assignment.day === day)
-      );
+      const scheduledDays = scheduleIndexes.daysByPerson.get(person.id);
+      acc[person.id] = DAYS.every((day) => scheduledDays?.has(day));
       return acc;
     }, {});
-  }, [people, assignments]);
-
-  const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
+  }, [people, scheduleIndexes.daysByPerson]);
 
   const getDateForDay = (dayIndex: number) => {
     const startDate = parse(weekStartDate, "yyyy-MM-dd", new Date());
@@ -220,26 +266,12 @@ export function WeeklyCalendar({
   };
 
   const hasAnnualLeave = (personId: string, day: string) => {
-    const cellAssignments = getAssignmentsForCell(personId, day);
-    return cellAssignments.some(assignment => {
-      const task = getTaskById(assignment.taskId);
-      return task?.name.includes("Annual Leave");
-    });
+    return scheduleIndexes.annualLeaveByCell.get(`${personId}-${day}`) ?? false;
   };
 
-  const requiredDailyTasks = useMemo(() => {
-    return tasks.filter(t => (t as any).requiredDaily === 1);
-  }, [tasks]);
-
   const getMissingRequiredTasks = (day: string) => {
-    if (requiredDailyTasks.length === 0) return [];
-    const scheduledTaskIds = new Set<string>();
-    for (const a of assignments) {
-      if (a.day === day) {
-        scheduledTaskIds.add(a.taskId);
-      }
-    }
-    return requiredDailyTasks.filter(t => !scheduledTaskIds.has(t.id));
+    if (scheduleIndexes.requiredDailyTasks.length === 0) return [];
+    return scheduleIndexes.missingRequiredTasksByDay.get(day) ?? [];
   };
 
   // Number of columns: 1 for person (when shown) + 5 for days
