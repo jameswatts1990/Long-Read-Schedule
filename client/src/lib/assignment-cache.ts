@@ -20,7 +20,7 @@ const isDateWithinRange = (date: string, startDate: string, endDate: string) => 
   return date >= startDate && date <= endDate;
 };
 
-const queryContainsDate = (queryKey: readonly unknown[], date: string) => {
+export const queryContainsDate = (queryKey: readonly unknown[], date: string) => {
   const key = queryKey[0];
   if (typeof key !== "string" || !key.startsWith(ASSIGNMENTS_PATH)) return false;
 
@@ -115,6 +115,78 @@ export const applyAssignmentUpsert = (
       return assignmentListUpdater(old, assignment, containsNewWeek);
     });
   }
+};
+
+type ReorderPayload = {
+  weekStartDate: string;
+  personId: string;
+  day: Assignment["day"];
+  orderedAssignmentIds: string[];
+};
+
+const reorderCellAssignments = (
+  assignments: Assignment[],
+  payload: ReorderPayload,
+): Assignment[] => {
+  const { weekStartDate, personId, day, orderedAssignmentIds } = payload;
+  const orderedIds = new Set(orderedAssignmentIds);
+
+  const cellAssignments = assignments.filter(
+    (assignment) => assignment.weekStartDate === weekStartDate && assignment.personId === personId && assignment.day === day,
+  );
+
+  if (!cellAssignments.length) return assignments;
+
+  const byId = new Map(cellAssignments.map((assignment) => [assignment.id, assignment]));
+  const reorderedInCell = orderedAssignmentIds
+    .map((id) => byId.get(id))
+    .filter((assignment): assignment is Assignment => Boolean(assignment));
+
+  for (const assignment of cellAssignments) {
+    if (!orderedIds.has(assignment.id)) {
+      reorderedInCell.push(assignment);
+    }
+  }
+
+  if (!reorderedInCell.length) return assignments;
+
+  const cellIdSet = new Set(cellAssignments.map((assignment) => assignment.id));
+  const next: Assignment[] = [];
+  let inserted = false;
+
+  for (const assignment of assignments) {
+    if (!cellIdSet.has(assignment.id)) {
+      next.push(assignment);
+      continue;
+    }
+
+    if (!inserted) {
+      next.push(...reorderedInCell);
+      inserted = true;
+    }
+  }
+
+  if (!inserted) {
+    next.push(...reorderedInCell);
+  }
+
+  return next;
+};
+
+export const applyAssignmentReorder = (client: QueryClient, payload: ReorderPayload) => {
+  const { weekStartDate } = payload;
+  const weekKey = `${ASSIGNMENTS_PATH}?weekStartDate=${weekStartDate}`;
+
+  client.setQueryData<Assignment[]>([weekKey], (old) =>
+    old ? reorderCellAssignments(old, payload) : old,
+  );
+
+  client.setQueriesData<Assignment[]>(
+    {
+      predicate: (query) => isAssignmentQuery(query) && queryContainsDate(query.queryKey, weekStartDate),
+    },
+    (old) => (old ? reorderCellAssignments(old, payload) : old),
+  );
 };
 
 export const applyAssignmentDelete = (

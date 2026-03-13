@@ -478,7 +478,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields" });
       }
       const result = await storage.reorderAssignmentsByCell(personId, day, weekStartDate, assignmentIds);
-      broadcastUpdate("assignments", req.workspaceId, undefined, getOriginClientId(req));
+      broadcastUpdate("assignments", req.workspaceId, {
+        action: "reorder",
+        weekStartDate,
+        personId,
+        day,
+        orderedAssignmentIds: assignmentIds,
+      });
       res.json(result);
     } catch (error) {
       res.status(400).json({ error: "Failed to reorder assignments" });

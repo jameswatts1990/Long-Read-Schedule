@@ -8,7 +8,13 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import type { Assignment, Person, PremadeFilter, Task } from "@shared/schema";
-import { applyAssignmentDelete, applyAssignmentReorderCell, applyAssignmentUpsert, isAssignmentQuery } from "@/lib/assignment-cache";
+import {
+  applyAssignmentDelete,
+  applyAssignmentReorder,
+  applyAssignmentUpsert,
+  isAssignmentQuery,
+  queryContainsDate,
+} from "@/lib/assignment-cache";
 import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
@@ -23,28 +29,37 @@ function useRealTimeUpdates(workspaceId: string | null, clientId: string) {
   const missedEventsRef = useRef(false);
   const lastRefreshRef = useRef(0);
 
-  const handleUpdate = (data: { type?: string; action?: string; record?: Record<string, unknown> & { id?: string }; originClientId?: string }) => {
-    const { type, action, record, originClientId } = data ?? {};
+  type UpdatePayload = {
+    type?: string;
+    action?: string;
+    record?: Record<string, unknown> & { id?: string };
+    weekStartDate?: string;
+    personId?: string;
+    day?: Assignment["day"];
+    orderedAssignmentIds?: string[];
+  };
 
-    if (originClientId && originClientId === clientId) {
-      return;
-    }
+  const handleUpdate = (data: UpdatePayload) => {
+    const { type, action, record, weekStartDate, personId, day, orderedAssignmentIds } = data ?? {};
 
     if (type === "assignments") {
       const assignmentRecord = record as Assignment;
 
-      if ((action === "create" || action === "update") && assignmentRecord?.weekStartDate) {
+      if (action === "reorder" && weekStartDate && personId && day && Array.isArray(orderedAssignmentIds)) {
+        applyAssignmentReorder(queryClient, {
+          weekStartDate,
+          personId,
+          day,
+          orderedAssignmentIds,
+        });
+      } else if ((action === "create" || action === "update") && assignmentRecord?.weekStartDate) {
         applyAssignmentUpsert(queryClient, assignmentRecord);
       } else if (action === "delete" && record?.id) {
         applyAssignmentDelete(queryClient, record.id, (record as Assignment | undefined)?.weekStartDate);
-      } else if (
-        action === "reorder-cell" &&
-        weekStartDate &&
-        personId &&
-        day &&
-        Array.isArray(assignmentIds)
-      ) {
-        applyAssignmentReorderCell(queryClient, { weekStartDate, personId, day, assignmentIds });
+      } else if (weekStartDate) {
+        queryClient.invalidateQueries({
+          predicate: (query) => isAssignmentQuery(query) && queryContainsDate(query.queryKey, weekStartDate),
+        });
       } else {
         queryClient.invalidateQueries({ predicate: isAssignmentQuery });
       }
