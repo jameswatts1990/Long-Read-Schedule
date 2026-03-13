@@ -49,36 +49,21 @@ export default function MyDay() {
     const firstName = (user as any).firstName?.toLowerCase();
     const lastName = (user as any).lastName?.toLowerCase();
     
-    // Log for debugging
-    console.log("Matching user:", { userEmail, userName, firstName, lastName });
-    console.log("Available people:", people.map(p => p.name));
-    
     // Priority 1: Exact name match (highest priority)
     let match = people.find(p => userName && p.name.toLowerCase() === userName);
-    if (match) {
-      console.log("Matched by exact name:", match.name);
-      return match;
-    }
+    if (match) return match;
     
     // Priority 2: Full name contains both first and last name
     match = people.find(p => {
       const personName = p.name.toLowerCase();
       return lastName && firstName && personName.includes(lastName) && personName.includes(firstName);
     });
-    if (match) {
-      console.log("Matched by first+last name:", match.name);
-      return match;
-    }
+    if (match) return match;
     
     // Priority 3: Email local part match (less reliable)
     match = people.find(p => userEmail && p.name.toLowerCase().includes(userEmail.split('@')[0]));
-    if (match) {
-      console.log("Matched by email:", match.name);
-      return match;
-    }
+    if (match) return match;
     
-    // No match found
-    console.log("No match found for user");
     return null;
   }, [user, people]);
 
@@ -89,9 +74,7 @@ export default function MyDay() {
 
   const myAssignments = useMemo(() => {
     if (!matchedPerson) return [];
-    const filtered = assignments.filter(a => a.personId === matchedPerson.id);
-    console.log("Filtered assignments for", matchedPerson.name, ":", filtered.length);
-    return filtered;
+    return assignments.filter(a => a.personId === matchedPerson.id);
   }, [assignments, matchedPerson]);
 
   const assignmentsByDate = useMemo(() => {

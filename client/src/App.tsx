@@ -27,13 +27,25 @@ function useRealTimeUpdates(workspaceId: string | null) {
 
     const socket = io({
       path: "/socket.io",
-      transports: ["websocket", "polling"],
+      transports: ["websocket"],
       query: workspaceId ? { workspaceId } : {},
     });
 
-    socket.on("update", (data) => {
-      console.log("Real-time update received:", data);
-      queryClient.invalidateQueries();
+    socket.on("update", (data: { type?: string }) => {
+      const type = data?.type;
+      if (type === "assignments") {
+        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      } else if (type === "people") {
+        queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      } else if (type === "tasks") {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      } else if (type === "premade-filters") {
+        queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      }
     });
 
     socketRef.current = socket;

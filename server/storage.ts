@@ -21,9 +21,12 @@ import {
   workspaceUsers,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
 import { eq, and, gte, lte } from "drizzle-orm";
+import ws from "ws";
+
+neonConfig.webSocketConstructor = ws;
 
 export interface WorkspaceMember extends User {
   role: string;
@@ -91,8 +94,8 @@ export class PostgresStorage implements IStorage {
     if (!connectionString) {
       throw new Error("DATABASE_URL environment variable is not set");
     }
-    const sql = neon(connectionString);
-    this.db = drizzle(sql);
+    const pool = new Pool({ connectionString });
+    this.db = drizzle(pool);
   }
 
   // ─── User operations ───────────────────────────────────────────────────────

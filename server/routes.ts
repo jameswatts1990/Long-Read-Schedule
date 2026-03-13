@@ -71,9 +71,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const workspaceId = socket.handshake.query.workspaceId as string | undefined;
     if (workspaceId) {
       socket.join(workspaceId);
-      console.log(`Client joined workspace room: ${workspaceId}`);
-    } else {
-      console.log("Client connected without workspace");
     }
   });
 
