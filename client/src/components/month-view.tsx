@@ -2,12 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Plus, GripVertical, Info } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -284,38 +279,30 @@ export function MonthView({
                                 <div className="flex-1 min-w-0">
                                   <div className={cn("text-xs font-medium truncate flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                     <span className="truncate">{assignment.customName || task.name}</span>
-                                    {!isCompactView && (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <div className="p-0.5 hover:bg-black/10 rounded cursor-help">
-                                              <Info className="w-3 h-3 opacity-70" />
-                                            </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="p-3 max-w-xs text-foreground bg-popover border shadow-md">
-                                            <div className="space-y-2">
-                                              <div>
-                                                <p className="text-xs font-bold text-muted-foreground uppercase">Task</p>
-                                                <p className="text-sm font-medium">{assignment.customName || task.name}</p>
-                                              </div>
-                                              <div>
-                                                <p className="text-xs font-bold text-muted-foreground uppercase">Assigned To</p>
-                                                <p className="text-sm">{person.name}</p>
-                                              </div>
-                                              <div>
-                                                <p className="text-xs font-bold text-muted-foreground uppercase">Time Slot</p>
-                                                <p className="text-sm">{day}, {getDateForDay(weekStr, dayIndex)}</p>
-                                              </div>
-                                              {assignment.notes && (
-                                                <div>
-                                                  <p className="text-xs font-bold text-muted-foreground uppercase">Notes</p>
-                                                  <p className="text-sm italic">{assignment.notes}</p>
-                                                </div>
-                                              )}
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
+                                    {!isCompactView && assignment.notes && (
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className="relative z-20 inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/35 bg-white/85 shadow-sm transition-colors hover:bg-white/95"
+                                            onClick={(event) => event.stopPropagation()}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                            aria-label="View assignment notes"
+                                          >
+                                            <Info className="h-3.5 w-3.5" />
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                          className="z-[70] w-72 p-3"
+                                          align="end"
+                                          onClick={(event) => event.stopPropagation()}
+                                        >
+                                          <div className="space-y-1">
+                                            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Notes</p>
+                                            <p className="text-sm leading-relaxed">{assignment.notes}</p>
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
                                     )}
                                   </div>
                                   {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
