@@ -17,6 +17,7 @@ import { type Person, type Task, type Assignment, type PremadeFilter } from "@sh
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useAuth } from "@/hooks/useAuth";
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -74,14 +75,19 @@ export default function Scheduler() {
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());
   const [isCompactView, setIsCompactView] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
+  const [hideEmptyPipelines, setHideEmptyPipelines] = useState(false);
+  const [showOnlyMyAssignments, setShowOnlyMyAssignments] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
+  const { user } = useAuth();
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: premadeFilters = [] } = useQuery<PremadeFilter[]>({ queryKey: ["/api/premade-filters"] });
+
+  const currentPersonId = people.find((p) => p.userId === (user as any)?.id)?.id ?? null;
 
   const createFilterMutation = useMutation({
     mutationFn: async (data: { name: string; personIds: string[]; taskIds: string[] }) => {
@@ -142,6 +148,9 @@ export default function Scheduler() {
   if (filterTaskIds.size > 0) {
     weekAssignments = weekAssignments.filter(a => filterTaskIds.has(a.taskId));
   }
+  if (showOnlyMyAssignments && currentPersonId) {
+    weekAssignments = weekAssignments.filter((a) => a.personId === currentPersonId);
+  }
 
   const hasActiveFilters = filterPersonIds.size > 0 || filterTaskIds.size > 0;
 
@@ -149,6 +158,19 @@ export default function Scheduler() {
   const displayPeople = hasActiveFilters
     ? people.filter(p => !p.excluded && weekAssignments.some(a => a.personId === p.id))
     : people.filter(p => !p.excluded);
+
+  const canUseMyAssignmentsToggle = !!currentPersonId;
+
+  const toggleMyAssignmentsView = () => {
+    if (!canUseMyAssignmentsToggle) {
+      toast({
+        title: "Person profile not linked",
+        description: "Ask an admin to link your user account to a person record to use this view.",
+      });
+      return;
+    }
+    setShowOnlyMyAssignments((prev) => !prev);
+  };
 
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeekStart);
@@ -561,6 +583,9 @@ export default function Scheduler() {
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
+            showOnlyCurrentPerson={showOnlyMyAssignments}
+            canToggleCurrentPerson={canUseMyAssignmentsToggle}
+            onToggleCurrentPerson={toggleMyAssignmentsView}
           />
         )}
         {viewMode === "month" && (
@@ -582,6 +607,8 @@ export default function Scheduler() {
             tasks={tasks}
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
+            hideEmptyPipelines={hideEmptyPipelines}
+            onToggleHideEmptyPipelines={() => setHideEmptyPipelines((prev) => !prev)}
           />
         )}
       </div>
