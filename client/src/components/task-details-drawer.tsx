@@ -140,7 +140,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   return (
     <div
       className={cn(
-        "fixed inset-y-0 right-0 w-96 bg-card border-l shadow-xl transform transition-transform duration-300 z-50",
+        "fixed inset-y-0 right-0 w-full max-w-[42rem] bg-card border-l shadow-xl transform transition-transform duration-300 z-50",
         open ? "translate-x-0" : "translate-x-full"
       )}
       data-testid="drawer-task-details"
