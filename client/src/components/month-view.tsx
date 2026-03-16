@@ -284,12 +284,18 @@ export function MonthView({
                                         <PopoverTrigger asChild>
                                           <button
                                             type="button"
-                                            className="relative z-20 inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/35 bg-white/85 shadow-sm transition-colors hover:bg-white/95"
+                                            className={cn(
+                                              "relative z-20 inline-flex h-5 w-5 items-center justify-center rounded-full border shadow-sm transition-all",
+                                              "hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+                                              isTaskDark
+                                                ? "border-white/55 bg-black/35 text-white hover:bg-black/50 focus-visible:ring-white/80 focus-visible:ring-offset-transparent"
+                                                : "border-black/25 bg-white/95 text-foreground hover:bg-white focus-visible:ring-foreground/50 focus-visible:ring-offset-white/40"
+                                            )}
                                             onClick={(event) => event.stopPropagation()}
                                             onPointerDown={(event) => event.stopPropagation()}
                                             aria-label="View assignment notes"
                                           >
-                                            <Info className="h-3.5 w-3.5" />
+                                            <Info className="h-3.5 w-3.5 stroke-[2.6]" />
                                           </button>
                                         </PopoverTrigger>
                                         <PopoverContent
