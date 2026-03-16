@@ -154,10 +154,15 @@ export default function Scheduler() {
 
   const hasActiveFilters = filterPersonIds.size > 0 || filterTaskIds.size > 0;
 
-  // When filters are active, only show people who have assignments in the filtered results
-  const displayPeople = hasActiveFilters
-    ? people.filter(p => !p.excluded && weekAssignments.some(a => a.personId === p.id))
-    : people.filter(p => !p.excluded);
+  const visiblePeople = people.filter((p) => !p.excluded);
+
+  // When showing only the signed-in person's assignments, keep only that row visible.
+  // Otherwise, when filters are active, only show people who have assignments in the filtered results.
+  const displayPeople = showOnlyMyAssignments && currentPersonId
+    ? visiblePeople.filter((p) => p.id === currentPersonId)
+    : hasActiveFilters
+      ? visiblePeople.filter((p) => weekAssignments.some((a) => a.personId === p.id))
+      : visiblePeople;
 
   const canUseMyAssignmentsToggle = !!currentPersonId;
 

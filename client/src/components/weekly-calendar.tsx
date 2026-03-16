@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User } from "lucide-react";
+import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -268,7 +268,7 @@ export function WeeklyCalendar({
                           title={canToggleCurrentPerson ? (showOnlyCurrentPerson ? "Show all people" : "Show only my assignments") : "Link your person record to your user in Admin to use this filter"}
                           data-testid="button-person-only-toggle"
                         >
-                          <User className="h-3.5 w-3.5" />
+                          {showOnlyCurrentPerson ? <UserCheck className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
                         </Button>
                       </div>
                     </th>
