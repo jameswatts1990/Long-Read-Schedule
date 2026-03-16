@@ -1,5 +1,7 @@
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { addDays } from "date-fns";
+import { Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface PipelineViewProps {
   weekStartDate: string;
@@ -8,6 +10,8 @@ interface PipelineViewProps {
   tasks: Task[];
   onAssignmentClick: (assignment: Assignment) => void;
   isCompactView: boolean;
+  hideEmptyPipelines?: boolean;
+  onToggleHideEmptyPipelines?: () => void;
 }
 
 function formatDate(date: Date): string {
@@ -33,8 +37,13 @@ export function PipelineView({
   tasks,
   onAssignmentClick,
   isCompactView,
+  hideEmptyPipelines = false,
+  onToggleHideEmptyPipelines,
 }: PipelineViewProps) {
   const pipelineTasks = tasks.filter((t) => t.showInPipelineView);
+  const visiblePipelineTasks = hideEmptyPipelines
+    ? pipelineTasks.filter((task) => assignments.some((a) => a.taskId === task.id))
+    : pipelineTasks;
 
   const weekStart = new Date(weekStartDate + "T00:00:00");
 
@@ -53,6 +62,15 @@ export function PipelineView({
     );
   }
 
+  if (hideEmptyPipelines && visiblePipelineTasks.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-24">
+        <p className="text-base">No pipeline rows have assignments this week.</p>
+        <p className="text-sm">Turn off the visibility filter to show all configured pipeline rows.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-auto">
       <div
@@ -65,6 +83,17 @@ export function PipelineView({
         {/* Header row */}
         <div className="sticky left-0 z-20 bg-background border-b border-r flex items-center px-3 py-2">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pipeline</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-1 h-6 w-6"
+            onClick={onToggleHideEmptyPipelines}
+            aria-label={hideEmptyPipelines ? "Show all pipeline rows" : "Hide empty pipeline rows"}
+            title={hideEmptyPipelines ? "Show all pipeline rows" : "Hide empty pipeline rows"}
+            data-testid="button-pipeline-hide-empty"
+          >
+            {hideEmptyPipelines ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          </Button>
         </div>
         {DAYS.map((day, idx) => (
           <div
@@ -79,7 +108,7 @@ export function PipelineView({
         ))}
 
         {/* Task rows */}
-        {pipelineTasks.map((task) => (
+        {visiblePipelineTasks.map((task) => (
           <>
             {/* Task name cell */}
             <div

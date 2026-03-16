@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle } from "lucide-react";
+import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -59,6 +59,9 @@ interface WeeklyCalendarProps {
   isCompactView?: boolean;
   hidePersonColumn?: boolean;
   showColumnHeader?: boolean;
+  showOnlyCurrentPerson?: boolean;
+  canToggleCurrentPerson?: boolean;
+  onToggleCurrentPerson?: () => void;
 }
 
 export function WeeklyCalendar({ 
@@ -69,7 +72,10 @@ export function WeeklyCalendar({
   onAssignmentClick, 
   isCompactView = false,
   hidePersonColumn = false,
-  showColumnHeader = true
+  showColumnHeader = true,
+  showOnlyCurrentPerson = false,
+  canToggleCurrentPerson = true,
+  onToggleCurrentPerson,
 }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -250,7 +256,21 @@ export function WeeklyCalendar({
                 <tr>
                   {!hidePersonColumn && (
                     <th className="sticky top-0 left-0 z-50 border-b border-r bg-muted p-2 text-left">
-                      <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-sm text-foreground" data-testid="header-person">Person</span>
+                        <Button
+                          variant={showOnlyCurrentPerson ? "secondary" : "ghost"}
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={onToggleCurrentPerson}
+                          disabled={!canToggleCurrentPerson}
+                          aria-label={showOnlyCurrentPerson ? "Show all people" : "Show only my assignments"}
+                          title={canToggleCurrentPerson ? (showOnlyCurrentPerson ? "Show all people" : "Show only my assignments") : "Link your person record to your user in Admin to use this filter"}
+                          data-testid="button-person-only-toggle"
+                        >
+                          <User className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </th>
                   )}
                   {DAYS.map((day, dayIndex) => {
