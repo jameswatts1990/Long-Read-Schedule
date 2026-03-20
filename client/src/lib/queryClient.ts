@@ -19,9 +19,10 @@ export async function apiRequest(
     credentials: "include",
   });
 
-  // Handle 401 on mutations - force auth state update and UI refresh
+  // Handle 401 on mutations by re-checking auth in the background.
+  // Avoid forcing the app into a logged-out state until /api/auth/user
+  // confirms the session is actually gone.
   if (res.status === 401) {
-    queryClient.setQueryData(["/api/auth/user"], null);
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
   }
 
@@ -40,10 +41,9 @@ export const getQueryFn: <T>(options: {
     });
 
     if (res.status === 401) {
-      // Always invalidate auth state on any 401
+      // Re-check auth in the background on non-auth 401s, but keep the
+      // current auth state until the dedicated auth query confirms expiry.
       if (queryKey[0] !== "/api/auth/user") {
-        // Force auth re-check immediately when any API returns 401
-        queryClient.setQueryData(["/api/auth/user"], null);
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       }
       
