@@ -27,11 +27,10 @@ export function useAuth() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  // No polling needed — session expiry is detected reactively via the 401
-  // handler in queryClient.ts (apiRequest / getQueryFn both call
-  // setQueryData(["/api/auth/user"], null) on any 401 response).
-  // A setInterval here was firing 2 DB queries every 5 minutes per open tab
-  // for zero benefit.
+  // No polling needed — session expiry is detected reactively. We only show
+  // the destructive toast once the dedicated auth query itself confirms the
+  // session is gone, which avoids false flashes from transient 401s elsewhere
+  // in the app.
 
   return {
     user,

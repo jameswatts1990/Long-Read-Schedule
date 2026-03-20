@@ -19,7 +19,7 @@ const getOidcConfig = memoize(
 );
 
 export function getSession() {
-  const sessionTtl = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+  const sessionTtl = 90 * 24 * 60 * 60 * 1000; // 90 days in ms
   const pgStore = connectPg(session);
   // Share the same Neon pool that Drizzle uses — avoids a second independent
   // WebSocket cluster to the database just for session reads/writes.
@@ -200,6 +200,24 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     const config = await getOidcConfig();
     const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
     updateUserSession(user, tokenResponse);
+
+    await new Promise<void>((resolve, reject) => {
+      req.login(user, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        req.session.save((sessionError) => {
+          if (sessionError) {
+            reject(sessionError);
+            return;
+          }
+          resolve();
+        });
+      });
+    });
+
     return next();
   } catch (error) {
     res.status(401).json({ message: "Unauthorized" });
