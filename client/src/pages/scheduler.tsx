@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers, Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -128,16 +128,24 @@ export default function Scheduler() {
   const monthEndStr = weeksInMonth.length > 0 ? formatDate(weeksInMonth[weeksInMonth.length - 1]) : weekStartStr;
   
   // Fetch assignments filtered by week for week/pipeline view
-  const { data: weekAssignmentsData = [] } = useQuery<Assignment[]>({ 
+  const weekAssignmentsQuery = useQuery<Assignment[]>({ 
     queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`],
-    enabled: viewMode === "week" || viewMode === "pipeline"
+    enabled: viewMode === "week" || viewMode === "pipeline",
+    placeholderData: (previousData) => previousData,
   });
   
   // Fetch assignments for entire month range for month view
-  const { data: monthAssignmentsData = [] } = useQuery<Assignment[]>({ 
+  const monthAssignmentsQuery = useQuery<Assignment[]>({ 
     queryKey: [`/api/assignments?startDate=${monthStartStr}&endDate=${monthEndStr}`],
-    enabled: viewMode === "month"
+    enabled: viewMode === "month",
+    placeholderData: (previousData) => previousData,
   });
+
+  const weekAssignmentsData = weekAssignmentsQuery.data ?? [];
+  const monthAssignmentsData = monthAssignmentsQuery.data ?? [];
+  const isAssignmentDataFetching = viewMode === "month"
+    ? monthAssignmentsQuery.isFetching
+    : weekAssignmentsQuery.isFetching;
   
   let weekAssignments = viewMode === "month" ? monthAssignmentsData : weekAssignmentsData;
 
@@ -580,7 +588,19 @@ export default function Scheduler() {
           />
         </div>
       </header>
-      <div className={`flex-1 overflow-auto ${isCompactView ? "p-2" : "p-6"}`}>
+      <div className={cn("relative flex-1 overflow-auto", isCompactView ? "p-2" : "p-6")}>
+        {isAssignmentDataFetching && (
+          <div
+            className="absolute inset-x-2 top-2 z-20 flex justify-center pointer-events-none"
+            data-testid="week-transition-spinner"
+          >
+            <div className="flex items-center gap-2 rounded-full border bg-background/95 px-4 py-2 shadow-lg backdrop-blur-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm font-medium text-foreground">Loading assignments...</span>
+            </div>
+          </div>
+        )}
+
         {viewMode === "week" && (
           <WeeklyCalendar
             weekStartDate={weekStartStr}
