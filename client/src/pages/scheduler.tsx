@@ -504,6 +504,7 @@ export default function Scheduler() {
             selectedPersonIds={filterPersonIds}
             selectedTaskIds={filterTaskIds}
             premadeFilters={premadeFilters}
+            workspaceStorageKey={activeWorkspace?.id ?? "default"}
             onPersonToggle={togglePersonFilter}
             onPersonSelectAll={selectAllPeople}
             onTaskToggle={toggleTaskFilter}
