@@ -686,6 +686,11 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                           <SelectItem value="weekly">Weekly (one day)</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {field.value === "daily"
+                          ? "On active weeks the current person is assigned Mon-Fri."
+                          : "On active weeks the current person is assigned on the chosen day only."}
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -695,7 +700,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                   name="intervalWeeks"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Rotation interval (weeks)</FormLabel>
+                      <FormLabel>Repeat every N weeks</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -705,6 +710,9 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                           placeholder="1"
                         />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        1 = every week; 2 = every other week; 3 = active week 1, skip 2-3, active week 4…
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
