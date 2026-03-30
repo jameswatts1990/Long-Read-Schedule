@@ -19,14 +19,15 @@ const getOidcConfig = memoize(
 );
 
 export function getSession() {
-  const sessionTtl = 90 * 24 * 60 * 60 * 1000; // 90 days in ms
+  const sessionTtlMs = 180 * 24 * 60 * 60 * 1000; // 180 days in ms
+  const sessionTtlSeconds = Math.floor(sessionTtlMs / 1000);
   const pgStore = connectPg(session);
   // Share the same Neon pool that Drizzle uses — avoids a second independent
   // WebSocket cluster to the database just for session reads/writes.
   const sessionStore = new pgStore({
     pool: pool as unknown as import("pg").Pool,
     createTableIfMissing: false,
-    ttl: sessionTtl,
+    ttl: sessionTtlSeconds,
     tableName: "sessions",
     pruneSessionInterval: 24 * 60 * 60, // once per day, not every 15 min
     disableTouch: true,                  // no TTL-refresh write on every request
@@ -39,7 +40,7 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: true,
-      maxAge: sessionTtl,
+      maxAge: sessionTtlMs,
     },
   });
 }
@@ -48,10 +49,14 @@ function updateUserSession(
   user: any,
   tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
 ) {
-  user.claims = tokens.claims();
+  const claims = tokens.claims();
+  user.claims = claims;
   user.access_token = tokens.access_token;
-  user.refresh_token = tokens.refresh_token;
-  user.expires_at = user.claims?.exp;
+  // Some refresh-token responses omit a new refresh token. Preserve the
+  // existing one so future refreshes don't fail prematurely.
+  user.refresh_token = tokens.refresh_token ?? user.refresh_token;
+  const now = Math.floor(Date.now() / 1000);
+  user.expires_at = claims?.exp ?? (tokens.expires_in ? now + tokens.expires_in : user.expires_at);
 }
 
 // Email whitelist - Add approved emails here

@@ -1,9 +1,46 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+let hasTriggeredSessionRedirect = false;
+
+function redirectToLogin() {
+  if (hasTriggeredSessionRedirect || typeof window === "undefined") return;
+  hasTriggeredSessionRedirect = true;
+  window.location.assign("/api/login");
+}
+
+async function getErrorDetails(res: Response): Promise<{ rawText: string; message: string }> {
+  const rawText = (await res.text()) || res.statusText;
+  let parsedMessage = rawText;
+
+  try {
+    const parsed = JSON.parse(rawText);
+    parsedMessage = parsed?.message ?? parsed?.error ?? rawText;
+  } catch {
+    // Keep raw text for non-JSON error payloads.
+  }
+
+  if (res.status === 401) {
+    return {
+      rawText,
+      message: "Your session has expired. Redirecting you to log in...",
+    };
+  }
+
+  if (res.status === 400 && /No active workspace selected/i.test(parsedMessage)) {
+    queryClient.invalidateQueries({ queryKey: ["/api/my-workspace"] });
+    return {
+      rawText,
+      message: "Your workspace session has ended. Please choose a workspace again.",
+    };
+  }
+
+  return { rawText, message: parsedMessage };
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const { message } = await getErrorDetails(res);
+    throw new Error(`${res.status}: ${message}`);
   }
 }
 
@@ -24,6 +61,7 @@ export async function apiRequest(
   // confirms the session is actually gone.
   if (res.status === 401) {
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    redirectToLogin();
   }
 
   await throwIfResNotOk(res);
@@ -50,7 +88,8 @@ export const getQueryFn: <T>(options: {
       if (unauthorizedBehavior === "returnNull") {
         return null;
       }
-      throw new Error("Session expired. Please log in.");
+      redirectToLogin();
+      throw new Error("Your session has expired. Redirecting you to log in...");
     }
 
     await throwIfResNotOk(res);
