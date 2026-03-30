@@ -95,6 +95,19 @@ export const premadeFilters = pgTable("premade_filters", {
   workspaceId: varchar("workspace_id").notNull().default("default"),
 });
 
+export const rotaTasks = pgTable("rota_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  taskId: varchar("task_id").notNull(),
+  personIds: text("person_ids").array().notNull().default([]),
+  frequency: text("frequency").notNull().default("weekly"), // "daily" | "weekly"
+  day: text("day").notNull().default("Monday"), // day the rota assignment is expected
+  startDate: text("start_date").notNull(),
+  order: integer("order").default(0),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const isoDateString = z.string()
   .trim()
   .refine((val) => val.length > 0, { message: "Required" })
@@ -108,6 +121,12 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id:
   weekStartDate: isoDateString,
 });
 export const insertPremadeFilterSchema = createInsertSchema(premadeFilters).omit({ id: true });
+export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: true, createdAt: true }).extend({
+  day: z.enum(DAYS),
+  frequency: z.enum(["daily", "weekly"]),
+  startDate: isoDateString,
+  personIds: z.array(z.string()).min(1, "At least one person is required"),
+});
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
 export const insertWorkspaceUserSchema = createInsertSchema(workspaceUsers).omit({ id: true, createdAt: true });
 
@@ -125,6 +144,9 @@ export type UpsertUser = typeof users.$inferInsert;
 
 export type PremadeFilter = typeof premadeFilters.$inferSelect;
 export type InsertPremadeFilter = z.infer<typeof insertPremadeFilterSchema>;
+
+export type RotaTask = typeof rotaTasks.$inferSelect;
+export type InsertRotaTask = z.infer<typeof insertRotaTaskSchema>;
 
 export type Workspace = typeof workspaces.$inferSelect;
 export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;

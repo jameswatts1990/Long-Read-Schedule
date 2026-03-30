@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun, UserCheck, UserX, Layers, Users, X, Loader2 } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun, UserCheck, UserX, Layers, Users, X, Loader2, CalendarClock } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,7 +37,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { type Person, type Task, type User, type Workspace } from "@shared/schema";
+import { DAYS, type Person, type Task, type User, type Workspace, type RotaTask } from "@shared/schema";
 
 // Super-admin email list (must match server/routes.ts SUPER_ADMIN_EMAILS)
 const SUPER_ADMIN_EMAILS = new Set(["jw24@sanger.ac.uk", "admin@sanger.ac.uk"]);
@@ -95,8 +95,18 @@ const taskFormSchema = z.object({
   showInPipelineView: z.coerce.boolean().default(false),
 });
 
+const rotaTaskFormSchema = z.object({
+  name: z.string().min(1, "Rota task name is required"),
+  taskId: z.string().min(1, "Task is required"),
+  frequency: z.enum(["daily", "weekly"]),
+  day: z.enum(DAYS),
+  startDate: z.string().min(1, "Start date is required"),
+  personIds: z.array(z.string()).min(1, "Add at least one person to the rota order"),
+});
+
 type PersonFormData = z.infer<typeof personFormSchema>;
 type TaskFormData = z.infer<typeof taskFormSchema>;
+type RotaTaskFormData = z.infer<typeof rotaTaskFormSchema>;
 
 type WorkspaceMember = User & { role: string };
 
@@ -407,6 +417,369 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }) {
+  const { toast } = useToast();
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingRotaTask, setEditingRotaTask] = useState<RotaTask | null>(null);
+  const [draggedRosterPersonId, setDraggedRosterPersonId] = useState<string | null>(null);
+
+  const { data: rotaTasks = [] } = useQuery<RotaTask[]>({ queryKey: ["/api/rota-tasks"] });
+
+  const rotaTaskForm = useForm<RotaTaskFormData>({
+    resolver: zodResolver(rotaTaskFormSchema),
+    defaultValues: {
+      name: "",
+      taskId: "",
+      frequency: "weekly",
+      day: "Monday",
+      startDate: new Date().toISOString().slice(0, 10),
+      personIds: [],
+    },
+  });
+
+  const createRotaTaskMutation = useMutation({
+    mutationFn: async (data: RotaTaskFormData) => {
+      const res = await apiRequest("POST", "/api/rota-tasks", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rota-tasks"] });
+      toast({ title: "Rota task created", description: "The rotation is now active for this workspace." });
+      setShowDialog(false);
+      rotaTaskForm.reset();
+    },
+    onError: () => toast({ title: "Failed to create rota task", variant: "destructive" }),
+  });
+
+  const updateRotaTaskMutation = useMutation({
+    mutationFn: async (data: RotaTaskFormData) => {
+      if (!editingRotaTask) throw new Error("No rota task selected");
+      const res = await apiRequest("PUT", `/api/rota-tasks/${editingRotaTask.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rota-tasks"] });
+      toast({ title: "Rota task updated" });
+      setShowDialog(false);
+      setEditingRotaTask(null);
+      rotaTaskForm.reset();
+    },
+    onError: () => toast({ title: "Failed to update rota task", variant: "destructive" }),
+  });
+
+  const deleteRotaTaskMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/rota-tasks/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rota-tasks"] });
+      toast({ title: "Rota task removed" });
+    },
+    onError: () => toast({ title: "Failed to delete rota task", variant: "destructive" }),
+  });
+
+  const personIds = rotaTaskForm.watch("personIds");
+  const selectedTaskId = rotaTaskForm.watch("taskId");
+
+  const addPersonToRoster = (personId: string) => {
+    if (personIds.includes(personId)) return;
+    rotaTaskForm.setValue("personIds", [...personIds, personId], { shouldValidate: true });
+  };
+
+  const removePersonFromRoster = (personId: string) => {
+    rotaTaskForm.setValue("personIds", personIds.filter((id) => id !== personId), { shouldValidate: true });
+  };
+
+  const movePersonWithinRoster = (fromPersonId: string, targetPersonId: string) => {
+    if (fromPersonId === targetPersonId) return;
+    const next = personIds.filter((id) => id !== fromPersonId);
+    const targetIndex = next.findIndex((id) => id === targetPersonId);
+    if (targetIndex < 0) return;
+    next.splice(targetIndex, 0, fromPersonId);
+    rotaTaskForm.setValue("personIds", next, { shouldValidate: true });
+  };
+
+  const getRotationPreview = (rotaTask: RotaTask) => {
+    const orderedPeople = rotaTask.personIds
+      .map((personId) => people.find((person) => person.id === personId))
+      .filter((person): person is Person => Boolean(person));
+
+    if (!orderedPeople.length) return "No people assigned";
+
+    const today = new Date();
+    const start = new Date(`${rotaTask.startDate}T00:00:00`);
+    const elapsedMs = today.getTime() - start.getTime();
+    const elapsedDays = Math.max(0, Math.floor(elapsedMs / (1000 * 60 * 60 * 24)));
+    const step = rotaTask.frequency === "daily" ? elapsedDays : Math.floor(elapsedDays / 7);
+    const person = orderedPeople[step % orderedPeople.length];
+    return `Current: ${person.name}`;
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <CalendarClock className="h-6 w-6" />
+            Rota Tasks
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Build an ordered rota from workspace people and link it to an existing task.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            setEditingRotaTask(null);
+            rotaTaskForm.reset({
+              name: "",
+              taskId: selectedTaskId || "",
+              frequency: "weekly",
+              day: "Monday",
+              startDate: new Date().toISOString().slice(0, 10),
+              personIds: [],
+            });
+            setShowDialog(true);
+          }}
+          data-testid="button-add-rota-task"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Rota Task
+        </Button>
+      </div>
+
+      {rotaTasks.length === 0 ? (
+        <p className="text-muted-foreground text-sm">No rota tasks configured yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {rotaTasks.map((rotaTask) => {
+            const linkedTask = tasks.find((task) => task.id === rotaTask.taskId);
+            const names = rotaTask.personIds
+              .map((personId) => people.find((person) => person.id === personId)?.name)
+              .filter(Boolean) as string[];
+            return (
+              <div key={rotaTask.id} className="rounded-lg border p-4" data-testid={`rota-task-item-${rotaTask.id}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="font-semibold">{rotaTask.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Task: {linkedTask?.name || "Unknown"} · {rotaTask.frequency === "daily" ? "Daily" : "Weekly"} on {rotaTask.day}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Start date: {rotaTask.startDate}</p>
+                    <p className="text-sm">{getRotationPreview(rotaTask)}</p>
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {names.map((name) => (
+                        <Badge key={name} variant="secondary">{name}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setEditingRotaTask(rotaTask);
+                        rotaTaskForm.reset({
+                          name: rotaTask.name,
+                          taskId: rotaTask.taskId,
+                          frequency: rotaTask.frequency as "daily" | "weekly",
+                          day: rotaTask.day as typeof DAYS[number],
+                          startDate: rotaTask.startDate,
+                          personIds: rotaTask.personIds,
+                        });
+                        setShowDialog(true);
+                      }}
+                      data-testid={`button-edit-rota-task-${rotaTask.id}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteRotaTaskMutation.mutate(rotaTask.id)}
+                      disabled={deleteRotaTaskMutation.isPending}
+                      data-testid={`button-delete-rota-task-${rotaTask.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Dialog open={showDialog} onOpenChange={(open) => { if (!open) { setShowDialog(false); setEditingRotaTask(null); } }}>
+        <DialogContent className="max-w-4xl" data-testid="dialog-rota-task">
+          <DialogHeader>
+            <DialogTitle>{editingRotaTask ? "Edit Rota Task" : "Create Rota Task"}</DialogTitle>
+            <DialogDescription>
+              Choose a linked task, set cadence, then build the ordered list of people.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...rotaTaskForm}>
+            <form onSubmit={rotaTaskForm.handleSubmit((data) => editingRotaTask ? updateRotaTaskMutation.mutate(data) : createRotaTaskMutation.mutate(data))} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={rotaTaskForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Rota Task Name</FormLabel>
+                      <FormControl><Input {...field} placeholder="e.g. Bench opening rota" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={rotaTaskForm.control}
+                  name="taskId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Linked Task</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select a task..." /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {tasks.map((task) => <SelectItem key={task.id} value={task.id}>{task.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={rotaTaskForm.control}
+                  name="frequency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Assignment cadence</FormLabel>
+                      <Select value={field.value} onValueChange={(value: "daily" | "weekly") => field.onChange(value)}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={rotaTaskForm.control}
+                  name="day"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Assignment day</FormLabel>
+                      <Select value={field.value} onValueChange={(value: typeof DAYS[number]) => field.onChange(value)}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {DAYS.map((day) => <SelectItem key={day} value={day}>{day}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={rotaTaskForm.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Rotation start date</FormLabel>
+                      <FormControl><Input {...field} type="date" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Card className="p-3">
+                  <p className="font-medium mb-2">Available people</p>
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {people.filter((person) => !personIds.includes(person.id)).map((person) => (
+                      <button
+                        type="button"
+                        key={person.id}
+                        className="w-full flex items-center justify-between rounded-md border px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+                        onClick={() => addPersonToRoster(person.id)}
+                      >
+                        <span>{person.name}</span>
+                        <Plus className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    ))}
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <FormField
+                    control={rotaTaskForm.control}
+                    name="personIds"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>Rota order (drag to reorder)</FormLabel>
+                        <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                          {personIds.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Add people from the left.</p>
+                          ) : (
+                            personIds.map((personId) => {
+                              const person = people.find((entry) => entry.id === personId);
+                              if (!person) return null;
+                              return (
+                                <div
+                                  key={person.id}
+                                  draggable
+                                  onDragStart={() => setDraggedRosterPersonId(person.id)}
+                                  onDragEnd={() => setDraggedRosterPersonId(null)}
+                                  onDragOver={(event) => event.preventDefault()}
+                                  onDrop={() => {
+                                    if (draggedRosterPersonId) {
+                                      movePersonWithinRoster(draggedRosterPersonId, person.id);
+                                    }
+                                  }}
+                                  className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 cursor-move hover:bg-muted/50"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                    <span>{person.name}</span>
+                                  </div>
+                                  <Button type="button" variant="ghost" size="icon" onClick={() => removePersonFromRoster(person.id)}>
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </Card>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => { setShowDialog(false); setEditingRotaTask(null); }}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createRotaTaskMutation.isPending || updateRotaTaskMutation.isPending}>
+                  {createRotaTaskMutation.isPending || updateRotaTaskMutation.isPending ? "Saving..." : editingRotaTask ? "Update Rota Task" : "Create Rota Task"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
 
@@ -959,6 +1332,8 @@ export default function Admin() {
           </div>
         </Card>
         </div>
+
+        <RotaTasksSection people={people} tasks={tasks} />
 
         {/* Super-Admin: Workspace Management */}
         {isSuperAdmin && (

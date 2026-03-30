@@ -9,6 +9,8 @@ import {
   type UpsertUser,
   type PremadeFilter,
   type InsertPremadeFilter,
+  type RotaTask,
+  type InsertRotaTask,
   type Workspace,
   type InsertWorkspace,
   type WorkspaceUser,
@@ -17,6 +19,7 @@ import {
   assignments,
   users,
   premadeFilters,
+  rotaTasks,
   workspaces,
   workspaceUsers,
 } from "@shared/schema";
@@ -95,6 +98,13 @@ export interface IStorage {
   createPremadeFilter(filter: InsertPremadeFilter): Promise<PremadeFilter>;
   updatePremadeFilter(id: string, data: Partial<InsertPremadeFilter>): Promise<PremadeFilter>;
   deletePremadeFilter(id: string): Promise<void>;
+
+  // Rota tasks (scoped to workspace)
+  getRotaTasks(workspaceId: string): Promise<RotaTask[]>;
+  getRotaTask(id: string): Promise<RotaTask | undefined>;
+  createRotaTask(task: InsertRotaTask): Promise<RotaTask>;
+  updateRotaTask(id: string, data: Partial<InsertRotaTask>): Promise<RotaTask>;
+  deleteRotaTask(id: string): Promise<void>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -148,6 +158,7 @@ export class PostgresStorage implements IStorage {
     await this.db.delete(workspaceUsers).where(eq(workspaceUsers.workspaceId, id));
     await this.db.delete(premadeFilters).where(eq(premadeFilters.workspaceId, id));
     await this.db.delete(assignments).where(eq(assignments.workspaceId, id));
+    await this.db.delete(rotaTasks).where(eq(rotaTasks.workspaceId, id));
     await this.db.delete(people).where(eq(people.workspaceId, id));
     await this.db.delete(tasks).where(eq(tasks.workspaceId, id));
     await this.db.delete(workspaces).where(eq(workspaces.id, id));
@@ -429,6 +440,41 @@ export class PostgresStorage implements IStorage {
 
   async deletePremadeFilter(id: string): Promise<void> {
     await this.db.delete(premadeFilters).where(eq(premadeFilters.id, id));
+  }
+
+  // ─── Rota Tasks ───────────────────────────────────────────────────────────
+
+  async getRotaTasks(workspaceId: string): Promise<RotaTask[]> {
+    return await this.db
+      .select()
+      .from(rotaTasks)
+      .where(eq(rotaTasks.workspaceId, workspaceId))
+      .orderBy(rotaTasks.order);
+  }
+
+  async getRotaTask(id: string): Promise<RotaTask | undefined> {
+    const [rotaTask] = await this.db.select().from(rotaTasks).where(eq(rotaTasks.id, id));
+    return rotaTask;
+  }
+
+  async createRotaTask(insertTask: InsertRotaTask): Promise<RotaTask> {
+    const workspaceId = insertTask.workspaceId ?? "default";
+    const existing = await this.getRotaTasks(workspaceId);
+    const maxOrder = existing.length > 0 ? Math.max(...existing.map((t) => t.order ?? 0)) : -1;
+    const [created] = await this.db
+      .insert(rotaTasks)
+      .values({ ...insertTask, order: maxOrder + 1 })
+      .returning();
+    return created;
+  }
+
+  async updateRotaTask(id: string, data: Partial<InsertRotaTask>): Promise<RotaTask> {
+    const [updated] = await this.db.update(rotaTasks).set(data).where(eq(rotaTasks.id, id)).returning();
+    return updated;
+  }
+
+  async deleteRotaTask(id: string): Promise<void> {
+    await this.db.delete(rotaTasks).where(eq(rotaTasks.id, id));
   }
 }
 
