@@ -442,6 +442,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Auto-apply all rota tasks for a given week, creating any missing assignment rows.
+  // Idempotent: existing slots (by rotaTaskId+weekStartDate+day) are never duplicated.
+  app.post("/api/rota-tasks/apply", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const { weekStartDate } = z.object({ weekStartDate: isoDateString }).parse(req.body);
+      const created = await storage.applyRotaTasksForWeek(req.workspaceId!, weekStartDate);
+      if (created.length > 0) {
+        broadcastUpdate("assignments", req.workspaceId);
+      }
+      res.json(created);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to apply rota tasks" });
+    }
+  });
+
   // ── Assignments (workspace-scoped) ──────────────────────────────────────────
 
   app.get("/api/assignments", isAuthenticated, requireWorkspace, async (req, res) => {

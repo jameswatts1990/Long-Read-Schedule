@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers, Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -133,6 +133,31 @@ export default function Scheduler() {
     enabled: viewMode === "week" || viewMode === "pipeline",
     placeholderData: (previousData) => previousData,
   });
+
+  // Auto-apply rota tasks whenever the viewed week changes.
+  // Idempotent on the server: only creates assignments that don't exist yet.
+  const applyRotaMutation = useMutation({
+    mutationFn: async (weekStart: string) => {
+      const res = await apiRequest("POST", "/api/rota-tasks/apply", { weekStartDate: weekStart });
+      return res.json() as Promise<Assignment[]>;
+    },
+    onSuccess: (newAssignments, weekStart) => {
+      if (newAssignments.length === 0) return;
+      const key = `/api/assignments?weekStartDate=${weekStart}`;
+      queryClient.setQueryData<Assignment[]>([key], (old) => {
+        if (!old) return newAssignments;
+        const existingIds = new Set(old.map((a) => a.id));
+        const fresh = newAssignments.filter((a) => !existingIds.has(a.id));
+        return fresh.length > 0 ? [...old, ...fresh] : old;
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    applyRotaMutation.mutate(weekStartStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStartStr, activeWorkspace?.id]);
   
   // Fetch assignments for entire month range for month view
   const monthAssignmentsQuery = useQuery<Assignment[]>({ 

@@ -14,6 +14,7 @@ import {
   type Workspace,
   type InsertWorkspace,
   type WorkspaceUser,
+  DAYS,
   people,
   tasks,
   assignments,
@@ -105,6 +106,7 @@ export interface IStorage {
   createRotaTask(task: InsertRotaTask): Promise<RotaTask>;
   updateRotaTask(id: string, data: Partial<InsertRotaTask>): Promise<RotaTask>;
   deleteRotaTask(id: string): Promise<void>;
+  applyRotaTasksForWeek(workspaceId: string, weekStartDate: string): Promise<Assignment[]>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -475,6 +477,87 @@ export class PostgresStorage implements IStorage {
 
   async deleteRotaTask(id: string): Promise<void> {
     await this.db.delete(rotaTasks).where(eq(rotaTasks.id, id));
+  }
+
+  // ─── Rota Application ─────────────────────────────────────────────────────
+  //
+  // For each rota task in the workspace, compute which person (if any) should
+  // be assigned during `weekStartDate` and create any missing assignment rows.
+  // Uses `rotaTaskId` on assignment rows as a fingerprint so we never
+  // re-create a slot the user deliberately deleted.
+  async applyRotaTasksForWeek(workspaceId: string, weekStartDate: string): Promise<Assignment[]> {
+    const allRotaTasks = await this.getRotaTasks(workspaceId);
+    const created: Assignment[] = [];
+
+    // Helper: return the Monday (00:00 UTC) of the week containing `date`
+    const getMondayOf = (date: Date): Date => {
+      const d = new Date(date);
+      d.setUTCHours(0, 0, 0, 0);
+      const dow = d.getUTCDay(); // 0=Sun … 6=Sat
+      const diff = dow === 0 ? -6 : 1 - dow;
+      d.setUTCDate(d.getUTCDate() + diff);
+      return d;
+    };
+
+    const targetMonday = getMondayOf(new Date(`${weekStartDate}T00:00:00Z`));
+
+    for (const rotaTask of allRotaTasks) {
+      if (rotaTask.personIds.length === 0) continue;
+
+      const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00Z`));
+      const diffMs = targetMonday.getTime() - startMonday.getTime();
+      const weeksSinceStart = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+
+      if (weeksSinceStart < 0) continue; // Rota hasn't started yet
+
+      const intervalWeeks = rotaTask.intervalWeeks ?? 1;
+
+      // Skip inactive weeks (Option A: gap between turns)
+      if (weeksSinceStart % intervalWeeks !== 0) continue;
+
+      const turnIndex = Math.floor(weeksSinceStart / intervalWeeks);
+      const personId = rotaTask.personIds[turnIndex % rotaTask.personIds.length];
+
+      // Daily cadence → assign all Mon-Fri; weekly → only the configured day
+      const daysToAssign: string[] = rotaTask.frequency === "daily"
+        ? [...DAYS]
+        : [rotaTask.day];
+
+      for (const day of daysToAssign) {
+        // Check for an existing rota-generated slot for this (rotaTask, week, day).
+        // If found (even if deleted by the user and re-created manually), skip.
+        const [existing] = await this.db
+          .select({ id: assignments.id })
+          .from(assignments)
+          .where(
+            and(
+              eq(assignments.rotaTaskId, rotaTask.id),
+              eq(assignments.weekStartDate, weekStartDate),
+              eq(assignments.day, day),
+            ),
+          )
+          .limit(1);
+
+        if (existing) continue;
+
+        const [newAssignment] = await this.db
+          .insert(assignments)
+          .values({
+            id: randomUUID(),
+            taskId: rotaTask.taskId,
+            personId,
+            day,
+            weekStartDate,
+            workspaceId,
+            rotaTaskId: rotaTask.id,
+          })
+          .returning();
+
+        created.push(newAssignment);
+      }
+    }
+
+    return created;
   }
 }
 

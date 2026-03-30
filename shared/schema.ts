@@ -85,6 +85,9 @@ export const assignments = pgTable("assignments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdById: varchar("created_by_id"),
   workspaceId: varchar("workspace_id").notNull().default("default"),
+  // Set when this assignment was auto-created by a rota task; used to prevent
+  // re-creation after the user deliberately deletes a rota-generated slot.
+  rotaTaskId: varchar("rota_task_id"),
 });
 
 export const premadeFilters = pgTable("premade_filters", {
@@ -101,8 +104,11 @@ export const rotaTasks = pgTable("rota_tasks", {
   taskId: varchar("task_id").notNull(),
   personIds: text("person_ids").array().notNull().default([]),
   frequency: text("frequency").notNull().default("weekly"), // "daily" | "weekly"
-  day: text("day").notNull().default("Monday"), // day the rota assignment is expected
+  day: text("day").notNull().default("Monday"), // used for "weekly" cadence; ignored for "daily"
   startDate: text("start_date").notNull(),
+  // How many weeks between active rotations (Option A: skip N-1 weeks between turns).
+  // intervalWeeks=1 → active every week; intervalWeeks=3 → active week 1, skip 2-3, active week 4…
+  intervalWeeks: integer("interval_weeks").notNull().default(1),
   order: integer("order").default(0),
   workspaceId: varchar("workspace_id").notNull().default("default"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -126,6 +132,7 @@ export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: tru
   frequency: z.enum(["daily", "weekly"]),
   startDate: isoDateString,
   personIds: z.array(z.string()).min(1, "At least one person is required"),
+  intervalWeeks: z.coerce.number().int().min(1).max(52).default(1),
 });
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
 export const insertWorkspaceUserSchema = createInsertSchema(workspaceUsers).omit({ id: true, createdAt: true });

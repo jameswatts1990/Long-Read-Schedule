@@ -102,6 +102,7 @@ const rotaTaskFormSchema = z.object({
   day: z.enum(DAYS),
   startDate: z.string().min(1, "Start date is required"),
   personIds: z.array(z.string()).min(1, "Add at least one person to the rota order"),
+  intervalWeeks: z.coerce.number().int().min(1).max(52).default(1),
 });
 
 type PersonFormData = z.infer<typeof personFormSchema>;
@@ -437,6 +438,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       day: "Monday",
       startDate: new Date().toISOString().slice(0, 10),
       personIds: [],
+      intervalWeeks: 1,
     },
   });
 
@@ -510,13 +512,27 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
 
     if (!orderedPeople.length) return "No people assigned";
 
-    const today = new Date();
-    const start = new Date(`${rotaTask.startDate}T00:00:00`);
-    const elapsedMs = today.getTime() - start.getTime();
-    const elapsedDays = Math.max(0, Math.floor(elapsedMs / (1000 * 60 * 60 * 24)));
-    const step = rotaTask.frequency === "daily" ? elapsedDays : Math.floor(elapsedDays / 7);
-    const person = orderedPeople[step % orderedPeople.length];
-    return `Current: ${person.name}`;
+    // Compute Monday of rotaTask.startDate week
+    const getMondayOf = (d: Date): Date => {
+      const copy = new Date(d);
+      copy.setHours(0, 0, 0, 0);
+      const dow = copy.getDay();
+      const diff = dow === 0 ? -6 : 1 - dow;
+      copy.setDate(copy.getDate() + diff);
+      return copy;
+    };
+
+    const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00`));
+    const thisMonday = getMondayOf(new Date());
+    const diffMs = thisMonday.getTime() - startMonday.getTime();
+    const weeksSinceStart = Math.max(0, Math.round(diffMs / (7 * 24 * 60 * 60 * 1000)));
+    const intervalWeeks = rotaTask.intervalWeeks ?? 1;
+
+    if (weeksSinceStart % intervalWeeks !== 0) return "Off this week";
+
+    const turnIndex = Math.floor(weeksSinceStart / intervalWeeks);
+    const person = orderedPeople[turnIndex % orderedPeople.length];
+    return `This week: ${person.name}`;
   };
 
   return (
@@ -541,6 +557,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
               day: "Monday",
               startDate: new Date().toISOString().slice(0, 10),
               personIds: [],
+              intervalWeeks: 1,
             });
             setShowDialog(true);
           }}
@@ -566,7 +583,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                   <div className="space-y-1">
                     <p className="font-semibold">{rotaTask.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      Task: {linkedTask?.name || "Unknown"} · {rotaTask.frequency === "daily" ? "Daily" : "Weekly"} on {rotaTask.day}
+                      Task: {linkedTask?.name || "Unknown"} · {rotaTask.frequency === "daily" ? "Daily (all week)" : `Weekly on ${rotaTask.day}`}{(rotaTask.intervalWeeks ?? 1) > 1 ? ` · every ${rotaTask.intervalWeeks} weeks` : ""}
                     </p>
                     <p className="text-sm text-muted-foreground">Start date: {rotaTask.startDate}</p>
                     <p className="text-sm">{getRotationPreview(rotaTask)}</p>
@@ -589,6 +606,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                           day: rotaTask.day as typeof DAYS[number],
                           startDate: rotaTask.startDate,
                           personIds: rotaTask.personIds,
+                          intervalWeeks: rotaTask.intervalWeeks ?? 1,
                         });
                         setShowDialog(true);
                       }}
@@ -664,8 +682,8 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                           <SelectTrigger><SelectValue /></SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="daily">Daily (Mon-Fri)</SelectItem>
+                          <SelectItem value="weekly">Weekly (one day)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -674,27 +692,48 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                 />
                 <FormField
                   control={rotaTaskForm.control}
-                  name="day"
+                  name="intervalWeeks"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Assignment day</FormLabel>
-                      <Select value={field.value} onValueChange={(value: typeof DAYS[number]) => field.onChange(value)}>
-                        <FormControl>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {DAYS.map((day) => <SelectItem key={day} value={day}>{day}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Rotation interval (weeks)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          min={1}
+                          max={52}
+                          placeholder="1"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                {rotaTaskForm.watch("frequency") === "weekly" && (
+                  <FormField
+                    control={rotaTaskForm.control}
+                    name="day"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Assignment day</FormLabel>
+                        <Select value={field.value} onValueChange={(value: typeof DAYS[number]) => field.onChange(value)}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {DAYS.map((day) => <SelectItem key={day} value={day}>{day}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={rotaTaskForm.control}
                   name="startDate"
                   render={({ field }) => (
-                    <FormItem className="col-span-2">
+                    <FormItem className={rotaTaskForm.watch("frequency") === "weekly" ? "" : "col-span-2"}>
                       <FormLabel>Rotation start date</FormLabel>
                       <FormControl><Input {...field} type="date" /></FormControl>
                       <FormMessage />
