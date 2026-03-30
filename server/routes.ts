@@ -462,6 +462,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin cleanup: delete all assignments for a task on or after a given date
+  app.delete("/api/admin/assignments-cleanup", isAuthenticated, requireWorkspace, async (req: any, res) => {
+    try {
+      const isSuperAdmin = SUPER_ADMIN_EMAILS.has(req.user?.email);
+      if (!isSuperAdmin) return res.status(403).json({ error: "Only super admins can use cleanup endpoint" });
+
+      const { taskId, afterDate } = z.object({
+        taskId: z.string().min(1),
+        afterDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }).parse(req.body);
+
+      const result = await storage.deleteAssignmentsByTaskAndDate(taskId, req.workspaceId!, afterDate);
+      if (result.deletedCount > 0) {
+        broadcastUpdate("assignments", req.workspaceId);
+      }
+      res.json(result);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to cleanup assignments" });
+    }
+  });
+
   app.post("/api/tasks/reorder-list", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const { taskIds } = req.body;

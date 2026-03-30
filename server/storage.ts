@@ -95,6 +95,7 @@ export interface IStorage {
   createAssignment(assignment: InsertAssignment, createdById?: string): Promise<Assignment>;
   updateAssignment(id: string, data: Partial<Assignment>): Promise<Assignment>;
   deleteAssignment(id: string): Promise<void>;
+  deleteAssignmentsByTaskAndDate(taskId: string, workspaceId: string, afterDate?: string): Promise<{ deletedCount: number }>;
   reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]>;
 
   // Premade Filters (scoped to workspace)
@@ -447,6 +448,20 @@ export class PostgresStorage implements IStorage {
     if (row?.rotaTaskId) {
       await this.createRotaSkip(row.rotaTaskId, row.weekStartDate, row.day, row.workspaceId);
     }
+  }
+
+  async deleteAssignmentsByTaskAndDate(taskId: string, workspaceId: string, afterDate?: string): Promise<{ deletedCount: number }> {
+    const whereConditions = [eq(assignments.taskId, taskId), eq(assignments.workspaceId, workspaceId)];
+    if (afterDate) {
+      whereConditions.push(gte(assignments.weekStartDate, afterDate));
+    }
+
+    const deleted = await this.db
+      .delete(assignments)
+      .where(and(...whereConditions))
+      .returning({ id: assignments.id });
+
+    return { deletedCount: deleted.length };
   }
 
   // Fix Issue 4: parallel updates instead of sequential awaits
