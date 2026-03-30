@@ -434,9 +434,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/rota-tasks/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
-      await storage.deleteRotaTask(req.params.id);
+      const result = await storage.deleteRotaTask(req.params.id);
       broadcastUpdate("rota-tasks", req.workspaceId);
-      res.json({ success: true });
+      res.json({ success: true, ...result });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete rota task" });
     }
