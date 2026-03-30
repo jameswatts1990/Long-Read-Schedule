@@ -136,9 +136,12 @@ export default function Scheduler() {
 
   // Auto-apply rota tasks whenever the viewed week changes.
   // Idempotent on the server: only creates assignments that don't exist yet.
-  // On success, if any assignments were created we invalidate the week query so
-  // the fresh fetch returns all DB rows (including newly inserted rota slots),
-  // avoiding a cache-race where the in-flight query could overwrite a setQueryData patch.
+  // On success, newly created assignments are merged into the week query cache
+  // via a functional setQueryData updater (dedupe by id).  The functional updater
+  // runs against whatever the cache holds at that instant; if the week query has
+  // already settled it merges the new rows in, if it hasn't resolved yet it seeds
+  // the cache so the eventual query result (which includes the inserts) will be a
+  // superset and the dedupe pass removes any duplicates.
   const applyRotaMutation = useMutation({
     mutationFn: async (weekStart: string) => {
       const res = await apiRequest("POST", "/api/rota-tasks/apply", { weekStartDate: weekStart });
@@ -146,9 +149,12 @@ export default function Scheduler() {
     },
     onSuccess: (newAssignments, weekStart) => {
       if (newAssignments.length === 0) return;
-      // Force a fresh fetch that will include the newly inserted rota assignments.
-      queryClient.invalidateQueries({
-        queryKey: [`/api/assignments?weekStartDate=${weekStart}`],
+      const key = `/api/assignments?weekStartDate=${weekStart}`;
+      queryClient.setQueryData<Assignment[]>([key], (old) => {
+        if (!old) return newAssignments;
+        const existingIds = new Set(old.map((a) => a.id));
+        const fresh = newAssignments.filter((a) => !existingIds.has(a.id));
+        return fresh.length > 0 ? [...old, ...fresh] : old;
       });
     },
   });
