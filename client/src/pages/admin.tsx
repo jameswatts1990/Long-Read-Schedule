@@ -104,7 +104,7 @@ const rotaTaskFormSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   personIds: z.array(z.string()).min(1, "Add at least one person to the rota order"),
   intervalWeeks: z.coerce.number().int().min(1).max(52).default(1),
-  occurrenceLimit: z.preprocess(
+  weekLimit: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.coerce.number().int().min(1, "Minimum 1 occurrence").max(500, "Maximum 500 occurrences").optional(),
   ),
@@ -444,7 +444,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       startDate: new Date().toISOString().slice(0, 10),
       personIds: [],
       intervalWeeks: 1,
-      occurrenceLimit: undefined,
+      weekLimit: undefined,
     },
   });
 
@@ -452,7 +452,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
     mutationFn: async (data: RotaTaskFormData) => {
       const res = await apiRequest("POST", "/api/rota-tasks", {
         ...data,
-        occurrenceLimit: data.occurrenceLimit ?? null,
+        weekLimit: data.weekLimit ?? null,
       });
       return res.json();
     },
@@ -470,7 +470,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       if (!editingRotaTask) throw new Error("No rota task selected");
       const res = await apiRequest("PUT", `/api/rota-tasks/${editingRotaTask.id}`, {
         ...data,
-        occurrenceLimit: data.occurrenceLimit ?? null,
+        weekLimit: data.weekLimit ?? null,
       });
       return res.json();
     },
@@ -581,7 +581,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
               startDate: new Date().toISOString().slice(0, 10),
               personIds: [],
               intervalWeeks: 1,
-              occurrenceLimit: undefined,
+              weekLimit: undefined,
             });
             setShowDialog(true);
           }}
@@ -618,8 +618,8 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                         Task: {linkedTask?.name || "Unknown"} · {rotaTask.frequency === "daily" ? "Daily (all week)" : `Weekly on ${rotaTask.day}`}{(rotaTask.intervalWeeks ?? 1) > 1 ? ` · every ${rotaTask.intervalWeeks} weeks` : ""}
                       </p>
                       <p className="text-sm text-muted-foreground">Start date: {rotaTask.startDate}</p>
-                      {rotaTask.occurrenceLimit && (
-                        <p className="text-sm text-muted-foreground">Ends after {rotaTask.occurrenceLimit} scheduled occurrence{rotaTask.occurrenceLimit === 1 ? "" : "s"}.</p>
+                      {rotaTask.weekLimit && (
+                        <p className="text-sm text-muted-foreground">Ends after {rotaTask.weekLimit} week{rotaTask.weekLimit === 1 ? "" : "s"}.</p>
                       )}
                       <p className="text-sm">{getRotationPreview(rotaTask)}</p>
                       <div className="flex flex-wrap gap-1 pt-1">
@@ -642,7 +642,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                             startDate: rotaTask.startDate,
                             personIds: rotaTask.personIds,
                             intervalWeeks: rotaTask.intervalWeeks ?? 1,
-                            occurrenceLimit: rotaTask.occurrenceLimit ?? undefined,
+                            weekLimit: rotaTask.weekLimit ?? undefined,
                           });
                           setShowDialog(true);
                         }}
@@ -686,8 +686,8 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                       Task: {linkedTask?.name || "Unknown"} · {rotaTask.frequency === "daily" ? "Daily (all week)" : `Weekly on ${rotaTask.day}`}{(rotaTask.intervalWeeks ?? 1) > 1 ? ` · every ${rotaTask.intervalWeeks} weeks` : ""}
                     </p>
                     <p className="text-sm text-muted-foreground">Start date: {rotaTask.startDate}</p>
-                    {rotaTask.occurrenceLimit && (
-                      <p className="text-sm text-muted-foreground">Completed after {rotaTask.occurrenceLimit} scheduled occurrence{rotaTask.occurrenceLimit === 1 ? "" : "s"}.</p>
+                    {rotaTask.weekLimit && (
+                      <p className="text-sm text-muted-foreground">Completed after {rotaTask.weekLimit} week{rotaTask.weekLimit === 1 ? "" : "s"}.</p>
                     )}
                     <p className="text-sm">{getRotationPreview(rotaTask)}</p>
                     <div className="flex flex-wrap gap-1 pt-1">
@@ -837,10 +837,10 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                 />
                 <FormField
                   control={rotaTaskForm.control}
-                  name="occurrenceLimit"
+                  name="weekLimit"
                   render={({ field }) => (
                     <FormItem className={rotaTaskForm.watch("frequency") === "weekly" ? "" : "col-span-2"}>
-                      <FormLabel>End after N occurrences (optional)</FormLabel>
+                      <FormLabel>End after N weeks (optional)</FormLabel>
                       <FormControl>
                         <Input
                           type="number"

@@ -131,7 +131,7 @@ export const rotaTasks = pgTable("rota_tasks", {
   // How many weeks between active rotations (Option A: skip N-1 weeks between turns).
   // intervalWeeks=1 → active every week; intervalWeeks=3 → active week 1, skip 2-3, active week 4…
   intervalWeeks: integer("interval_weeks").notNull().default(1),
-  occurrenceLimit: integer("occurrence_limit"),
+  weekLimit: integer("week_limit"),
   archivedAt: timestamp("archived_at"),
   order: integer("order").default(0),
   workspaceId: varchar("workspace_id").notNull().default("default"),
@@ -157,7 +157,7 @@ export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: tru
   startDate: isoDateString,
   personIds: z.array(z.string()).min(1, "At least one person is required"),
   intervalWeeks: z.coerce.number().int().min(1).max(52).default(1),
-  occurrenceLimit: z.preprocess(
+  weekLimit: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.coerce.number().int().min(1).max(500).optional(),
   ),

@@ -57,6 +57,8 @@ function useRealTimeUpdates(workspaceId: string | null) {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
     } else if (type === "tasks") {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+    } else if (type === "rota-tasks") {
+      queryClient.invalidateQueries({ queryKey: ["/api/rota-tasks"] });
     } else if (type === "premade-filters") {
       queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
     }

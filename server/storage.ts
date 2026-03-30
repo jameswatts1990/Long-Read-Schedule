@@ -594,25 +594,10 @@ export class PostgresStorage implements IStorage {
           inArray(assignments.rotaTaskId, activeRotaTasks.map((task) => task.id)),
         ),
       );
-    const occurrenceCounts = new Map<string, number>();
-    for (const row of existingAssignments) {
-      if (!row.rotaTaskId) continue;
-      occurrenceCounts.set(row.rotaTaskId, (occurrenceCounts.get(row.rotaTaskId) ?? 0) + 1);
-    }
-
     const created: Assignment[] = [];
 
     for (const rotaTask of activeRotaTasks) {
       if (rotaTask.personIds.length === 0) continue;
-      let scheduledOccurrences = occurrenceCounts.get(rotaTask.id) ?? 0;
-      const occurrenceLimit = rotaTask.occurrenceLimit;
-      if (occurrenceLimit != null && scheduledOccurrences >= occurrenceLimit) {
-        await this.db
-          .update(rotaTasks)
-          .set({ archivedAt: new Date() })
-          .where(and(eq(rotaTasks.id, rotaTask.id), isNull(rotaTasks.archivedAt)));
-        continue;
-      }
 
       const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00Z`));
       const diffMs = targetMonday.getTime() - startMonday.getTime();
@@ -625,7 +610,19 @@ export class PostgresStorage implements IStorage {
       // Skip inactive weeks (Option A: gap between turns)
       if (weeksSinceStart % intervalWeeks !== 0) continue;
 
+      const weekLimit = rotaTask.weekLimit;
+      // Calculate how many active weeks have passed (0-indexed, so active week count is turnIndex + 1)
       const turnIndex = Math.floor(weeksSinceStart / intervalWeeks);
+      const activeWeekCount = turnIndex + 1;
+
+      if (weekLimit != null && activeWeekCount > weekLimit) {
+        await this.db
+          .update(rotaTasks)
+          .set({ archivedAt: new Date() })
+          .where(and(eq(rotaTasks.id, rotaTask.id), isNull(rotaTasks.archivedAt)));
+        continue;
+      }
+
       const personId = rotaTask.personIds[turnIndex % rotaTask.personIds.length];
 
       // Daily cadence → assign all Mon-Fri; weekly → only the configured day
@@ -634,7 +631,6 @@ export class PostgresStorage implements IStorage {
         : [rotaTask.day];
 
       for (const day of daysToAssign) {
-        if (occurrenceLimit != null && scheduledOccurrences >= occurrenceLimit) break;
 
         // Layer 1: tombstone check — user explicitly deleted this slot
         if (skipSet.has(`${rotaTask.id}:${day}`)) continue;
