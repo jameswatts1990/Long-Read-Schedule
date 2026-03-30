@@ -84,6 +84,7 @@ export const assignments = pgTable("assignments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdById: varchar("created_by_id"),
+  rotaTaskId: varchar("rota_task_id"),
   workspaceId: varchar("workspace_id").notNull().default("default"),
 });
 
@@ -103,6 +104,9 @@ export const rotaTasks = pgTable("rota_tasks", {
   frequency: text("frequency").notNull().default("weekly"), // "daily" | "weekly"
   day: text("day").notNull().default("Monday"), // day the rota assignment is expected
   startDate: text("start_date").notNull(),
+  endAfterOccurrences: integer("end_after_occurrences"),
+  status: text("status").notNull().default("active"), // "active" | "archived"
+  archivedAt: timestamp("archived_at"),
   order: integer("order").default(0),
   workspaceId: varchar("workspace_id").notNull().default("default"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -125,6 +129,8 @@ export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: tru
   day: z.enum(DAYS),
   frequency: z.enum(["daily", "weekly"]),
   startDate: isoDateString,
+  endAfterOccurrences: z.number().int().min(1).nullable().optional(),
+  status: z.enum(["active", "archived"]).optional(),
   personIds: z.array(z.string()).min(1, "At least one person is required"),
 });
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
