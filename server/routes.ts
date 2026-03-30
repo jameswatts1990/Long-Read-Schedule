@@ -454,6 +454,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       await storage.deleteTask(req.params.id);
       broadcastUpdate("tasks", req.workspaceId);
+      // Also broadcast assignments deletion since task deletion cascades to remove all assignments
+      broadcastUpdate("assignments", req.workspaceId);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete task" });
@@ -509,6 +511,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const result = await storage.deleteRotaTask(req.params.id);
       broadcastUpdate("rota-tasks", req.workspaceId);
+      // Also broadcast assignments deletion since rota task deletion cascades to remove all rota-generated assignments
+      if (result.deletedAssignments > 0) {
+        broadcastUpdate("assignments", req.workspaceId);
+      }
       res.json({ success: true, ...result });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete rota task" });
