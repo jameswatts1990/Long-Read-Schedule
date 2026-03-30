@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -79,8 +79,10 @@ export function WeeklyCalendar({
 }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
+  const [draggedAssignmentIds, setDraggedAssignmentIds] = useState<string[]>([]);
   const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
   const [deleteDragTarget, setDeleteDragTarget] = useState<string | null>(null);
+  const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const updateAssignmentMutation = useMutation({
@@ -136,28 +138,57 @@ export function WeeklyCalendar({
     },
   });
 
-  const deleteAssignmentMutation = useMutation({
-    mutationFn: async (assignmentId: string) => {
-      return apiRequest("DELETE", `/api/assignments/${assignmentId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => 
-        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+  const clearSelection = () => {
+    setSelectedAssignmentIds(new Set());
+  };
+
+  const deleteAssignments = async (assignmentIds: string[]) => {
+    const idsToDelete = Array.from(new Set(assignmentIds));
+    if (idsToDelete.length === 0) return;
+
+    try {
+      await Promise.all(idsToDelete.map((assignmentId) => apiRequest("DELETE", `/api/assignments/${assignmentId}`)));
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments"),
       });
       toast({
-        title: "Task deleted",
-        description: "Assignment has been removed",
+        title: idsToDelete.length > 1 ? "Tasks deleted" : "Task deleted",
+        description:
+          idsToDelete.length > 1
+            ? `${idsToDelete.length} assignments have been removed`
+            : "Assignment has been removed",
         variant: "default",
       });
-    },
-    onError: () => {
+      clearSelection();
+    } catch {
       toast({
-        title: "Failed to delete task",
-        description: "Could not remove the assignment",
+        title: "Failed to delete tasks",
+        description: "Could not remove one or more assignments",
         variant: "destructive",
       });
-    },
-  });
+    }
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      if (selectedAssignmentIds.size === 0) return;
+
+      const activeElement = document.activeElement;
+      const isTypingElement =
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement?.getAttribute("contenteditable") === "true";
+      if (isTypingElement) return;
+
+      event.preventDefault();
+      void deleteAssignments(Array.from(selectedAssignmentIds));
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedAssignmentIds]);
 
   // Pre-group assignments by person+day for O(1) lookup instead of O(A) per cell
   const assignmentsByCell = useMemo(() => {
@@ -354,11 +385,17 @@ export function WeeklyCalendar({
                       }}
                       onDragLeave={() => setDeleteDragTarget(null)}
                       onDrop={() => {
-                        if (draggedAssignment) {
-                          deleteAssignmentMutation.mutate(draggedAssignment.id);
+                        const assignmentsToDelete = draggedAssignmentIds.length > 0
+                          ? draggedAssignmentIds
+                          : draggedAssignment
+                            ? [draggedAssignment.id]
+                            : [];
+                        if (assignmentsToDelete.length > 0) {
+                          void deleteAssignments(assignmentsToDelete);
                         }
                         setDeleteDragTarget(null);
                         setDraggedAssignment(null);
+                        setDraggedAssignmentIds([]);
                       }}
                     >
                       <div className="flex items-center gap-1.5">
@@ -414,6 +451,17 @@ export function WeeklyCalendar({
                         onDragLeave={() => setDropTargetCell(null)}
                         onDrop={() => {
                           if (draggedAssignment) {
+                            if (draggedAssignmentIds.length > 1) {
+                              toast({
+                                title: "Multiple tasks selected",
+                                description: "Drag selected tasks to a person name to delete them together",
+                                variant: "default",
+                              });
+                              setDropTargetCell(null);
+                              setDraggedAssignment(null);
+                              setDraggedAssignmentIds([]);
+                              return;
+                            }
                             if (draggedAssignment.personId !== person.id || draggedAssignment.day !== day) {
                               updateAssignmentMutation.mutate({
                                 assignmentId: draggedAssignment.id,
@@ -436,6 +484,7 @@ export function WeeklyCalendar({
                           }
                           setDropTargetCell(null);
                           setDraggedAssignment(null);
+                          setDraggedAssignmentIds([]);
                         }}
                         data-testid={`cell-${person.id}-${day.toLowerCase()}`}
                       >
@@ -452,7 +501,8 @@ export function WeeklyCalendar({
                                 className={cn(
                                   "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
                                   isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
-                                  draggedAssignment?.id === assignment.id && "opacity-50"
+                                  draggedAssignment?.id === assignment.id && "opacity-50",
+                                  selectedAssignmentIds.has(assignment.id) && "ring-2 ring-primary ring-offset-1 ring-offset-background"
                                 )}
                                 style={{ 
                                   backgroundColor: task.color,
@@ -461,13 +511,37 @@ export function WeeklyCalendar({
                                 draggable
                                 onDragStart={(e) => {
                                   setDraggedAssignment(assignment);
+                                  const assignmentIdsToDrag = selectedAssignmentIds.has(assignment.id)
+                                    ? Array.from(selectedAssignmentIds)
+                                    : [assignment.id];
+                                  setDraggedAssignmentIds(assignmentIdsToDrag);
                                   e.dataTransfer.effectAllowed = "move";
                                 }}
                                 onDragEnd={() => {
                                   setDraggedAssignment(null);
+                                  setDraggedAssignmentIds([]);
                                   setDeleteDragTarget(null);
                                 }}
-                                onClick={() => onAssignmentClick(assignment)}
+                                onClick={(event) => {
+                                  const isMultiSelect = event.ctrlKey || event.metaKey;
+                                  if (isMultiSelect) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setSelectedAssignmentIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(assignment.id)) {
+                                        next.delete(assignment.id);
+                                      } else {
+                                        next.add(assignment.id);
+                                      }
+                                      return next;
+                                    });
+                                    return;
+                                  }
+
+                                  setSelectedAssignmentIds(new Set([assignment.id]));
+                                  onAssignmentClick(assignment);
+                                }}
                                 data-testid={`assignment-${assignment.id}`}
                               >
                                 <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
