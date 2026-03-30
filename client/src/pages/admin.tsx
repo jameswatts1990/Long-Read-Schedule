@@ -34,6 +34,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -103,6 +104,10 @@ const rotaTaskFormSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   personIds: z.array(z.string()).min(1, "Add at least one person to the rota order"),
   intervalWeeks: z.coerce.number().int().min(1).max(52).default(1),
+  occurrenceLimit: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.coerce.number().int().min(1, "Minimum 1 occurrence").max(500, "Maximum 500 occurrences").optional(),
+  ),
 });
 
 type PersonFormData = z.infer<typeof personFormSchema>;
@@ -439,12 +444,16 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       startDate: new Date().toISOString().slice(0, 10),
       personIds: [],
       intervalWeeks: 1,
+      occurrenceLimit: undefined,
     },
   });
 
   const createRotaTaskMutation = useMutation({
     mutationFn: async (data: RotaTaskFormData) => {
-      const res = await apiRequest("POST", "/api/rota-tasks", data);
+      const res = await apiRequest("POST", "/api/rota-tasks", {
+        ...data,
+        occurrenceLimit: data.occurrenceLimit ?? null,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -459,7 +468,10 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
   const updateRotaTaskMutation = useMutation({
     mutationFn: async (data: RotaTaskFormData) => {
       if (!editingRotaTask) throw new Error("No rota task selected");
-      const res = await apiRequest("PUT", `/api/rota-tasks/${editingRotaTask.id}`, data);
+      const res = await apiRequest("PUT", `/api/rota-tasks/${editingRotaTask.id}`, {
+        ...data,
+        occurrenceLimit: data.occurrenceLimit ?? null,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -477,9 +489,16 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       const res = await apiRequest("DELETE", `/api/rota-tasks/${id}`);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { deletedAssignments?: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/rota-tasks"] });
-      toast({ title: "Rota task removed" });
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      const removedAssignments = data?.deletedAssignments ?? 0;
+      toast({
+        title: "Rota task removed",
+        description: removedAssignments > 0
+          ? `${removedAssignments} scheduled assignment${removedAssignments === 1 ? "" : "s"} removed.`
+          : "Future repeats will stop immediately.",
+      });
     },
     onError: () => toast({ title: "Failed to delete rota task", variant: "destructive" }),
   });
@@ -506,6 +525,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
   };
 
   const getRotationPreview = (rotaTask: RotaTask) => {
+    if (rotaTask.archivedAt) return "Archived";
     const orderedPeople = rotaTask.personIds
       .map((personId) => people.find((person) => person.id === personId))
       .filter((person): person is Person => Boolean(person));
@@ -535,6 +555,9 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
     return `This week: ${person.name}`;
   };
 
+  const activeRotaTasks = rotaTasks.filter((rotaTask) => !rotaTask.archivedAt);
+  const archivedRotaTasks = rotaTasks.filter((rotaTask) => Boolean(rotaTask.archivedAt));
+
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -558,6 +581,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
               startDate: new Date().toISOString().slice(0, 10),
               personIds: [],
               intervalWeeks: 1,
+              occurrenceLimit: undefined,
             });
             setShowDialog(true);
           }}
@@ -571,8 +595,84 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       {rotaTasks.length === 0 ? (
         <p className="text-muted-foreground text-sm">No rota tasks configured yet.</p>
       ) : (
-        <div className="space-y-3">
-          {rotaTasks.map((rotaTask) => {
+        <Tabs defaultValue="active" className="space-y-3">
+          <TabsList>
+            <TabsTrigger value="active">Active ({activeRotaTasks.length})</TabsTrigger>
+            <TabsTrigger value="archived">Archive ({archivedRotaTasks.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="active" className="space-y-3">
+            {activeRotaTasks.length === 0 && (
+              <p className="text-muted-foreground text-sm">No active rota tasks.</p>
+            )}
+            {activeRotaTasks.map((rotaTask) => {
+              const linkedTask = tasks.find((task) => task.id === rotaTask.taskId);
+              const names = rotaTask.personIds
+                .map((personId) => people.find((person) => person.id === personId)?.name)
+                .filter(Boolean) as string[];
+              return (
+                <div key={rotaTask.id} className="rounded-lg border p-4" data-testid={`rota-task-item-${rotaTask.id}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="font-semibold">{rotaTask.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Task: {linkedTask?.name || "Unknown"} · {rotaTask.frequency === "daily" ? "Daily (all week)" : `Weekly on ${rotaTask.day}`}{(rotaTask.intervalWeeks ?? 1) > 1 ? ` · every ${rotaTask.intervalWeeks} weeks` : ""}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Start date: {rotaTask.startDate}</p>
+                      {rotaTask.occurrenceLimit && (
+                        <p className="text-sm text-muted-foreground">Ends after {rotaTask.occurrenceLimit} scheduled occurrence{rotaTask.occurrenceLimit === 1 ? "" : "s"}.</p>
+                      )}
+                      <p className="text-sm">{getRotationPreview(rotaTask)}</p>
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {names.map((name) => (
+                          <Badge key={name} variant="secondary">{name}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditingRotaTask(rotaTask);
+                          rotaTaskForm.reset({
+                            name: rotaTask.name,
+                            taskId: rotaTask.taskId,
+                            frequency: rotaTask.frequency as "daily" | "weekly",
+                            day: rotaTask.day as typeof DAYS[number],
+                            startDate: rotaTask.startDate,
+                            personIds: rotaTask.personIds,
+                            intervalWeeks: rotaTask.intervalWeeks ?? 1,
+                            occurrenceLimit: rotaTask.occurrenceLimit ?? undefined,
+                          });
+                          setShowDialog(true);
+                        }}
+                        data-testid={`button-edit-rota-task-${rotaTask.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (!window.confirm("Delete this rota and remove all its scheduled assignments? This cannot be undone.")) return;
+                          deleteRotaTaskMutation.mutate(rotaTask.id);
+                        }}
+                        disabled={deleteRotaTaskMutation.isPending}
+                        data-testid={`button-delete-rota-task-${rotaTask.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </TabsContent>
+          <TabsContent value="archived" className="space-y-3">
+            {archivedRotaTasks.length === 0 && (
+              <p className="text-muted-foreground text-sm">No archived rota tasks yet.</p>
+            )}
+            {archivedRotaTasks.map((rotaTask) => {
             const linkedTask = tasks.find((task) => task.id === rotaTask.taskId);
             const names = rotaTask.personIds
               .map((personId) => people.find((person) => person.id === personId)?.name)
@@ -586,6 +686,9 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                       Task: {linkedTask?.name || "Unknown"} · {rotaTask.frequency === "daily" ? "Daily (all week)" : `Weekly on ${rotaTask.day}`}{(rotaTask.intervalWeeks ?? 1) > 1 ? ` · every ${rotaTask.intervalWeeks} weeks` : ""}
                     </p>
                     <p className="text-sm text-muted-foreground">Start date: {rotaTask.startDate}</p>
+                    {rotaTask.occurrenceLimit && (
+                      <p className="text-sm text-muted-foreground">Completed after {rotaTask.occurrenceLimit} scheduled occurrence{rotaTask.occurrenceLimit === 1 ? "" : "s"}.</p>
+                    )}
                     <p className="text-sm">{getRotationPreview(rotaTask)}</p>
                     <div className="flex flex-wrap gap-1 pt-1">
                       {names.map((name) => (
@@ -598,26 +701,9 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                       variant="ghost"
                       size="icon"
                       onClick={() => {
-                        setEditingRotaTask(rotaTask);
-                        rotaTaskForm.reset({
-                          name: rotaTask.name,
-                          taskId: rotaTask.taskId,
-                          frequency: rotaTask.frequency as "daily" | "weekly",
-                          day: rotaTask.day as typeof DAYS[number],
-                          startDate: rotaTask.startDate,
-                          personIds: rotaTask.personIds,
-                          intervalWeeks: rotaTask.intervalWeeks ?? 1,
-                        });
-                        setShowDialog(true);
+                        if (!window.confirm("Delete this archived rota and remove any linked scheduled assignments? This cannot be undone.")) return;
+                        deleteRotaTaskMutation.mutate(rotaTask.id);
                       }}
-                      data-testid={`button-edit-rota-task-${rotaTask.id}`}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteRotaTaskMutation.mutate(rotaTask.id)}
                       disabled={deleteRotaTaskMutation.isPending}
                       data-testid={`button-delete-rota-task-${rotaTask.id}`}
                     >
@@ -627,8 +713,9 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                 </div>
               </div>
             );
-          })}
-        </div>
+            })}
+          </TabsContent>
+        </Tabs>
       )}
 
       <Dialog open={showDialog} onOpenChange={(open) => { if (!open) { setShowDialog(false); setEditingRotaTask(null); } }}>
@@ -741,9 +828,32 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                   control={rotaTaskForm.control}
                   name="startDate"
                   render={({ field }) => (
-                    <FormItem className={rotaTaskForm.watch("frequency") === "weekly" ? "" : "col-span-2"}>
+                    <FormItem>
                       <FormLabel>Rotation start date</FormLabel>
                       <FormControl><Input {...field} type="date" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={rotaTaskForm.control}
+                  name="occurrenceLimit"
+                  render={({ field }) => (
+                    <FormItem className={rotaTaskForm.watch("frequency") === "weekly" ? "" : "col-span-2"}>
+                      <FormLabel>End after N occurrences (optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={500}
+                          placeholder="Leave blank to keep repeating"
+                          value={field.value ?? ""}
+                          onChange={(event) => field.onChange(event.target.value)}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Once this many scheduled assignments are created, the rota automatically moves to Archive.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}

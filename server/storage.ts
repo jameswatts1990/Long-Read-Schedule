@@ -28,7 +28,7 @@ import {
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, isNull } from "drizzle-orm";
 import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
@@ -106,7 +106,7 @@ export interface IStorage {
   getRotaTask(id: string): Promise<RotaTask | undefined>;
   createRotaTask(task: InsertRotaTask): Promise<RotaTask>;
   updateRotaTask(id: string, data: Partial<InsertRotaTask>): Promise<RotaTask>;
-  deleteRotaTask(id: string): Promise<void>;
+  deleteRotaTask(id: string): Promise<{ deletedAssignments: number }>;
   applyRotaTasksForWeek(workspaceId: string, weekStartDate: string): Promise<Assignment[]>;
   createRotaSkip(rotaTaskId: string, weekStartDate: string, day: string, workspaceId: string): Promise<void>;
 }
@@ -489,8 +489,14 @@ export class PostgresStorage implements IStorage {
     return updated;
   }
 
-  async deleteRotaTask(id: string): Promise<void> {
+  async deleteRotaTask(id: string): Promise<{ deletedAssignments: number }> {
+    const deletedAssignmentsRows = await this.db
+      .delete(assignments)
+      .where(eq(assignments.rotaTaskId, id))
+      .returning({ id: assignments.id });
+    await this.db.delete(rotaSkips).where(eq(rotaSkips.rotaTaskId, id));
     await this.db.delete(rotaTasks).where(eq(rotaTasks.id, id));
+    return { deletedAssignments: deletedAssignmentsRows.length };
   }
 
   // ─── Rota Application ─────────────────────────────────────────────────────
@@ -506,6 +512,8 @@ export class PostgresStorage implements IStorage {
   async applyRotaTasksForWeek(workspaceId: string, weekStartDate: string): Promise<Assignment[]> {
     const allRotaTasks = await this.getRotaTasks(workspaceId);
     if (allRotaTasks.length === 0) return [];
+    const activeRotaTasks = allRotaTasks.filter((task) => !task.archivedAt);
+    if (activeRotaTasks.length === 0) return [];
 
     // Helper: return the Monday (00:00 UTC) of the week containing `date`
     const getMondayOf = (date: Date): Date => {
@@ -532,10 +540,34 @@ export class PostgresStorage implements IStorage {
     // Build a Set<"rotaTaskId:day"> for O(1) lookup
     const skipSet = new Set(skipRows.map((r) => `${r.rotaTaskId}:${r.day}`));
 
+    const existingAssignments = await this.db
+      .select({ rotaTaskId: assignments.rotaTaskId })
+      .from(assignments)
+      .where(
+        and(
+          eq(assignments.workspaceId, workspaceId),
+          inArray(assignments.rotaTaskId, activeRotaTasks.map((task) => task.id)),
+        ),
+      );
+    const occurrenceCounts = new Map<string, number>();
+    for (const row of existingAssignments) {
+      if (!row.rotaTaskId) continue;
+      occurrenceCounts.set(row.rotaTaskId, (occurrenceCounts.get(row.rotaTaskId) ?? 0) + 1);
+    }
+
     const created: Assignment[] = [];
 
-    for (const rotaTask of allRotaTasks) {
+    for (const rotaTask of activeRotaTasks) {
       if (rotaTask.personIds.length === 0) continue;
+      let scheduledOccurrences = occurrenceCounts.get(rotaTask.id) ?? 0;
+      const occurrenceLimit = rotaTask.occurrenceLimit;
+      if (occurrenceLimit != null && scheduledOccurrences >= occurrenceLimit) {
+        await this.db
+          .update(rotaTasks)
+          .set({ archivedAt: new Date() })
+          .where(and(eq(rotaTasks.id, rotaTask.id), isNull(rotaTasks.archivedAt)));
+        continue;
+      }
 
       const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00Z`));
       const diffMs = targetMonday.getTime() - startMonday.getTime();
@@ -557,6 +589,8 @@ export class PostgresStorage implements IStorage {
         : [rotaTask.day];
 
       for (const day of daysToAssign) {
+        if (occurrenceLimit != null && scheduledOccurrences >= occurrenceLimit) break;
+
         // Layer 1: tombstone check — user explicitly deleted this slot
         if (skipSet.has(`${rotaTask.id}:${day}`)) continue;
 
@@ -576,7 +610,18 @@ export class PostgresStorage implements IStorage {
           .onConflictDoNothing()
           .returning();
 
-        if (newAssignment) created.push(newAssignment);
+        if (newAssignment) {
+          created.push(newAssignment);
+          scheduledOccurrences += 1;
+          occurrenceCounts.set(rotaTask.id, scheduledOccurrences);
+        }
+      }
+
+      if (occurrenceLimit != null && scheduledOccurrences >= occurrenceLimit) {
+        await this.db
+          .update(rotaTasks)
+          .set({ archivedAt: new Date() })
+          .where(and(eq(rotaTasks.id, rotaTask.id), isNull(rotaTasks.archivedAt)));
       }
     }
 
