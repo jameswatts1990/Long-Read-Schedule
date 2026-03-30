@@ -7,6 +7,7 @@ import {
   insertTaskSchema,
   insertAssignmentSchema,
   insertPremadeFilterSchema,
+  insertRotaTaskSchema,
   insertWorkspaceSchema,
   isoDateString,
 } from "@shared/schema";
@@ -395,6 +396,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error) {
       res.status(400).json({ error: "Failed to reorder tasks" });
+    }
+  });
+
+  // ── Rota Tasks (workspace-scoped) ──────────────────────────────────────────
+
+  app.get("/api/rota-tasks", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const rotaTasks = await storage.getRotaTasks(req.workspaceId!);
+      res.json(rotaTasks);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch rota tasks" });
+    }
+  });
+
+  app.post("/api/rota-tasks", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const data = insertRotaTaskSchema.parse({ ...req.body, workspaceId: req.workspaceId });
+      const rotaTask = await storage.createRotaTask(data);
+      broadcastUpdate("rota-tasks", req.workspaceId);
+      res.json(rotaTask);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid rota task data" });
+    }
+  });
+
+  app.put("/api/rota-tasks/:id", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const data = insertRotaTaskSchema.partial().parse(req.body);
+      const rotaTask = await storage.updateRotaTask(req.params.id, data);
+      broadcastUpdate("rota-tasks", req.workspaceId);
+      res.json(rotaTask);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid rota task data" });
+    }
+  });
+
+  app.delete("/api/rota-tasks/:id", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      await storage.deleteRotaTask(req.params.id);
+      broadcastUpdate("rota-tasks", req.workspaceId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete rota task" });
     }
   });
 
