@@ -2,16 +2,9 @@
 import { storage, sharedDb as db } from "./storage";
 import { people, tasks, assignments, premadeFilters } from "@shared/schema";
 import { isNull, or, eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
 
 export async function initializeDatabase() {
   try {
-    // ── Step 0: Ensure latest rota-related columns exist ─────────────────────
-    await db.execute(sql`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS rota_task_id varchar`);
-    await db.execute(sql`ALTER TABLE rota_tasks ADD COLUMN IF NOT EXISTS end_after_occurrences integer`);
-    await db.execute(sql`ALTER TABLE rota_tasks ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active'`);
-    await db.execute(sql`ALTER TABLE rota_tasks ADD COLUMN IF NOT EXISTS archived_at timestamp`);
-
     // ── Step 1: Ensure at least one workspace exists ─────────────────────────
     const allWorkspaces = await storage.getWorkspaces();
     let defaultWorkspaceId: string;
