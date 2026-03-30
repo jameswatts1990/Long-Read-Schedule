@@ -110,6 +110,17 @@ export interface IStorage {
 export class PostgresStorage implements IStorage {
   private readonly db = sharedDb;
 
+  private getElapsedOccurrences(startDate: string, frequency: "daily" | "weekly"): number {
+    const start = new Date(`${startDate}T00:00:00`);
+    if (Number.isNaN(start.getTime())) return 0;
+    const today = new Date();
+    const diffMs = today.getTime() - start.getTime();
+    if (diffMs < 0) return 0;
+    const dayMs = 1000 * 60 * 60 * 24;
+    const elapsedDays = Math.floor(diffMs / dayMs);
+    return frequency === "daily" ? elapsedDays + 1 : Math.floor(elapsedDays / 7) + 1;
+  }
+
   // ─── User operations ───────────────────────────────────────────────────────
 
   async getUser(id: string): Promise<User | undefined> {
@@ -445,6 +456,25 @@ export class PostgresStorage implements IStorage {
   // ─── Rota Tasks ───────────────────────────────────────────────────────────
 
   async getRotaTasks(workspaceId: string): Promise<RotaTask[]> {
+    const all = await this.db
+      .select()
+      .from(rotaTasks)
+      .where(eq(rotaTasks.workspaceId, workspaceId))
+      .orderBy(rotaTasks.order);
+
+    await Promise.all(
+      all.map(async (rotaTask) => {
+        const limit = rotaTask.endAfterOccurrences;
+        if (!limit || rotaTask.status === "archived") return;
+        const elapsedOccurrences = this.getElapsedOccurrences(rotaTask.startDate, rotaTask.frequency as "daily" | "weekly");
+        if (elapsedOccurrences < limit) return;
+        await this.db
+          .update(rotaTasks)
+          .set({ status: "archived", archivedAt: new Date() })
+          .where(eq(rotaTasks.id, rotaTask.id));
+      }),
+    );
+
     return await this.db
       .select()
       .from(rotaTasks)
@@ -463,17 +493,45 @@ export class PostgresStorage implements IStorage {
     const maxOrder = existing.length > 0 ? Math.max(...existing.map((t) => t.order ?? 0)) : -1;
     const [created] = await this.db
       .insert(rotaTasks)
-      .values({ ...insertTask, order: maxOrder + 1 })
+      .values({
+        ...insertTask,
+        status: "active",
+        archivedAt: null,
+        endAfterOccurrences: insertTask.endAfterOccurrences ?? null,
+        order: maxOrder + 1,
+      })
       .returning();
     return created;
   }
 
   async updateRotaTask(id: string, data: Partial<InsertRotaTask>): Promise<RotaTask> {
-    const [updated] = await this.db.update(rotaTasks).set(data).where(eq(rotaTasks.id, id)).returning();
+    const existing = await this.getRotaTask(id);
+    if (!existing) throw new Error("Rota task not found");
+
+    const effectiveLimit = data.endAfterOccurrences === undefined ? existing.endAfterOccurrences : data.endAfterOccurrences;
+    const nextStatus =
+      effectiveLimit && this.getElapsedOccurrences(
+        data.startDate ?? existing.startDate,
+        (data.frequency as "daily" | "weekly") ?? (existing.frequency as "daily" | "weekly"),
+      ) >= effectiveLimit
+        ? "archived"
+        : "active";
+
+    const [updated] = await this.db
+      .update(rotaTasks)
+      .set({
+        ...data,
+        endAfterOccurrences: data.endAfterOccurrences === undefined ? existing.endAfterOccurrences : data.endAfterOccurrences,
+        status: nextStatus,
+        archivedAt: nextStatus === "archived" ? (existing.archivedAt ?? new Date()) : null,
+      })
+      .where(eq(rotaTasks.id, id))
+      .returning();
     return updated;
   }
 
   async deleteRotaTask(id: string): Promise<void> {
+    await this.db.delete(assignments).where(eq(assignments.rotaTaskId, id));
     await this.db.delete(rotaTasks).where(eq(rotaTasks.id, id));
   }
 }
