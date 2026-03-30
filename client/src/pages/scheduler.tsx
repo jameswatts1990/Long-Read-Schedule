@@ -153,11 +153,14 @@ export default function Scheduler() {
     },
   });
 
+  // Only auto-apply in week/pipeline views; month view fetches a date range and
+  // would issue multiple redundant requests (one per visible week instead of one).
   useEffect(() => {
     if (!activeWorkspace) return;
+    if (viewMode !== "week" && viewMode !== "pipeline") return;
     applyRotaMutation.mutate(weekStartStr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStartStr, activeWorkspace?.id]);
+  }, [weekStartStr, activeWorkspace?.id, viewMode]);
   
   // Fetch assignments for entire month range for month view
   const monthAssignmentsQuery = useQuery<Assignment[]>({ 

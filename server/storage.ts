@@ -21,6 +21,7 @@ import {
   users,
   premadeFilters,
   rotaTasks,
+  rotaSkips,
   workspaces,
   workspaceUsers,
 } from "@shared/schema";
@@ -107,6 +108,7 @@ export interface IStorage {
   updateRotaTask(id: string, data: Partial<InsertRotaTask>): Promise<RotaTask>;
   deleteRotaTask(id: string): Promise<void>;
   applyRotaTasksForWeek(workspaceId: string, weekStartDate: string): Promise<Assignment[]>;
+  createRotaSkip(rotaTaskId: string, weekStartDate: string, day: string, workspaceId: string): Promise<void>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -402,7 +404,19 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteAssignment(id: string): Promise<void> {
+    // Before deleting, check if this is a rota-generated assignment.
+    // If so, create a tombstone so applyRotaTasksForWeek won't recreate it.
+    const [row] = await this.db
+      .select({ rotaTaskId: assignments.rotaTaskId, weekStartDate: assignments.weekStartDate, day: assignments.day, workspaceId: assignments.workspaceId })
+      .from(assignments)
+      .where(eq(assignments.id, id))
+      .limit(1);
+
     await this.db.delete(assignments).where(eq(assignments.id, id));
+
+    if (row?.rotaTaskId) {
+      await this.createRotaSkip(row.rotaTaskId, row.weekStartDate, row.day, row.workspaceId);
+    }
   }
 
   // Fix Issue 4: parallel updates instead of sequential awaits
@@ -483,11 +497,15 @@ export class PostgresStorage implements IStorage {
   //
   // For each rota task in the workspace, compute which person (if any) should
   // be assigned during `weekStartDate` and create any missing assignment rows.
-  // Uses `rotaTaskId` on assignment rows as a fingerprint so we never
-  // re-create a slot the user deliberately deleted.
+  //
+  // Idempotency strategy (two layers):
+  //  1. rota_skips tombstones — created when the user explicitly deletes a
+  //     rota-generated assignment; prevents recreation for the rest of time.
+  //  2. Unique partial index + ON CONFLICT DO NOTHING on the DB insert — makes
+  //     concurrent apply calls from multiple tabs/devices safe.
   async applyRotaTasksForWeek(workspaceId: string, weekStartDate: string): Promise<Assignment[]> {
     const allRotaTasks = await this.getRotaTasks(workspaceId);
-    const created: Assignment[] = [];
+    if (allRotaTasks.length === 0) return [];
 
     // Helper: return the Monday (00:00 UTC) of the week containing `date`
     const getMondayOf = (date: Date): Date => {
@@ -500,6 +518,21 @@ export class PostgresStorage implements IStorage {
     };
 
     const targetMonday = getMondayOf(new Date(`${weekStartDate}T00:00:00Z`));
+
+    // Batch-load all tombstones for this workspace + week upfront to avoid N+1 queries.
+    const skipRows = await this.db
+      .select({ rotaTaskId: rotaSkips.rotaTaskId, day: rotaSkips.day })
+      .from(rotaSkips)
+      .where(
+        and(
+          eq(rotaSkips.workspaceId, workspaceId),
+          eq(rotaSkips.weekStartDate, weekStartDate),
+        ),
+      );
+    // Build a Set<"rotaTaskId:day"> for O(1) lookup
+    const skipSet = new Set(skipRows.map((r) => `${r.rotaTaskId}:${r.day}`));
+
+    const created: Assignment[] = [];
 
     for (const rotaTask of allRotaTasks) {
       if (rotaTask.personIds.length === 0) continue;
@@ -524,22 +557,11 @@ export class PostgresStorage implements IStorage {
         : [rotaTask.day];
 
       for (const day of daysToAssign) {
-        // Check for an existing rota-generated slot for this (rotaTask, week, day).
-        // If found (even if deleted by the user and re-created manually), skip.
-        const [existing] = await this.db
-          .select({ id: assignments.id })
-          .from(assignments)
-          .where(
-            and(
-              eq(assignments.rotaTaskId, rotaTask.id),
-              eq(assignments.weekStartDate, weekStartDate),
-              eq(assignments.day, day),
-            ),
-          )
-          .limit(1);
+        // Layer 1: tombstone check — user explicitly deleted this slot
+        if (skipSet.has(`${rotaTask.id}:${day}`)) continue;
 
-        if (existing) continue;
-
+        // Layer 2: atomic insert with ON CONFLICT DO NOTHING (unique index on
+        // rota_task_id+week_start_date+day handles concurrent requests safely).
         const [newAssignment] = await this.db
           .insert(assignments)
           .values({
@@ -551,13 +573,21 @@ export class PostgresStorage implements IStorage {
             workspaceId,
             rotaTaskId: rotaTask.id,
           })
+          .onConflictDoNothing()
           .returning();
 
-        created.push(newAssignment);
+        if (newAssignment) created.push(newAssignment);
       }
     }
 
     return created;
+  }
+
+  async createRotaSkip(rotaTaskId: string, weekStartDate: string, day: string, workspaceId: string): Promise<void> {
+    await this.db
+      .insert(rotaSkips)
+      .values({ id: randomUUID(), rotaTaskId, weekStartDate, day, workspaceId })
+      .onConflictDoNothing(); // idempotent — safe to call multiple times
   }
 }
 

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -88,7 +88,29 @@ export const assignments = pgTable("assignments", {
   // Set when this assignment was auto-created by a rota task; used to prevent
   // re-creation after the user deliberately deletes a rota-generated slot.
   rotaTaskId: varchar("rota_task_id"),
-});
+}, (t) => [
+  // Unique index on the rota slot triple so concurrent apply calls can use
+  // ON CONFLICT DO NOTHING instead of a racy read-then-insert.
+  // NULL != NULL in PostgreSQL, so regular (non-rota) rows are unaffected.
+  uniqueIndex("assignments_rota_slot_unique")
+    .on(t.rotaTaskId, t.weekStartDate, t.day)
+    .where(sql`${t.rotaTaskId} IS NOT NULL`),
+]);
+
+// Tombstone records that prevent applyRotaTasksForWeek from recreating an
+// assignment the user deliberately deleted.  One row per (rotaTaskId,
+// weekStartDate, day) triple; created atomically when a rota-generated
+// assignment is hard-deleted.
+export const rotaSkips = pgTable("rota_skips", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  rotaTaskId: varchar("rota_task_id").notNull(),
+  weekStartDate: text("week_start_date").notNull(),
+  day: text("day").notNull(),
+  workspaceId: varchar("workspace_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("rota_skips_unique").on(t.rotaTaskId, t.weekStartDate, t.day),
+]);
 
 export const premadeFilters = pgTable("premade_filters", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -154,6 +176,8 @@ export type InsertPremadeFilter = z.infer<typeof insertPremadeFilterSchema>;
 
 export type RotaTask = typeof rotaTasks.$inferSelect;
 export type InsertRotaTask = z.infer<typeof insertRotaTaskSchema>;
+
+export type RotaSkip = typeof rotaSkips.$inferSelect;
 
 export type Workspace = typeof workspaces.$inferSelect;
 export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;

@@ -443,13 +443,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auto-apply all rota tasks for a given week, creating any missing assignment rows.
-  // Idempotent: existing slots (by rotaTaskId+weekStartDate+day) are never duplicated.
+  // Idempotent: tombstone table + unique partial DB index make this safe under
+  // concurrent requests from multiple tabs/devices.
   app.post("/api/rota-tasks/apply", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const { weekStartDate } = z.object({ weekStartDate: isoDateString }).parse(req.body);
       const created = await storage.applyRotaTasksForWeek(req.workspaceId!, weekStartDate);
-      if (created.length > 0) {
-        broadcastUpdate("assignments", req.workspaceId);
+      // Broadcast each newly created assignment individually so other tabs can
+      // merge them into their local cache without a full refetch.
+      for (const assignment of created) {
+        broadcastUpdate("assignments", req.workspaceId, { action: "create", record: assignment });
       }
       res.json(created);
     } catch (error) {
