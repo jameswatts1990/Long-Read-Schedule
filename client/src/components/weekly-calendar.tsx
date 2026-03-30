@@ -371,7 +371,7 @@ export function WeeklyCalendar({
                           <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
                             {person.name}
                           </span>
-                          {assignments.some(a => a.personId === person.id) && (
+                          {hasAssignmentEveryDay(person.id) && (
                             <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
                           )}
                         </div>
