@@ -607,6 +607,18 @@ export default function Admin() {
     personForm.reset({ name: person.name, color: person.color });
   };
 
+  const linkedUserIds = new Set(
+    people
+      .filter((person) => person.userId)
+      .map((person) => person.userId as string),
+  );
+
+  const getAvailableUsersForPerson = (person: Person) =>
+    allUsers.filter((user) => {
+      if (person.userId && user.id === person.userId) return true;
+      return !linkedUserIds.has(user.id);
+    });
+
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
     taskForm.reset({ 
@@ -751,7 +763,7 @@ export default function Admin() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__none__">No user linked</SelectItem>
-                              {allUsers.map((user) => (
+                              {getAvailableUsersForPerson(person).map((user) => (
                                 <SelectItem key={user.id} value={user.id}>
                                   {user.email || `${user.firstName} ${user.lastName}`.trim() || user.id}
                                 </SelectItem>
