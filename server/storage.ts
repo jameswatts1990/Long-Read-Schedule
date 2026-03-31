@@ -28,7 +28,7 @@ import {
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq, and, gte, lte, inArray, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, isNull, sql } from "drizzle-orm";
 import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
@@ -68,6 +68,8 @@ export interface IStorage {
 
   // People (scoped to workspace)
   getPeople(workspaceId: string): Promise<Person[]>;
+  getPeopleByUser(userId: string): Promise<Person[]>;
+  findUnlinkedPersonByName(workspaceId: string, name: string): Promise<Person | undefined>;
   getPerson(id: string): Promise<Person | undefined>;
   createPerson(person: InsertPerson): Promise<Person>;
   updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person>;
@@ -234,6 +236,34 @@ export class PostgresStorage implements IStorage {
       .from(people)
       .where(eq(people.workspaceId, workspaceId))
       .orderBy(people.order);
+  }
+
+  async getPeopleByUser(userId: string): Promise<Person[]> {
+    return await this.db
+      .select()
+      .from(people)
+      .where(eq(people.userId, userId))
+      .orderBy(people.order);
+  }
+
+  async findUnlinkedPersonByName(workspaceId: string, name: string): Promise<Person | undefined> {
+    const normalizedName = name.trim();
+    if (!normalizedName) return undefined;
+
+    const [person] = await this.db
+      .select()
+      .from(people)
+      .where(
+        and(
+          eq(people.workspaceId, workspaceId),
+          isNull(people.userId),
+          sql`lower(${people.name}) = lower(${normalizedName})`,
+        ),
+      )
+      .orderBy(people.order)
+      .limit(1);
+
+    return person;
   }
 
   async getPerson(id: string): Promise<Person | undefined> {

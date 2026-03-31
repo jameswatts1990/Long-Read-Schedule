@@ -1,6 +1,6 @@
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,7 @@ import ALReporting from "@/pages/al-reporting";
 import MyDay from "@/pages/my-day";
 import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
+import FirstLoginOnboarding from "@/pages/first-login-onboarding";
 import NotFound from "@/pages/not-found";
 
 // Predicate that matches any cached query whose key starts with "/api/assignments"
@@ -143,6 +144,11 @@ function useIsMobile() {
 function Router() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
+  const { data: onboardingStatus, isLoading: onboardingLoading } = useQuery<{ needsOnboarding: boolean }>({
+    queryKey: ["/api/auth/onboarding-status"],
+    enabled: isAuthenticated,
+    retry: false,
+  });
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [hasRedirected, setHasRedirected] = useState(false);
@@ -156,7 +162,7 @@ function Router() {
     }
   }, [authLoading, workspaceLoading, isAuthenticated, activeWorkspace, isMobile, location, hasRedirected, setLocation]);
 
-  if (authLoading || (isAuthenticated && workspaceLoading)) {
+  if (authLoading || (isAuthenticated && (workspaceLoading || onboardingLoading))) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
@@ -166,6 +172,10 @@ function Router() {
 
   if (!isAuthenticated) {
     return <Landing />;
+  }
+
+  if (onboardingStatus?.needsOnboarding) {
+    return <FirstLoginOnboarding />;
   }
 
   // Authenticated but no workspace selected

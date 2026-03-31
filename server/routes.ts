@@ -106,6 +106,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/auth/onboarding-status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const linkedPeople = await storage.getPeopleByUser(userId);
+      const userWorkspaces = await storage.getUserWorkspaces(userId);
+
+      res.json({
+        needsOnboarding: linkedPeople.length === 0 && userWorkspaces.length > 0,
+        firstName: user?.firstName ?? "",
+        lastName: user?.lastName ?? "",
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch onboarding status" });
+    }
+  });
+
+  const completeOnboardingSchema = z.object({
+    workspaceId: z.string().trim().min(1, "workspaceId required"),
+    firstName: z.string().trim().min(1, "firstName required"),
+    lastName: z.string().trim().min(1, "lastName required"),
+  });
+
+  app.post("/api/auth/complete-onboarding", isAuthenticated, async (req: any, res) => {
+    try {
+      const { workspaceId, firstName, lastName } = completeOnboardingSchema.parse(req.body);
+      const userId = req.user.claims.sub;
+      const userEmail = req.user.claims.email;
+
+      if (!isSuperAdmin(userEmail)) {
+        const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
+        if (!membership) return res.status(403).json({ error: "Not a member of this workspace" });
+      }
+
+      const normalizedFirstName = firstName.trim();
+      const normalizedLastName = lastName.trim();
+      const fullName = `${normalizedFirstName} ${normalizedLastName}`.replace(/\s+/g, " ").trim();
+
+      const existingUser = await storage.getUser(userId);
+      await storage.upsertUser({
+        id: userId,
+        email: existingUser?.email ?? userEmail ?? null,
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
+        profileImageUrl: existingUser?.profileImageUrl ?? null,
+      });
+
+      let person = await storage.findUnlinkedPersonByName(workspaceId, fullName);
+      let linkedExisting = true;
+
+      if (person) {
+        person = await storage.updatePerson(person.id, { userId });
+      } else {
+        person = await storage.createPerson({
+          name: fullName,
+          color: "#3B82F6",
+          userId,
+          workspaceId,
+        });
+        linkedExisting = false;
+      }
+
+      (req.session as any).activeWorkspaceId = workspaceId;
+      const workspace = await storage.getWorkspace(workspaceId);
+
+      broadcastUpdate("people", workspaceId);
+
+      res.json({ workspace, person, linkedExisting });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to complete onboarding" });
+    }
+  });
+
   app.get("/api/users/:id", isAuthenticated, async (req, res) => {
     try {
       const user = await storage.getUser(req.params.id);
