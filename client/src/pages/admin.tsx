@@ -40,8 +40,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { DAYS, type Person, type Task, type User, type Workspace, type RotaTask } from "@shared/schema";
 
-// Super-admin email list (must match server/routes.ts SUPER_ADMIN_EMAILS)
-const SUPER_ADMIN_EMAILS = new Set(["jw24@sanger.ac.uk", "admin@sanger.ac.uk"]);
 
 // 20 unique colors with light, medium, and dark variants (60 colors total)
 const PRESET_COLORS = [
@@ -954,8 +952,8 @@ export default function Admin() {
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: allUsers = [] } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
-  const { data: currentUser } = useQuery<User>({ queryKey: ["/api/auth/user"] });
-  const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.has(currentUser.email.toLowerCase()) : false;
+  const { data: currentUser } = useQuery<User & { isSuperAdmin?: boolean }>({ queryKey: ["/api/auth/user"] });
+  const isSuperAdmin = currentUser?.isSuperAdmin === true;
 
   const personForm = useForm<PersonFormData>({
     resolver: zodResolver(personFormSchema),
@@ -1324,7 +1322,11 @@ export default function Admin() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => deletePersonMutation.mutate(person.id)}
+                        onClick={() => {
+                          if (confirm(`Delete ${person.name}? This will also remove all their assignments.`)) {
+                            deletePersonMutation.mutate(person.id);
+                          }
+                        }}
                         disabled={deletePersonMutation.isPending}
                         data-testid={`button-delete-person-${person.id}`}
                       >
@@ -1454,7 +1456,9 @@ export default function Admin() {
                         size="icon"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteTaskMutation.mutate(task.id);
+                          if (confirm(`Delete "${task.name}"? This will also remove all assignments for this task.`)) {
+                            deleteTaskMutation.mutate(task.id);
+                          }
                         }}
                         disabled={deleteTaskMutation.isPending}
                         data-testid={`button-delete-task-${task.id}`}

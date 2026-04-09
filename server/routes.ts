@@ -104,7 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
-      res.json(user);
+      res.json({ ...user, isSuperAdmin: isSuperAdmin(req.user.claims.email) });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -419,8 +419,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (userId) {
         const user = await storage.getUser(userId);
         if (!user) return res.status(400).json({ message: "User not found" });
-        const allPeople = await storage.getPeople(req.workspaceId!);
-        const alreadyLinked = allPeople.find(p => p.userId === userId && p.id !== personId);
+        const alreadyLinked = await storage.findPersonByUserId(userId, req.workspaceId!, personId);
         if (alreadyLinked) return res.status(400).json({ message: `User is already linked to ${alreadyLinked.name}` });
       }
 
@@ -591,6 +590,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { weekStartDate, startDate, endDate } = req.query;
 
       if (startDate && endDate && typeof startDate === "string" && typeof endDate === "string") {
+        const msInDay = 86_400_000;
+        const rangeMs = new Date(endDate).getTime() - new Date(startDate).getTime();
+        if (rangeMs > 366 * msInDay) {
+          return res.status(400).json({ message: "Date range must not exceed 366 days" });
+        }
         return res.json(await storage.getAssignmentsByDateRange(startDate, endDate, req.workspaceId!));
       }
       if (weekStartDate && typeof weekStartDate === "string") {
@@ -599,6 +603,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(await storage.getAssignments(req.workspaceId!));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch assignments" });
+    }
+  });
+
+  app.post("/api/assignments/bulk", isAuthenticated, requireWorkspace, async (req: any, res) => {
+    try {
+      const items = z.array(insertAssignmentSchema).parse(
+        (req.body as any[]).map((item: any) => ({ ...item, workspaceId: req.workspaceId }))
+      );
+      const userId = req.user.claims.sub;
+      const created = await Promise.all(items.map((data) => storage.createAssignment(data, userId)));
+      created.forEach((assignment) =>
+        broadcastUpdate("assignments", req.workspaceId, { action: "create", record: assignment })
+      );
+      res.json(created);
+    } catch (error) {
+      console.error("Bulk assignment error:", error);
+      res.status(400).json({ message: "Invalid assignment data" });
     }
   });
 

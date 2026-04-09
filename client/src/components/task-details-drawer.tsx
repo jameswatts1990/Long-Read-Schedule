@@ -10,6 +10,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { DuplicateAssignmentDialog } from "@/components/duplicate-assignment-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface TaskDetailsDrawerProps {
   assignment: Assignment | null;
@@ -26,6 +36,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const [customName, setCustomName] = useState("");
   const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
 
   const { data: creator } = useQuery<User>({
@@ -69,21 +80,47 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      if (!assignment) return;
-      return apiRequest("DELETE", `/api/assignments/${assignment.id}`);
+  const restoreMutation = useMutation({
+    mutationFn: async (snapshot: Assignment) => {
+      return apiRequest("POST", "/api/assignments", {
+        taskId: snapshot.taskId,
+        personId: snapshot.personId,
+        day: snapshot.day,
+        weekStartDate: snapshot.weekStartDate,
+        date: snapshot.date,
+        batchNumber: snapshot.batchNumber,
+        batchSize: snapshot.batchSize,
+        notes: snapshot.notes,
+        customName: snapshot.customName,
+      });
     },
     onSuccess: () => {
-      if (assignment) {
-        queryClient.invalidateQueries({ predicate: (query) => 
-          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
-        });
-      }
+      queryClient.invalidateQueries({ predicate: (query) =>
+        typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments")
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (snapshot: Assignment) => {
+      return apiRequest("DELETE", `/api/assignments/${snapshot.id}`);
+    },
+    onSuccess: (_data, snapshot) => {
+      queryClient.invalidateQueries({ predicate: (query) =>
+        typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments")
+      });
       toast({
         title: "Assignment deleted",
         description: "The task has been removed",
         variant: "default",
+        action: (
+          <button
+            className="shrink-0 rounded border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            onClick={() => restoreMutation.mutate(snapshot)}
+          >
+            Undo
+          </button>
+        ) as any,
       });
       onClose();
     },
@@ -120,9 +157,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
 
   const handleDelete = () => {
     if (!assignment) return;
-    if (confirm("Are you sure you want to delete this assignment?")) {
-      deleteMutation.mutate();
-    }
+    setShowDeleteConfirm(true);
   };
 
   if (!assignment) return null;
@@ -139,6 +174,9 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Task details"
       className={cn(
         "fixed inset-y-0 right-0 w-full max-w-[42rem] bg-card border-l shadow-xl transform transition-transform duration-300 z-50",
         open ? "translate-x-0" : "translate-x-full"
@@ -152,6 +190,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
             size="icon"
             variant="ghost"
             onClick={onClose}
+            aria-label="Close details"
             data-testid="button-close-drawer"
           >
             <X className="w-4 h-4" />
@@ -379,6 +418,25 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
         open={showDuplicateDialog}
         onClose={() => setShowDuplicateDialog(false)}
       />
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete assignment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the assignment from the schedule. You can undo this immediately after.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { setShowDeleteConfirm(false); deleteMutation.mutate(assignment); }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

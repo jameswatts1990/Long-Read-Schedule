@@ -71,6 +71,7 @@ export interface IStorage {
   getPeopleByUser(userId: string): Promise<Person[]>;
   findUnlinkedPersonByName(workspaceId: string, name: string): Promise<Person | undefined>;
   getPerson(id: string): Promise<Person | undefined>;
+  findPersonByUserId(userId: string, workspaceId: string, excludePersonId?: string): Promise<Person | undefined>;
   createPerson(person: InsertPerson): Promise<Person>;
   updatePerson(id: string, data: Partial<InsertPerson>): Promise<Person>;
   deletePerson(id: string): Promise<void>;
@@ -162,13 +163,15 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteWorkspace(id: string): Promise<void> {
-    await this.db.delete(workspaceUsers).where(eq(workspaceUsers.workspaceId, id));
-    await this.db.delete(premadeFilters).where(eq(premadeFilters.workspaceId, id));
-    await this.db.delete(assignments).where(eq(assignments.workspaceId, id));
-    await this.db.delete(rotaTasks).where(eq(rotaTasks.workspaceId, id));
-    await this.db.delete(people).where(eq(people.workspaceId, id));
-    await this.db.delete(tasks).where(eq(tasks.workspaceId, id));
-    await this.db.delete(workspaces).where(eq(workspaces.id, id));
+    await this.db.transaction(async (tx) => {
+      await tx.delete(workspaceUsers).where(eq(workspaceUsers.workspaceId, id));
+      await tx.delete(premadeFilters).where(eq(premadeFilters.workspaceId, id));
+      await tx.delete(assignments).where(eq(assignments.workspaceId, id));
+      await tx.delete(rotaTasks).where(eq(rotaTasks.workspaceId, id));
+      await tx.delete(people).where(eq(people.workspaceId, id));
+      await tx.delete(tasks).where(eq(tasks.workspaceId, id));
+      await tx.delete(workspaces).where(eq(workspaces.id, id));
+    });
   }
 
   // Fix Issue 5: use SQL IN clause instead of fetching all then filtering in JS
@@ -269,6 +272,13 @@ export class PostgresStorage implements IStorage {
 
   async getPerson(id: string): Promise<Person | undefined> {
     const [p] = await this.db.select().from(people).where(eq(people.id, id));
+    return p;
+  }
+
+  async findPersonByUserId(userId: string, workspaceId: string, excludePersonId?: string): Promise<Person | undefined> {
+    const conditions = [eq(people.userId, userId), eq(people.workspaceId, workspaceId)];
+    if (excludePersonId) conditions.push(sql`${people.id} != ${excludePersonId}`);
+    const [p] = await this.db.select().from(people).where(and(...conditions));
     return p;
   }
 

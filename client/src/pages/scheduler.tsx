@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers, Loader2 } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers, Loader2, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAuth } from "@/hooks/useAuth";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -83,8 +84,9 @@ export default function Scheduler() {
   const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
   const { user } = useAuth();
 
-  const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
-  const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: people = [], isLoading: peopleLoading } = useQuery<Person[]>({ queryKey: ["/api/people"] });
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const isInitialLoading = peopleLoading || tasksLoading;
   const { data: premadeFilters = [] } = useQuery<PremadeFilter[]>({ queryKey: ["/api/premade-filters"] });
 
   const currentPersonId = people.find((p) => p.userId === (user as any)?.id)?.id ?? null;
@@ -491,6 +493,7 @@ export default function Scheduler() {
               variant="ghost"
               size="icon"
               onClick={viewMode === "month" ? goToPreviousMonth : goToPreviousWeek}
+              aria-label={viewMode === "month" ? "Previous month" : "Previous week"}
               data-testid="button-previous"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -525,6 +528,7 @@ export default function Scheduler() {
               variant="ghost"
               size="icon"
               onClick={viewMode === "month" ? goToNextMonth : goToNextWeek}
+              aria-label={viewMode === "month" ? "Next month" : "Next week"}
               data-testid="button-next"
             >
               <ChevronRight className="w-4 h-4" />
@@ -576,6 +580,8 @@ export default function Scheduler() {
             variant="outline"
             size="icon"
             onClick={() => setIsCompactView(!isCompactView)}
+            aria-label={isCompactView ? "Expand view" : "Compact view"}
+            aria-pressed={isCompactView}
             data-testid="button-toggle-compact"
           >
             {isCompactView ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
@@ -583,7 +589,7 @@ export default function Scheduler() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" data-testid="button-more-actions">
+              <Button variant="outline" size="icon" aria-label="More actions" data-testid="button-more-actions">
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -636,7 +642,26 @@ export default function Scheduler() {
           </div>
         )}
 
-        {viewMode === "week" && (
+        {isInitialLoading && (
+          <div className="space-y-2" aria-label="Loading schedule" aria-busy="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex gap-2">
+                <Skeleton className="h-10 w-32 shrink-0" />
+                {Array.from({ length: 5 }).map((_, j) => (
+                  <Skeleton key={j} className="h-10 flex-1" />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+        {!isInitialLoading && (viewMode === "week" || viewMode === "month") && people.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+            <Users className="h-10 w-10 opacity-40" />
+            <p className="text-sm font-medium">No team members yet</p>
+            <p className="text-xs">Add people in <Link href="/admin" className="underline underline-offset-2">Admin</Link> to start scheduling.</p>
+          </div>
+        )}
+        {!isInitialLoading && viewMode === "week" && people.length > 0 && (
           <WeeklyCalendar
             weekStartDate={weekStartStr}
             assignments={weekAssignments}
@@ -649,7 +674,7 @@ export default function Scheduler() {
             onToggleCurrentPerson={toggleMyAssignmentsView}
           />
         )}
-        {viewMode === "month" && (
+        {!isInitialLoading && viewMode === "month" && people.length > 0 && (
           <MonthView
             weeksInMonth={weeksInMonth}
             weekAssignments={weekAssignments}
@@ -660,7 +685,7 @@ export default function Scheduler() {
             formatDate={formatDate}
           />
         )}
-        {viewMode === "pipeline" && (
+        {!isInitialLoading && viewMode === "pipeline" && (
           <PipelineView
             weekStartDate={weekStartStr}
             assignments={weekAssignments}

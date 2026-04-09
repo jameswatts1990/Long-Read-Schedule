@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BarChart3, Filter, Layers } from "lucide-react";
+import { ArrowLeft, BarChart3, Filter, Layers, Download } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -135,11 +135,28 @@ export default function Reporting() {
   }, [productionTasks]);
 
   const toggleTask = (taskId: string) => {
-    setSelectedTaskIds(prev => 
-      prev.includes(taskId) 
+    setSelectedTaskIds(prev =>
+      prev.includes(taskId)
         ? prev.filter(id => id !== taskId)
         : [...prev, taskId]
     );
+  };
+
+  const exportCsv = () => {
+    const visibleTasks = productionTasks.filter(t => selectedTaskIds.includes(t.id));
+    const headers = ["Week", ...visibleTasks.map(t => t.name)];
+    const rows = weeks.map(week => [
+      formatWeekDate(week),
+      ...visibleTasks.map(t => String(getWeekTotal(week, t.id))),
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `capacity-report-${startDate}-${endDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -171,6 +188,10 @@ export default function Reporting() {
                 <TabsTrigger value="line">Line</TabsTrigger>
               </TabsList>
             </Tabs>
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={weeks.length === 0} data-testid="button-export-csv">
+              <Download className="h-4 w-4 mr-1.5" />
+              Export CSV
+            </Button>
 
             <Popover>
               <PopoverTrigger asChild>
