@@ -274,9 +274,11 @@ export class PostgresStorage implements IStorage {
 
   async createPerson(insertPerson: InsertPerson): Promise<Person> {
     const workspaceId = insertPerson.workspaceId ?? "default";
-    const existing = await this.getPeople(workspaceId);
-    const maxOrder = existing.length > 0 ? Math.max(...existing.map(p => p.order ?? 0)) : -1;
-    const [p] = await this.db.insert(people).values({ ...insertPerson, order: maxOrder + 1 }).returning();
+    const [{ max }] = await this.db
+      .select({ max: sql<number>`coalesce(max(${people.order}), -1)` })
+      .from(people)
+      .where(eq(people.workspaceId, workspaceId));
+    const [p] = await this.db.insert(people).values({ ...insertPerson, order: max + 1 }).returning();
     return p;
   }
 
@@ -331,9 +333,11 @@ export class PostgresStorage implements IStorage {
 
   async createTask(insertTask: InsertTask): Promise<Task> {
     const workspaceId = insertTask.workspaceId ?? "default";
-    const existing = await this.getTasks(workspaceId);
-    const maxOrder = existing.length > 0 ? Math.max(...existing.map(t => t.order ?? 0)) : -1;
-    const [t] = await this.db.insert(tasks).values({ ...insertTask, order: maxOrder + 1 }).returning();
+    const [{ max }] = await this.db
+      .select({ max: sql<number>`coalesce(max(${tasks.order}), -1)` })
+      .from(tasks)
+      .where(eq(tasks.workspaceId, workspaceId));
+    const [t] = await this.db.insert(tasks).values({ ...insertTask, order: max + 1 }).returning();
     return t;
   }
 
@@ -520,11 +524,13 @@ export class PostgresStorage implements IStorage {
 
   async createRotaTask(insertTask: InsertRotaTask): Promise<RotaTask> {
     const workspaceId = insertTask.workspaceId ?? "default";
-    const existing = await this.getRotaTasks(workspaceId);
-    const maxOrder = existing.length > 0 ? Math.max(...existing.map((t) => t.order ?? 0)) : -1;
+    const [{ max }] = await this.db
+      .select({ max: sql<number>`coalesce(max(${rotaTasks.order}), -1)` })
+      .from(rotaTasks)
+      .where(eq(rotaTasks.workspaceId, workspaceId));
     const [created] = await this.db
       .insert(rotaTasks)
-      .values({ ...insertTask, order: maxOrder + 1 })
+      .values({ ...insertTask, order: max + 1 })
       .returning();
     return created;
   }
@@ -653,16 +659,7 @@ export class PostgresStorage implements IStorage {
 
         if (newAssignment) {
           created.push(newAssignment);
-          scheduledOccurrences += 1;
-          occurrenceCounts.set(rotaTask.id, scheduledOccurrences);
         }
-      }
-
-      if (occurrenceLimit != null && scheduledOccurrences >= occurrenceLimit) {
-        await this.db
-          .update(rotaTasks)
-          .set({ archivedAt: new Date() })
-          .where(and(eq(rotaTasks.id, rotaTask.id), isNull(rotaTasks.archivedAt)));
       }
     }
 

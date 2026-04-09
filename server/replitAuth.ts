@@ -183,6 +183,11 @@ export async function setupAuth(app: Express) {
   });
 }
 
+// Deduplicates concurrent token-refresh attempts for the same session.
+// Key: session ID  Value: the in-flight refresh promise.
+// Memory overhead: one Promise reference per session actively refreshing (~0).
+const sessionRefreshPromises = new Map<string, Promise<void>>();
+
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
@@ -191,41 +196,56 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
+  // 60-second buffer: proactively refresh before the token actually expires,
+  // shrinking the window in which concurrent requests all see an expired token.
+  if (now < user.expires_at - 60) {
     return next();
   }
 
   const refreshToken = user.refresh_token;
   if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
+    return res.status(401).json({ message: "Unauthorized" });
   }
 
-  try {
+  const sessionId = req.session.id;
+
+  // If another concurrent request for this session is already refreshing,
+  // wait for it to finish instead of issuing a duplicate refresh grant.
+  const inFlight = sessionRefreshPromises.get(sessionId);
+  if (inFlight) {
+    try {
+      await inFlight;
+      return next(); // Concurrent refresh succeeded; this request can proceed.
+    } catch {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+  }
+
+  // Kick off the refresh and register it so concurrent requests can piggyback.
+  const refreshWork = (async () => {
     const config = await getOidcConfig();
     const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
     updateUserSession(user, tokenResponse);
-
     await new Promise<void>((resolve, reject) => {
       req.login(user, (error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
+        if (error) { reject(error); return; }
         req.session.save((sessionError) => {
-          if (sessionError) {
-            reject(sessionError);
-            return;
-          }
+          if (sessionError) { reject(sessionError); return; }
           resolve();
         });
       });
     });
+  })();
 
+  sessionRefreshPromises.set(sessionId, refreshWork);
+
+  try {
+    await refreshWork;
     return next();
   } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
+    return res.status(401).json({ message: "Unauthorized" });
+  } finally {
+    // Always clean up — even on failure — so a retry isn't permanently blocked.
+    sessionRefreshPromises.delete(sessionId);
   }
 };

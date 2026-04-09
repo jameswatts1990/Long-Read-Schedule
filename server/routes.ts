@@ -15,11 +15,13 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { getDiagnosticsSnapshot } from "./diagnostics";
 
-// Super-admin email list — these users can manage workspaces
-export const SUPER_ADMIN_EMAILS = new Set<string>([
-  "jw24@sanger.ac.uk",
-  "admin@sanger.ac.uk",
-]);
+// Super-admin email list — loaded from SUPER_ADMIN_EMAILS env var (comma-separated)
+// so access can be changed without a code deployment.
+const _superAdminEmails = (process.env.SUPER_ADMIN_EMAILS ?? "")
+  .split(",")
+  .map((e: string) => e.trim().toLowerCase())
+  .filter(Boolean);
+export const SUPER_ADMIN_EMAILS = new Set<string>(_superAdminEmails);
 
 function isSuperAdmin(email: string | null | undefined): boolean {
   if (!email) return false;
@@ -44,7 +46,7 @@ declare module "express-session" {
 const requireWorkspace = async (req: Request, res: Response, next: NextFunction) => {
   const workspaceId = (req.session as any).activeWorkspaceId;
   if (!workspaceId) {
-    return res.status(400).json({ error: "No active workspace selected" });
+    return res.status(400).json({ message: "No active workspace selected" });
   }
   req.workspaceId = workspaceId;
   next();
@@ -55,7 +57,7 @@ const requireSuperAdmin = async (req: Request, res: Response, next: NextFunction
   const userEmail = (req as any).user?.claims?.email;
   if (!isSuperAdmin(userEmail)) {
     console.warn(`[SuperAdmin Check] Access denied for ${userEmail}`);
-    return res.status(403).json({ error: "Forbidden: Super-admin access required" });
+    return res.status(403).json({ message: "Forbidden: Super-admin access required" });
   }
   next();
 };
@@ -70,7 +72,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // pingTimeout raised to 30 s so a slow round-trip doesn't falsely evict connections.
   const io = new SocketServer(httpServer, {
     path: "/socket.io",
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: {
+      origin: (process.env.ALLOWED_ORIGIN ?? "").split(",").map((o: string) => o.trim()).filter(Boolean),
+      methods: ["GET", "POST"],
+    },
     pingInterval: 60_000,
     pingTimeout:  30_000,
   });
@@ -119,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName: user?.lastName ?? "",
       });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch onboarding status" });
+      res.status(500).json({ message: "Failed to fetch onboarding status" });
     }
   });
 
@@ -137,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!isSuperAdmin(userEmail)) {
         const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
-        if (!membership) return res.status(403).json({ error: "Not a member of this workspace" });
+        if (!membership) return res.status(403).json({ message: "Not a member of this workspace" });
       }
 
       const normalizedFirstName = firstName.trim();
@@ -175,17 +180,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ workspace, person, linkedExisting });
     } catch (error) {
-      res.status(400).json({ error: "Failed to complete onboarding" });
+      res.status(400).json({ message: "Failed to complete onboarding" });
     }
   });
 
-  app.get("/api/users/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/users/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const user = await storage.getUser(req.params.id);
-      if (!user) return res.status(404).json({ error: "User not found" });
+      if (!user) return res.status(404).json({ message: "User not found" });
+      // Only allow lookup of users who share the active workspace
+      const membership = await storage.getUserWorkspaceMembership(req.params.id, req.workspaceId!);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
       res.json(user);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch user" });
+      res.status(500).json({ message: "Failed to fetch user" });
     }
   });
 
@@ -194,7 +202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const users = await storage.getUsers();
       res.json(users);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch users" });
+      res.status(500).json({ message: "Failed to fetch users" });
     }
   });
 
@@ -202,7 +210,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       res.json(getDiagnosticsSnapshot(true));
     } catch (error) {
-      res.status(500).json({ error: "Failed to collect diagnostics" });
+      res.status(500).json({ message: "Failed to collect diagnostics" });
     }
   });
 
@@ -220,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userWorkspaces = await storage.getUserWorkspaces(userId);
       res.json(userWorkspaces);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch workspaces" });
+      res.status(500).json({ message: "Failed to fetch workspaces" });
     }
   });
 
@@ -234,7 +242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workspace = await storage.getWorkspace(workspaceId);
       res.json(workspace || null);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch active workspace" });
+      res.status(500).json({ message: "Failed to fetch active workspace" });
     }
   });
 
@@ -242,20 +250,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/my-workspace", isAuthenticated, async (req: any, res) => {
     try {
       const { workspaceId } = req.body;
-      if (!workspaceId) return res.status(400).json({ error: "workspaceId required" });
+      if (!workspaceId) return res.status(400).json({ message: "workspaceId required" });
 
       const userEmail = req.user.claims.email;
       if (!isSuperAdmin(userEmail)) {
         const userId = req.user.claims.sub;
         const membership = await storage.getUserWorkspaceMembership(userId, workspaceId);
-        if (!membership) return res.status(403).json({ error: "Not a member of this workspace" });
+        if (!membership) return res.status(403).json({ message: "Not a member of this workspace" });
       }
 
       (req.session as any).activeWorkspaceId = workspaceId;
       const workspace = await storage.getWorkspace(workspaceId);
       res.json(workspace);
     } catch (error) {
-      res.status(500).json({ error: "Failed to set active workspace" });
+      res.status(500).json({ message: "Failed to set active workspace" });
     }
   });
 
@@ -266,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const all = await storage.getWorkspaces();
       res.json(all);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch workspaces" });
+      res.status(500).json({ message: "Failed to fetch workspaces" });
     }
   });
 
@@ -276,7 +284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workspace = await storage.createWorkspace(data);
       res.json(workspace);
     } catch (error) {
-      res.status(400).json({ error: "Invalid workspace data" });
+      res.status(400).json({ message: "Invalid workspace data" });
     }
   });
 
@@ -286,7 +294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workspace = await storage.updateWorkspace(req.params.id, data);
       res.json(workspace);
     } catch (error) {
-      res.status(400).json({ error: "Failed to update workspace" });
+      res.status(400).json({ message: "Failed to update workspace" });
     }
   });
 
@@ -295,7 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteWorkspace(req.params.id);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete workspace" });
+      res.status(500).json({ message: "Failed to delete workspace" });
     }
   });
 
@@ -304,18 +312,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const members = await storage.getWorkspaceMembers(req.params.id);
       res.json(members);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch workspace members" });
+      res.status(500).json({ message: "Failed to fetch workspace members" });
     }
   });
 
   app.post("/api/workspaces/:id/members", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
       const { userId, role } = req.body;
-      if (!userId) return res.status(400).json({ error: "userId required" });
+      if (!userId) return res.status(400).json({ message: "userId required" });
       const membership = await storage.addUserToWorkspace(userId, req.params.id, role || "member");
       res.json(membership);
     } catch (error) {
-      res.status(400).json({ error: "Failed to add member" });
+      res.status(400).json({ message: "Failed to add member" });
     }
   });
 
@@ -324,7 +332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.removeUserFromWorkspace(req.params.userId, req.params.id);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to remove member" });
+      res.status(500).json({ message: "Failed to remove member" });
     }
   });
 
@@ -335,7 +343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const people = await storage.getPeople(req.workspaceId!);
       res.json(people);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch people" });
+      res.status(500).json({ message: "Failed to fetch people" });
     }
   });
 
@@ -346,40 +354,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("people", req.workspaceId);
       res.json(person);
     } catch (error) {
-      res.status(400).json({ error: "Invalid person data" });
+      res.status(400).json({ message: "Invalid person data" });
     }
   });
 
   app.put("/api/people/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
+      const existing = await storage.getPerson(req.params.id);
+      if (!existing || existing.workspaceId !== req.workspaceId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       const data = insertPersonSchema.partial().parse(req.body);
       const person = await storage.updatePerson(req.params.id, data);
       broadcastUpdate("people", req.workspaceId);
       res.json(person);
     } catch (error) {
-      res.status(400).json({ error: "Invalid person data" });
+      res.status(400).json({ message: "Invalid person data" });
     }
   });
 
   app.delete("/api/people/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
+      const existing = await storage.getPerson(req.params.id);
+      if (!existing || existing.workspaceId !== req.workspaceId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       await storage.deletePerson(req.params.id);
       broadcastUpdate("people", req.workspaceId);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete person" });
+      res.status(500).json({ message: "Failed to delete person" });
     }
   });
 
   app.post("/api/people/reorder-list", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const { personIds } = req.body;
-      if (!Array.isArray(personIds)) return res.status(400).json({ error: "personIds must be an array" });
+      if (!Array.isArray(personIds)) return res.status(400).json({ message: "personIds must be an array" });
       const result = await storage.reorderPeople(personIds);
       broadcastUpdate("people", req.workspaceId);
       res.json(result);
     } catch (error) {
-      res.status(400).json({ error: "Failed to reorder people" });
+      res.status(400).json({ message: "Failed to reorder people" });
     }
   });
 
@@ -389,7 +405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("people", req.workspaceId);
       res.json(person);
     } catch (error) {
-      res.status(500).json({ error: "Failed to toggle excluded status" });
+      res.status(500).json({ message: "Failed to toggle excluded status" });
     }
   });
 
@@ -402,10 +418,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (userId) {
         const user = await storage.getUser(userId);
-        if (!user) return res.status(400).json({ error: "User not found" });
+        if (!user) return res.status(400).json({ message: "User not found" });
         const allPeople = await storage.getPeople(req.workspaceId!);
         const alreadyLinked = allPeople.find(p => p.userId === userId && p.id !== personId);
-        if (alreadyLinked) return res.status(400).json({ error: `User is already linked to ${alreadyLinked.name}` });
+        if (alreadyLinked) return res.status(400).json({ message: `User is already linked to ${alreadyLinked.name}` });
       }
 
       const person = await storage.updatePerson(personId, { userId });
@@ -413,7 +429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(person);
     } catch (error) {
       console.error("Link user error:", error);
-      res.status(400).json({ error: "Failed to link user" });
+      res.status(400).json({ message: "Failed to link user" });
     }
   });
 
@@ -424,7 +440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tasks = await storage.getTasks(req.workspaceId!);
       res.json(tasks);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch tasks" });
+      res.status(500).json({ message: "Failed to fetch tasks" });
     }
   });
 
@@ -435,30 +451,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("tasks", req.workspaceId);
       res.json(task);
     } catch (error) {
-      res.status(400).json({ error: "Invalid task data" });
+      res.status(400).json({ message: "Invalid task data" });
     }
   });
 
   app.put("/api/tasks/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
+      const existing = await storage.getTask(req.params.id);
+      if (!existing || existing.workspaceId !== req.workspaceId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       const data = insertTaskSchema.partial().parse(req.body);
       const task = await storage.updateTask(req.params.id, data);
       broadcastUpdate("tasks", req.workspaceId);
       res.json(task);
     } catch (error) {
-      res.status(400).json({ error: "Invalid task data" });
+      res.status(400).json({ message: "Invalid task data" });
     }
   });
 
   app.delete("/api/tasks/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
+      const existing = await storage.getTask(req.params.id);
+      if (!existing || existing.workspaceId !== req.workspaceId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       await storage.deleteTask(req.params.id);
       broadcastUpdate("tasks", req.workspaceId);
       // Also broadcast assignments deletion since task deletion cascades to remove all assignments
       broadcastUpdate("assignments", req.workspaceId);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete task" });
+      res.status(500).json({ message: "Failed to delete task" });
     }
   });
 
@@ -466,7 +490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/admin/assignments-cleanup", isAuthenticated, requireWorkspace, async (req: any, res) => {
     try {
       const isSuperAdmin = SUPER_ADMIN_EMAILS.has(req.user?.email);
-      if (!isSuperAdmin) return res.status(403).json({ error: "Only super admins can use cleanup endpoint" });
+      if (!isSuperAdmin) return res.status(403).json({ message: "Only super admins can use cleanup endpoint" });
 
       const { taskId, afterDate } = z.object({
         taskId: z.string().min(1),
@@ -479,19 +503,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(result);
     } catch (error) {
-      res.status(400).json({ error: "Failed to cleanup assignments" });
+      res.status(400).json({ message: "Failed to cleanup assignments" });
     }
   });
 
   app.post("/api/tasks/reorder-list", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const { taskIds } = req.body;
-      if (!Array.isArray(taskIds)) return res.status(400).json({ error: "taskIds must be an array" });
+      if (!Array.isArray(taskIds)) return res.status(400).json({ message: "taskIds must be an array" });
       const result = await storage.reorderTasks(taskIds);
       broadcastUpdate("tasks", req.workspaceId);
       res.json(result);
     } catch (error) {
-      res.status(400).json({ error: "Failed to reorder tasks" });
+      res.status(400).json({ message: "Failed to reorder tasks" });
     }
   });
 
@@ -502,7 +526,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rotaTasks = await storage.getRotaTasks(req.workspaceId!);
       res.json(rotaTasks);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch rota tasks" });
+      res.status(500).json({ message: "Failed to fetch rota tasks" });
     }
   });
 
@@ -513,7 +537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("rota-tasks", req.workspaceId);
       res.json(rotaTask);
     } catch (error) {
-      res.status(400).json({ error: "Invalid rota task data" });
+      res.status(400).json({ message: "Invalid rota task data" });
     }
   });
 
@@ -524,7 +548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("rota-tasks", req.workspaceId);
       res.json(rotaTask);
     } catch (error) {
-      res.status(400).json({ error: "Invalid rota task data" });
+      res.status(400).json({ message: "Invalid rota task data" });
     }
   });
 
@@ -538,7 +562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ success: true, ...result });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete rota task" });
+      res.status(500).json({ message: "Failed to delete rota task" });
     }
   });
 
@@ -556,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(created);
     } catch (error) {
-      res.status(400).json({ error: "Failed to apply rota tasks" });
+      res.status(400).json({ message: "Failed to apply rota tasks" });
     }
   });
 
@@ -574,7 +598,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(await storage.getAssignments(req.workspaceId!));
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch assignments" });
+      res.status(500).json({ message: "Failed to fetch assignments" });
     }
   });
 
@@ -589,7 +613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(assignment);
     } catch (error) {
       console.error("Assignment validation error:", error);
-      res.status(400).json({ error: "Invalid assignment data" });
+      res.status(400).json({ message: "Invalid assignment data" });
     }
   });
 
@@ -608,7 +632,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/assignments/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const existing = await storage.getAssignment(req.params.id);
-      if (!existing) return res.status(404).json({ error: "Assignment not found" });
+      if (!existing) return res.status(404).json({ message: "Assignment not found" });
 
       const parsed = assignmentPatchSchema.partial().parse(req.body ?? {});
       const { weekStartDate, ...mutable } = parsed;
@@ -621,7 +645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     } catch (error) {
       console.error("PATCH assignment error:", error);
-      res.status(400).json({ error: "Invalid update data" });
+      res.status(400).json({ message: "Invalid update data" });
     }
   });
 
@@ -629,13 +653,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { personId, day, weekStartDate, assignmentIds } = req.body;
       if (!personId || !day || !weekStartDate || !Array.isArray(assignmentIds)) {
-        return res.status(400).json({ error: "Missing required fields" });
+        return res.status(400).json({ message: "Missing required fields" });
       }
       const result = await storage.reorderAssignmentsByCell(personId, day, weekStartDate, assignmentIds);
       broadcastUpdate("assignments", req.workspaceId);
       res.json(result);
     } catch (error) {
-      res.status(400).json({ error: "Failed to reorder assignments" });
+      res.status(400).json({ message: "Failed to reorder assignments" });
     }
   });
 
@@ -651,7 +675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete assignment" });
+      res.status(500).json({ message: "Failed to delete assignment" });
     }
   });
 
@@ -662,7 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filters = await storage.getPremadeFilters(req.workspaceId!);
       res.json(filters);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch premade filters" });
+      res.status(500).json({ message: "Failed to fetch premade filters" });
     }
   });
 
@@ -673,7 +697,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("premade-filters", req.workspaceId);
       res.json(filter);
     } catch (error) {
-      res.status(400).json({ error: "Invalid filter data" });
+      res.status(400).json({ message: "Invalid filter data" });
     }
   });
 
@@ -683,7 +707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("premade-filters", req.workspaceId);
       res.json(filter);
     } catch (error) {
-      res.status(400).json({ error: "Failed to update premade filter" });
+      res.status(400).json({ message: "Failed to update premade filter" });
     }
   });
 
@@ -693,7 +717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("premade-filters", req.workspaceId);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete premade filter" });
+      res.status(500).json({ message: "Failed to delete premade filter" });
     }
   });
 
