@@ -70,7 +70,7 @@ export function DuplicateAssignmentDialog({
       toast({
         title: "Tasks duplicated",
         description: `Created ${selectedSlots.size} new assignment(s)`,
-        variant: "default",
+        variant: "success",
       });
       setSelectedSlots(new Set());
       onClose();
@@ -100,7 +100,7 @@ export function DuplicateAssignmentDialog({
       toast({
         title: "No slots selected",
         description: "Please select at least one day to duplicate to",
-        variant: "destructive",
+        variant: "warning",
       });
       return;
     }

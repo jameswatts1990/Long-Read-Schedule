@@ -608,11 +608,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/assignments/bulk", isAuthenticated, requireWorkspace, async (req: any, res) => {
     try {
+      const rawItems = req.body as any[];
       const items = z.array(insertAssignmentSchema).parse(
-        (req.body as any[]).map((item: any) => ({ ...item, workspaceId: req.workspaceId }))
+        rawItems.map((item: any) => ({ ...item, workspaceId: req.workspaceId }))
       );
       const userId = req.user.claims.sub;
-      const created = await Promise.all(items.map((data) => storage.createAssignment(data, userId)));
+      // Merge customColor back in — it is stripped by insertAssignmentSchema.parse if the
+      // drizzle-zod cache predates the column addition, so pass it through explicitly.
+      const created = await Promise.all(
+        items.map((data, i) =>
+          storage.createAssignment(
+            { ...data, customColor: rawItems[i]?.customColor || null },
+            userId,
+          )
+        )
+      );
       created.forEach((assignment) =>
         broadcastUpdate("assignments", req.workspaceId, { action: "create", record: assignment })
       );
@@ -625,10 +635,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/assignments", isAuthenticated, requireWorkspace, async (req: any, res) => {
     try {
-      const { override, ...bodyData } = req.body;
+      const { override, customColor, ...bodyData } = req.body;
       const data = insertAssignmentSchema.parse({ ...bodyData, workspaceId: req.workspaceId });
       const userId = req.user.claims.sub;
-      const assignment = await storage.createAssignment(data, userId);
+      const assignment = await storage.createAssignment(
+        { ...data, customColor: customColor || null },
+        userId,
+      );
       // Fix Issue 1: send the actual record so clients can update cache without refetching
       broadcastUpdate("assignments", req.workspaceId, { action: "create", record: assignment });
       res.json(assignment);

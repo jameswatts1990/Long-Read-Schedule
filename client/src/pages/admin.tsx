@@ -951,7 +951,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      toast({ title: "Team member added", description: "Person added to the team", variant: "default" });
+      toast({ title: "Team member added", description: "Person added to the team", variant: "success" });
       personForm.reset();
       setShowAddPerson(false);
     },
@@ -968,7 +968,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      toast({ title: "Team member updated", description: "Changes have been saved", variant: "default" });
+      toast({ title: "Team member updated", description: "Changes have been saved", variant: "success" });
       personForm.reset();
       setEditingPerson(null);
     },
@@ -984,7 +984,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      toast({ title: "Task added", description: "New task is now available", variant: "default" });
+      toast({ title: "Task added", description: "New task is now available", variant: "success" });
       taskForm.reset();
       setShowAddTask(false);
     },
@@ -1001,7 +1001,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      toast({ title: "Task updated", description: "Changes have been saved", variant: "default" });
+      toast({ title: "Task updated", description: "Changes have been saved", variant: "success" });
       taskForm.reset();
       setEditingTask(null);
     },
@@ -1017,7 +1017,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      toast({ title: "Success", description: "Person deleted successfully" });
+      toast({ title: "Person deleted", description: "Team member has been removed", variant: "destructive" });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete person", variant: "destructive" });
@@ -1044,7 +1044,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-      toast({ title: "Success", description: "Exclusion status updated" });
+      toast({ title: "Availability updated", description: "Exclusion status changed", variant: "success" });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to update exclusion status", variant: "destructive" });
@@ -1071,7 +1071,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      toast({ title: "Success", description: "Task deleted successfully" });
+      toast({ title: "Task deleted", description: "Task has been removed", variant: "destructive" });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete task", variant: "destructive" });

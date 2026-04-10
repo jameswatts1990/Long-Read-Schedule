@@ -111,7 +111,7 @@ export function WeeklyCalendar({
       toast({
         title: "Task moved",
         description: "Assignment updated successfully",
-        variant: "default",
+        variant: "success",
       });
     },
     onError: () => {
@@ -168,7 +168,8 @@ export function WeeklyCalendar({
           idsToDelete.length > 1
             ? `${idsToDelete.length} assignments have been removed`
             : "Assignment has been removed",
-        variant: "default",
+        variant: "destructive",
+        icon: <Trash2 className="h-4 w-4 shrink-0 mt-0.5" />,
       });
       clearSelection();
     } catch {
@@ -184,6 +185,7 @@ export function WeeklyCalendar({
     setClipboardAssignments(toCopy);
     toast({
       title: `${toCopy.length} assignment${toCopy.length !== 1 ? "s" : ""} copied`,
+      icon: <Copy className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />,
     });
   };
 
@@ -250,7 +252,7 @@ export function WeeklyCalendar({
         if (target) {
           void handlePaste(target);
         } else {
-          toast({ title: "Right-click a cell to paste" });
+          toast({ title: "Right-click a cell to paste", icon: <CheckCircle className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" /> });
         }
         return;
       }
@@ -530,7 +532,7 @@ export function WeeklyCalendar({
                               toast({
                                 title: "Multiple tasks selected",
                                 description: "Drag selected tasks to a person name to delete them together",
-                                variant: "default",
+                                variant: "warning",
                               });
                               setDropTargetCell(null);
                               setDraggedAssignment(null);

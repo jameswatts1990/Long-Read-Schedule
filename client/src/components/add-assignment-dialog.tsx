@@ -209,7 +209,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       toast({
         title: "Assignment created",
         description: "Task assigned successfully",
-        variant: "default",
+        variant: "success",
       });
       form.reset({
         taskId: "",
@@ -336,7 +336,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         toast({
           title: "Recurring assignments created",
           description: `Created ${allDates.length} assignment(s)`,
-          variant: "default",
+          variant: "success",
         });
         form.reset();
         setSelectedDays(new Set([day]));
@@ -377,7 +377,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         toast({
           title: "Assignments created",
           description: `Task assigned to ${daysArray.length} day(s)`,
-          variant: "default",
+          variant: "success",
         });
         form.reset();
         setSelectedDays(new Set([day]));
@@ -426,7 +426,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       toast({
         title: "Assignments created",
         description: `Task assigned to all 5 days`,
-        variant: "default",
+        variant: "success",
       });
       form.reset();
       onClose();
@@ -581,7 +581,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                               toast({
                                 title: "Task required",
                                 description: "Please select a task first",
-                                variant: "destructive",
+                                variant: "warning",
                               });
                               return;
                             }

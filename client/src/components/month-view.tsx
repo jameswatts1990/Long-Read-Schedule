@@ -65,7 +65,7 @@ export function MonthView({
       queryClient.invalidateQueries({ predicate: (query) => 
         typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
       });
-      toast({ title: "Task moved", description: "Assignment updated successfully" });
+      toast({ title: "Task moved", description: "Assignment updated successfully", variant: "success" });
     },
     onError: () => {
       toast({ title: "Failed to move task", description: "Could not update the assignment", variant: "destructive" });
@@ -80,7 +80,7 @@ export function MonthView({
       queryClient.invalidateQueries({ predicate: (query) => 
         typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
       });
-      toast({ title: "Task deleted", description: "Assignment has been removed" });
+      toast({ title: "Task deleted", description: "Assignment has been removed", variant: "destructive" });
     },
     onError: () => {
       toast({ title: "Failed to delete task", description: "Could not remove the assignment", variant: "destructive" });

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { X, Save, Copy, Trash2, CheckCircle, AlertCircle } from "lucide-react";
+import { X, Save, Copy, Trash2, CheckCircle, AlertCircle, RotateCcw } from "lucide-react";
 import { type Assignment, type Person, type Task, type User } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -75,7 +75,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       toast({
         title: "Assignment updated",
         description: "Changes have been saved",
-        variant: "default",
+        variant: "success",
       });
       onClose();
     },
@@ -121,12 +121,14 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       toast({
         title: "Assignment deleted",
         description: "The task has been removed",
-        variant: "default",
+        variant: "destructive",
+        icon: <Trash2 className="h-4 w-4 shrink-0 mt-0.5" />,
         action: (
           <button
-            className="shrink-0 rounded border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            className="shrink-0 rounded border border-red-300 bg-destructive-foreground px-3 py-1.5 text-xs font-medium text-destructive hover:bg-red-50 flex items-center gap-1.5"
             onClick={() => restoreMutation.mutate(snapshot)}
           >
+            <RotateCcw className="h-3 w-3" />
             Undo
           </button>
         ) as any,
@@ -150,7 +152,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       toast({
         title: "Validation error",
         description: "Batch ID is required when a batch size is specified",
-        variant: "destructive",
+        variant: "warning",
       });
       return;
     }

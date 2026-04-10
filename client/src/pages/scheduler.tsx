@@ -216,6 +216,7 @@ export default function Scheduler() {
       toast({
         title: "Person profile not linked",
         description: "Ask an admin to link your user account to a person record to use this view.",
+        variant: "warning",
       });
       return;
     }
@@ -360,6 +361,7 @@ export default function Scheduler() {
       toast({
         title: "Import successful",
         description: `Imported ${data.people.length} people, ${data.tasks.length} tasks, and ${data.assignments.length} assignments.`,
+        variant: "success",
       });
     } catch (error) {
       toast({
