@@ -139,6 +139,22 @@ export const rotaTasks = pgTable("rota_tasks", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  workspaceId: varchar("workspace_id").notNull(),
+  type: text("type").notNull(), // "assignment_created" | "assignment_updated"
+  title: text("title").notNull(),
+  body: text("body"),
+  relatedEntityType: text("related_entity_type"),
+  relatedEntityId: text("related_entity_id"),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
+
 export const isoDateString = z.string()
   .trim()
   .refine((val) => val.length > 0, { message: "Required" })

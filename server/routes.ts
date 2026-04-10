@@ -626,6 +626,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       created.forEach((assignment) =>
         broadcastUpdate("assignments", req.workspaceId, { action: "create", record: assignment })
       );
+
+      // Notify assignees who are different users from the creator
+      try {
+        const creator = await storage.getUser(userId);
+        const creatorName = creator?.firstName
+          ? `${creator.firstName}${creator.lastName ? " " + creator.lastName : ""}`
+          : "Someone";
+        await Promise.all(
+          created.map(async (assignment) => {
+            const person = await storage.getPerson(assignment.personId);
+            if (person?.userId && person.userId !== userId) {
+              const task = await storage.getTask(assignment.taskId);
+              await storage.createNotification({
+                userId: person.userId,
+                workspaceId: req.workspaceId,
+                type: "assignment_created",
+                title: `New assignment: ${task?.name ?? "Task"}`,
+                body: `${assignment.day} · Week of ${assignment.weekStartDate} · Assigned by ${creatorName}`,
+                relatedEntityType: "assignment",
+                relatedEntityId: assignment.id,
+              });
+            }
+          })
+        );
+      } catch (notifErr) {
+        console.error("Bulk notification creation error:", notifErr);
+      }
+
       res.json(created);
     } catch (error) {
       console.error("Bulk assignment error:", error);
@@ -644,6 +672,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       // Fix Issue 1: send the actual record so clients can update cache without refetching
       broadcastUpdate("assignments", req.workspaceId, { action: "create", record: assignment });
+
+      // Notify the assignee if they are a different user than the creator
+      try {
+        const person = await storage.getPerson(assignment.personId);
+        if (person?.userId && person.userId !== userId) {
+          const task = await storage.getTask(assignment.taskId);
+          const creator = await storage.getUser(userId);
+          const creatorName = creator?.firstName
+            ? `${creator.firstName}${creator.lastName ? " " + creator.lastName : ""}`
+            : "Someone";
+          await storage.createNotification({
+            userId: person.userId,
+            workspaceId: req.workspaceId,
+            type: "assignment_created",
+            title: `New assignment: ${task?.name ?? "Task"}`,
+            body: `${assignment.day} · Week of ${assignment.weekStartDate} · Assigned by ${creatorName}`,
+            relatedEntityType: "assignment",
+            relatedEntityId: assignment.id,
+          });
+        }
+      } catch (notifErr) {
+        console.error("Notification creation error:", notifErr);
+      }
+
       res.json(assignment);
     } catch (error) {
       console.error("Assignment validation error:", error);
@@ -753,6 +805,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete premade filter" });
+    }
+  });
+
+  // ─── Notifications ─────────────────────────────────────────────────────────
+
+  app.get("/api/notifications", isAuthenticated, requireWorkspace, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const items = await storage.getNotificationsForUser(userId, req.workspaceId);
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.post("/api/notifications/mark-read", isAuthenticated, requireWorkspace, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      await storage.markAllNotificationsRead(userId, req.workspaceId);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to mark notifications as read" });
     }
   });
 

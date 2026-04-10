@@ -14,6 +14,8 @@ import {
   type Workspace,
   type InsertWorkspace,
   type WorkspaceUser,
+  type Notification,
+  type InsertNotification,
   DAYS,
   people,
   tasks,
@@ -24,6 +26,7 @@ import {
   rotaSkips,
   workspaces,
   workspaceUsers,
+  notifications,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
@@ -113,6 +116,11 @@ export interface IStorage {
   deleteRotaTask(id: string): Promise<{ deletedAssignments: number }>;
   applyRotaTasksForWeek(workspaceId: string, weekStartDate: string): Promise<Assignment[]>;
   createRotaSkip(rotaTaskId: string, weekStartDate: string, day: string, workspaceId: string): Promise<void>;
+
+  // Notifications
+  createNotification(data: InsertNotification): Promise<void>;
+  getNotificationsForUser(userId: string, workspaceId: string): Promise<Notification[]>;
+  markAllNotificationsRead(userId: string, workspaceId: string): Promise<void>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -681,6 +689,34 @@ export class PostgresStorage implements IStorage {
       .insert(rotaSkips)
       .values({ id: randomUUID(), rotaTaskId, weekStartDate, day, workspaceId })
       .onConflictDoNothing(); // idempotent — safe to call multiple times
+  }
+
+  // ─── Notifications ─────────────────────────────────────────────────────────
+
+  async createNotification(data: InsertNotification): Promise<void> {
+    await this.db.insert(notifications).values(data);
+  }
+
+  async getNotificationsForUser(userId: string, workspaceId: string): Promise<Notification[]> {
+    return this.db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.workspaceId, workspaceId)))
+      .orderBy(sql`${notifications.createdAt} DESC`)
+      .limit(50);
+  }
+
+  async markAllNotificationsRead(userId: string, workspaceId: string): Promise<void> {
+    await this.db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.workspaceId, workspaceId),
+          isNull(notifications.readAt)
+        )
+      );
   }
 }
 
