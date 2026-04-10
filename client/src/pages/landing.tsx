@@ -60,7 +60,7 @@ export default function Landing() {
         </div>
 
         <p className="text-center text-sm text-muted-foreground">
-          Sign in with Google, GitHub, or email to access your lab schedule
+          Sign in with your Sanger Google email to gain access. Once signed up, you will need to register with a workspace.
         </p>
       </div>
     </div>

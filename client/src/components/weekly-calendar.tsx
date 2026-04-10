@@ -91,6 +91,7 @@ export function WeeklyCalendar({
   const [deleteDragTarget, setDeleteDragTarget] = useState<string | null>(null);
   const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<Set<string>>(new Set());
   const [clipboardAssignments, setClipboardAssignments] = useState<Assignment[]>([]);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const pasteTargetCellRef = useRef<CellData | null>(null);
   const { toast } = useToast();
 
@@ -226,6 +227,12 @@ export function WeeklyCalendar({
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
         activeElement?.getAttribute("contenteditable") === "true";
+
+      // Escape — clear task highlight
+      if (event.key === "Escape") {
+        setHighlightedTaskId(null);
+        return;
+      }
 
       // Ctrl/Cmd + C — copy selected assignments
       if ((event.ctrlKey || event.metaKey) && event.key === "c") {
@@ -577,9 +584,10 @@ export function WeeklyCalendar({
                                 <ContextMenuTrigger asChild>
                                   <div
                                     className={cn(
-                                      "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
+                                      "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2 transition-opacity duration-150",
                                       isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
                                       draggedAssignment?.id === assignment.id && "opacity-50",
+                                      highlightedTaskId && task.id !== highlightedTaskId && "opacity-20",
                                       selectedAssignmentIds.has(assignment.id) && "ring-2 ring-primary ring-offset-1 ring-offset-background"
                                     )}
                                     style={{
@@ -683,6 +691,15 @@ export function WeeklyCalendar({
                                   </ContextMenuItem>
                                   <ContextMenuItem onSelect={() => onAssignmentClick(assignment)}>
                                     Edit Details
+                                  </ContextMenuItem>
+                                  <ContextMenuItem
+                                    onSelect={() =>
+                                      setHighlightedTaskId(
+                                        highlightedTaskId === task.id ? null : task.id
+                                      )
+                                    }
+                                  >
+                                    {highlightedTaskId === task.id ? "Clear Highlight" : `Highlight ${task.name}`}
                                   </ContextMenuItem>
                                   <ContextMenuSeparator />
                                   <ContextMenuItem
