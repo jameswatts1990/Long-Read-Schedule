@@ -662,7 +662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     customColor: z.string().optional().nullable(),
     day: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]).optional(),
     weekStartDate: isoDateString.optional(),
-  }).strict();
+  });
 
   app.patch("/api/assignments/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {

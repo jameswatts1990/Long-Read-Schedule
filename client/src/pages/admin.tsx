@@ -73,7 +73,7 @@ const rotaTaskFormSchema = z.object({
   intervalWeeks: z.coerce.number().int().min(1).max(52).default(1),
   weekLimit: z.preprocess(
     (value) => value === "" ? undefined : value,
-    z.coerce.number().int().min(1, "Minimum 1 occurrence").max(500, "Maximum 500 occurrences").optional(),
+    z.coerce.number().int().min(1, "Minimum 1 week").max(500, "Maximum 500 weeks").optional(),
   ),
 });
 
