@@ -15,7 +15,7 @@ const getOidcConfig = memoize(
       process.env.REPL_ID!
     );
   },
-  { maxAge: 3600 * 1000 }
+  { maxAge: 24 * 3600 * 1000 } // 24 hours — OIDC discovery docs rarely change
 );
 
 export function getSession() {
@@ -40,6 +40,7 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: true,
+      sameSite: "lax",
       maxAge: sessionTtlMs,
     },
   });
@@ -156,8 +157,10 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/login", (req, res, next) => {
     ensureStrategy(req.hostname);
+    // No `prompt` override — lets Replit use SSO if the user already has
+    // an active session there, so re-authentication after token expiry is
+    // seamless (invisible redirect) rather than forcing a login/consent screen.
     passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
@@ -196,6 +199,8 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   }
 
   const now = Math.floor(Date.now() / 1000);
+  const tokenExpired = now >= user.expires_at;
+
   // 60-second buffer: proactively refresh before the token actually expires,
   // shrinking the window in which concurrent requests all see an expired token.
   if (now < user.expires_at - 60) {
@@ -204,7 +209,12 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   const refreshToken = user.refresh_token;
   if (!refreshToken) {
-    return res.status(401).json({ message: "Unauthorized" });
+    // No refresh token and token is expired → force re-login
+    if (tokenExpired) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    // No refresh token but token still valid → let it through
+    return next();
   }
 
   const sessionId = req.session.id;
@@ -217,6 +227,9 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       await inFlight;
       return next(); // Concurrent refresh succeeded; this request can proceed.
     } catch {
+      // If refresh failed but token is still technically valid, allow the
+      // request through rather than kicking the user out unnecessarily.
+      if (!tokenExpired) return next();
       return res.status(401).json({ message: "Unauthorized" });
     }
   }
@@ -243,6 +256,12 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     await refreshWork;
     return next();
   } catch (error) {
+    // Log the actual error so we can diagnose refresh failures.
+    console.error(`[auth] Token refresh failed for session ${sessionId}:`, error);
+    // Only force re-login if the token has genuinely expired.
+    // If it is still within the proactive buffer window, let the request
+    // through — a transient OIDC error should not log the user out.
+    if (!tokenExpired) return next();
     return res.status(401).json({ message: "Unauthorized" });
   } finally {
     // Always clean up — even on failure — so a retry isn't permanently blocked.

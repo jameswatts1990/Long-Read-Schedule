@@ -38,6 +38,13 @@ import { cn } from "@/lib/utils";
 type RepeatUnit = "days" | "weeks" | "months";
 type EndType = "never" | "date" | "occurrences";
 
+// 12-hue × 3-shade palette shared with admin colour pickers
+const COLOR_PALETTE: string[][] = [
+  ["#FEE2E2","#FFEDD5","#FEF9C3","#ECFCCB","#DCFCE7","#CCFBF1","#CFFAFE","#E0F2FE","#DBEAFE","#E0E7FF","#F3E8FF","#FCE7F3"],
+  ["#F87171","#FB923C","#FACC15","#A3E635","#4ADE80","#2DD4BF","#22D3EE","#38BDF8","#60A5FA","#818CF8","#C084FC","#F472B6"],
+  ["#991B1B","#7C2D12","#713F12","#365314","#14532D","#134E4A","#164E63","#075985","#1E40AF","#3730A3","#6B21A8","#9D174D"],
+];
+
 interface AddAssignmentDialogProps {
   open: boolean;
   onClose: () => void;
@@ -54,6 +61,7 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
   batchSize: z.number().int().positive().optional(),
   notes: z.string().optional(),
   customName: z.string().optional(),
+  customColor: z.string().optional(),
 }).refine(data => {
   if (data.batchSize !== undefined && data.batchSize !== null && !data.batchNumber) {
     return false;
@@ -102,6 +110,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       batchSize: undefined,
       notes: "",
       customName: "",
+      customColor: "#93C5FD",
     },
   });
 
@@ -167,6 +176,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           batchSize: data.batchSize || undefined,
           notes: data.notes || undefined,
           customName: data.customName || undefined,
+          customColor: data.customColor || undefined,
         }));
         const res = await apiRequest("POST", "/api/assignments/bulk", items);
         const created = await res.json();
@@ -207,6 +217,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchSize: undefined,
         notes: "",
         customName: "",
+        customColor: "#93C5FD",
       });
       setSelectedTaskId("");
       setConflictData(null);
@@ -238,6 +249,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchSize: undefined,
         notes: "",
         customName: "",
+        customColor: "#93C5FD",
       });
       setSelectedTaskId("");
       setSelectedDays(new Set([day]));
@@ -307,6 +319,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
               batchNumber: data.batchNumber || undefined,
               notes: data.notes || undefined,
               customName: data.customName || undefined,
+          customColor: data.customColor || undefined,
             });
           });
           
@@ -352,6 +365,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           batchNumber: data.batchNumber || undefined,
           notes: data.notes || undefined,
           customName: data.customName || undefined,
+          customColor: data.customColor || undefined,
         })
       );
 
@@ -476,23 +490,76 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
               />
 
               {isCustomTask && (
-                <FormField
-                  control={form.control}
-                  name="customName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Custom Task Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Enter a name for this custom task"
-                          data-testid="input-custom-name"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <>
+                  <FormField
+                    control={form.control}
+                    name="customName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Custom Task Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Enter a name for this custom task"
+                            data-testid="input-custom-name"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="customColor"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Task Colour</FormLabel>
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-12 gap-1.5">
+                            {COLOR_PALETTE.flatMap((row, ri) =>
+                              row.map((color, ci) => (
+                                <button
+                                  key={`${ri}-${ci}`}
+                                  type="button"
+                                  className={cn(
+                                    "w-6 h-6 rounded-sm transition-all",
+                                    field.value === color
+                                      ? "ring-2 ring-offset-1 ring-foreground"
+                                      : "hover:ring-2 hover:ring-offset-1 hover:ring-muted-foreground"
+                                  )}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => field.onChange(color)}
+                                  title={color}
+                                />
+                              ))
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded border shrink-0" style={{ backgroundColor: field.value }} />
+                            <Input
+                              value={field.value ?? ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) field.onChange(v);
+                              }}
+                              placeholder="#000000"
+                              className="font-mono text-sm h-8"
+                              maxLength={7}
+                            />
+                            <input
+                              type="color"
+                              value={field.value ?? "#93C5FD"}
+                              onChange={(e) => field.onChange(e.target.value)}
+                              className="w-8 h-8 rounded cursor-pointer border p-0.5"
+                              title="Custom colour"
+                            />
+                          </div>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
               )}
 
               <div className="flex gap-4">

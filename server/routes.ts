@@ -646,6 +646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     date: insertAssignmentSchema.shape.date.optional().nullable(),
     personId: insertAssignmentSchema.shape.personId.optional(),
     customName: insertAssignmentSchema.shape.customName.optional().nullable(),
+    customColor: z.string().optional().nullable(),
     day: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]).optional(),
     weekStartDate: isoDateString.optional(),
   }).strict();

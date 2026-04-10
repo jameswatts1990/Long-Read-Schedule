@@ -21,6 +21,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const COLOR_PALETTE: string[][] = [
+  ["#FEE2E2","#FFEDD5","#FEF9C3","#ECFCCB","#DCFCE7","#CCFBF1","#CFFAFE","#E0F2FE","#DBEAFE","#E0E7FF","#F3E8FF","#FCE7F3"],
+  ["#F87171","#FB923C","#FACC15","#A3E635","#4ADE80","#2DD4BF","#22D3EE","#38BDF8","#60A5FA","#818CF8","#C084FC","#F472B6"],
+  ["#991B1B","#7C2D12","#713F12","#365314","#14532D","#134E4A","#164E63","#075985","#1E40AF","#3730A3","#6B21A8","#9D174D"],
+];
+
 interface TaskDetailsDrawerProps {
   assignment: Assignment | null;
   people: Person[];
@@ -34,6 +40,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
   const [batchSize, setBatchSize] = useState("");
   const [notes, setNotes] = useState("");
   const [customName, setCustomName] = useState("");
+  const [customColor, setCustomColor] = useState("");
   const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -50,6 +57,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       setBatchSize(assignment.batchSize ? String(assignment.batchSize) : "");
       setNotes(assignment.notes || "");
       setCustomName(assignment.customName || "");
+      setCustomColor((assignment as any).customColor || "");
     }
   }, [assignment]);
 
@@ -92,6 +100,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
         batchSize: snapshot.batchSize,
         notes: snapshot.notes,
         customName: snapshot.customName,
+        customColor: (snapshot as any).customColor,
       });
     },
     onSuccess: () => {
@@ -151,6 +160,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       batchSize: batchSize ? parseInt(batchSize, 10) : undefined,
       notes: notes || undefined,
       customName: customName || undefined,
+      customColor: customColor || undefined,
       weekStartDate: assignment.weekStartDate,
     });
   };
@@ -203,8 +213,8 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
             <div
               className="p-3 rounded-md border-l-4"
               style={{
-                backgroundColor: task ? `${task.color}20` : undefined,
-                borderLeftColor: task?.color,
+                backgroundColor: task ? `${(assignment as any).customColor ?? task.color}20` : undefined,
+                borderLeftColor: (assignment as any).customColor ?? task?.color,
               }}
             >
               <div className="text-sm font-medium">{assignment.customName || task?.name}</div>
@@ -215,18 +225,62 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
           </div>
 
           {isCustomTask && (
-            <div className="space-y-2">
-              <Label htmlFor="custom-name" className="text-sm font-medium">
-                Custom Task Name
-              </Label>
-              <Input
-                id="custom-name"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="Enter a custom name"
-                data-testid="input-custom-name"
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="custom-name" className="text-sm font-medium">
+                  Custom Task Name
+                </Label>
+                <Input
+                  id="custom-name"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="Enter a custom name"
+                  data-testid="input-custom-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Task Colour</Label>
+                <div className="grid grid-cols-12 gap-1.5">
+                  {COLOR_PALETTE.flatMap((row, ri) =>
+                    row.map((color, ci) => (
+                      <button
+                        key={`${ri}-${ci}`}
+                        type="button"
+                        className={cn(
+                          "w-6 h-6 rounded-sm transition-all",
+                          customColor === color
+                            ? "ring-2 ring-offset-1 ring-foreground"
+                            : "hover:ring-2 hover:ring-offset-1 hover:ring-muted-foreground"
+                        )}
+                        style={{ backgroundColor: color }}
+                        onClick={() => setCustomColor(color)}
+                        title={color}
+                      />
+                    ))
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded border shrink-0" style={{ backgroundColor: customColor || task?.color }} />
+                  <Input
+                    value={customColor}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) setCustomColor(v);
+                    }}
+                    placeholder="#000000"
+                    className="font-mono text-sm h-8"
+                    maxLength={7}
+                  />
+                  <input
+                    type="color"
+                    value={customColor || task?.color || "#93C5FD"}
+                    onChange={(e) => setCustomColor(e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border p-0.5"
+                    title="Custom colour"
+                  />
+                </div>
+              </div>
+            </>
           )}
 
           <div className="space-y-2">

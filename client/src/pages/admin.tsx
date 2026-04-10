@@ -41,43 +41,12 @@ import { z } from "zod";
 import { DAYS, type Person, type Task, type User, type Workspace, type RotaTask } from "@shared/schema";
 
 
-// 20 unique colors with light, medium, and dark variants (60 colors total)
-const PRESET_COLORS = [
-  // Blue
-  "#DBEAFE", "#93C5FD", "#1E40AF",
-  "#E0F2FE", "#7DD3FC", "#0369A1",
-  // Green
-  "#D1FAE5", "#6EE7B7", "#065F46",
-  "#DCFCE7", "#86EFAC", "#14532D",
-  // Yellow/Gold
-  "#FEF3C7", "#FCD34D", "#92400E",
-  "#FEFCE8", "#FBBF24", "#78350F",
-  // Orange
-  "#FEEDC3", "#FDBA74", "#9A3412",
-  "#FEF3C7", "#FBA040", "#B45309",
-  // Red
-  "#FEE2E2", "#FCA5A5", "#7F1D1D",
-  "#FECACA", "#EF4444", "#991B1B",
-  // Pink
-  "#FCE7F3", "#F472B6", "#831843",
-  "#FDF2F8", "#EC4899", "#9D174D",
-  // Purple
-  "#E9D5FF", "#C084FC", "#581C87",
-  "#F3E8FF", "#D8B4FE", "#5B21B6",
-  // Teal
-  "#CCFBF1", "#67E8F9", "#0D9488",
-  "#CFFAFE", "#06B6D4", "#0E7490",
-  // Cyan
-  "#CFF2F5", "#4FD1E5", "#0E5E6F",
-  "#D1F4F8", "#22D3EE", "#164E63",
-  // Lime
-  "#ECFDF5", "#BFEF45", "#3F6212",
-  "#F7FEE7", "#84CC16", "#3F6212",
-];
-
-const PERSON_COLORS = [
-  "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6",
-  "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#06B6D4",
+// Full-spectrum palette: 12 hues (Red→Pink) × 3 shades (light / mid / dark)
+// Columns: Red, Orange, Yellow, Lime, Green, Teal, Cyan, Sky, Blue, Indigo, Purple, Pink
+const COLOR_PALETTE: string[][] = [
+  ["#FEE2E2","#FFEDD5","#FEF9C3","#ECFCCB","#DCFCE7","#CCFBF1","#CFFAFE","#E0F2FE","#DBEAFE","#E0E7FF","#F3E8FF","#FCE7F3"],
+  ["#F87171","#FB923C","#FACC15","#A3E635","#4ADE80","#2DD4BF","#22D3EE","#38BDF8","#60A5FA","#818CF8","#C084FC","#F472B6"],
+  ["#991B1B","#7C2D12","#713F12","#365314","#14532D","#134E4A","#164E63","#075985","#1E40AF","#3730A3","#6B21A8","#9D174D"],
 ];
 
 const personFormSchema = z.object({
@@ -959,7 +928,7 @@ export default function Admin() {
     resolver: zodResolver(personFormSchema),
     defaultValues: {
       name: "",
-      color: PERSON_COLORS[0],
+      color: COLOR_PALETTE[1][8], // mid blue
     },
   });
 
@@ -967,7 +936,7 @@ export default function Admin() {
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
       name: "",
-      color: PRESET_COLORS[0],
+      color: COLOR_PALETTE[1][8], // mid blue
       description: "",
       isProduction: true,
       requiredDaily: false,
@@ -1536,19 +1505,46 @@ export default function Admin() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Color</FormLabel>
-                    <div className="flex gap-2 flex-wrap">
-                      {PERSON_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          className={`w-8 h-8 rounded border-2 transition-transform ${
-                            field.value === color ? "border-foreground scale-110" : "border-transparent"
-                          }`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => field.onChange(color)}
-                          data-testid={`color-picker-${color}`}
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-12 gap-1.5">
+                        {COLOR_PALETTE.flatMap((row, ri) =>
+                          row.map((color, ci) => (
+                            <button
+                              key={`${ri}-${ci}`}
+                              type="button"
+                              className={`w-6 h-6 rounded-sm transition-all ${
+                                field.value === color
+                                  ? "ring-2 ring-offset-1 ring-foreground"
+                                  : "hover:ring-2 hover:ring-offset-1 hover:ring-muted-foreground"
+                              }`}
+                              style={{ backgroundColor: color }}
+                              onClick={() => field.onChange(color)}
+                              title={color}
+                              data-testid={`color-picker-${ri}-${ci}`}
+                            />
+                          ))
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded border shrink-0" style={{ backgroundColor: field.value }} />
+                        <Input
+                          value={field.value}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) field.onChange(v);
+                          }}
+                          placeholder="#000000"
+                          className="font-mono text-sm h-8"
+                          maxLength={7}
                         />
-                      ))}
+                        <input
+                          type="color"
+                          value={field.value}
+                          onChange={(e) => field.onChange(e.target.value)}
+                          className="w-8 h-8 rounded cursor-pointer border p-0.5"
+                          title="Custom colour"
+                        />
+                      </div>
                     </div>
                     <FormMessage />
                   </FormItem>
@@ -1608,25 +1604,46 @@ export default function Admin() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Color</FormLabel>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {/* Group colors by base (every 3 colors form a group: light, medium, dark) */}
-                      {[...Array(Math.ceil(PRESET_COLORS.length / 3))].map((_, groupIndex) => (
-                        <div key={groupIndex} className="flex gap-2">
-                          {PRESET_COLORS.slice(groupIndex * 3, groupIndex * 3 + 3).map((color) => (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-12 gap-1.5">
+                        {COLOR_PALETTE.flatMap((row, ri) =>
+                          row.map((color, ci) => (
                             <button
-                              key={color}
+                              key={`${ri}-${ci}`}
                               type="button"
-                              className={`flex-1 h-10 rounded border-2 transition-transform ${
-                                field.value === color ? "border-foreground scale-105" : "border-transparent"
+                              className={`w-6 h-6 rounded-sm transition-all ${
+                                field.value === color
+                                  ? "ring-2 ring-offset-1 ring-foreground"
+                                  : "hover:ring-2 hover:ring-offset-1 hover:ring-muted-foreground"
                               }`}
                               style={{ backgroundColor: color }}
                               onClick={() => field.onChange(color)}
-                              data-testid={`color-picker-${color}`}
                               title={color}
+                              data-testid={`color-picker-${ri}-${ci}`}
                             />
-                          ))}
-                        </div>
-                      ))}
+                          ))
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded border shrink-0" style={{ backgroundColor: field.value }} />
+                        <Input
+                          value={field.value}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) field.onChange(v);
+                          }}
+                          placeholder="#000000"
+                          className="font-mono text-sm h-8"
+                          maxLength={7}
+                        />
+                        <input
+                          type="color"
+                          value={field.value}
+                          onChange={(e) => field.onChange(e.target.value)}
+                          className="w-8 h-8 rounded cursor-pointer border p-0.5"
+                          title="Custom colour"
+                        />
+                      </div>
                     </div>
                     <FormMessage />
                   </FormItem>

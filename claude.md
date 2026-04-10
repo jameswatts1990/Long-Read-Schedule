@@ -62,6 +62,9 @@ A rule is more useful when the reason behind it is also captured.
 ### 6. Always Prioritise minimal resource utilisation
 The app is deployed on a shared sever where compute units are chargeable - Including, PostGres SQL, CPU and RAM. Any changes should aim to minimise compute utilisation but not deteriorate functionality. Raise with the user if there is a conflict of these interests. 
 
+### 7. Alert the user to database changes 
+This app is hosted using Replit - replit controls the build process. As such migrations should be alerted so that the user can deploy the database changes using replit.
+
 ---
 
 ## Required workflow
@@ -112,6 +115,12 @@ Use this file for accumulated project lessons, such as:
 - reviewer feedback worth preserving
 - subsystem quirks
 - successful recurring patterns
+
+### 'design_guidelines.md'
+Use this file to make consistent design choices
+
+### 'replit.md'
+This file describes the application
 
 Keep `CLAUDE.md` stable. Let `learnings.md` grow over time.
 

@@ -577,7 +577,7 @@ export function WeeklyCalendar({
                             const task = getTaskById(assignment.taskId);
                             if (!task) return null;
                             
-                            const isTaskDark = isDarkColor(task.color);
+                            const isTaskDark = isDarkColor((assignment as any).customColor ?? task.color);
 
                             return (
                               <ContextMenu key={assignment.id}>
@@ -591,7 +591,7 @@ export function WeeklyCalendar({
                                       selectedAssignmentIds.has(assignment.id) && "ring-2 ring-primary ring-offset-1 ring-offset-background"
                                     )}
                                     style={{
-                                      backgroundColor: task.color,
+                                      backgroundColor: (assignment as any).customColor ?? task.color,
                                       borderColor: person.color,
                                     }}
                                     draggable
