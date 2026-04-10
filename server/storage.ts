@@ -36,16 +36,19 @@ import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
 
-// Shared pool and db instance — reused by init-db.ts AND the session store
-// to avoid opening multiple independent WebSocket clusters to Neon.
-//
-// max: 3  — default is 10; this single-server Node app needs far fewer.
-// idleTimeoutMillis: 10_000  — close connections after 10 s idle so Neon
-//   WebSocket keep-alive frames stop flowing during quiet periods.
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL environment variable is not set");
+
+// Main Drizzle pool — short idle timeout keeps WebSocket keep-alive frames
+// low during quiet periods. All ORM queries use this pool.
 export const pool = new Pool({ connectionString, max: 3, idleTimeoutMillis: 10_000 });
 export const sharedDb = drizzle(pool);
+
+// Dedicated session pool — separate from the Drizzle pool so session reads
+// don't compete with ORM queries for connections. Longer idle timeout keeps a
+// connection alive between page requests so the session store never needs to
+// reconnect mid-request (which caused intermittent 401s on the shared pool).
+export const sessionPool = new Pool({ connectionString, max: 2, idleTimeoutMillis: 60_000 });
 
 export interface WorkspaceMember extends User {
   role: string;

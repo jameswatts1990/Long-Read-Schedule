@@ -6,7 +6,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
-import { storage, pool } from "./storage";
+import { storage, sessionPool } from "./storage";
 
 const getOidcConfig = memoize(
   async () => {
@@ -25,7 +25,7 @@ export function getSession() {
   // Share the same Neon pool that Drizzle uses — avoids a second independent
   // WebSocket cluster to the database just for session reads/writes.
   const sessionStore = new pgStore({
-    pool: pool as unknown as import("pg").Pool,
+    pool: sessionPool as unknown as import("pg").Pool,
     createTableIfMissing: false,
     ttl: sessionTtlSeconds,
     tableName: "sessions",
@@ -170,7 +170,6 @@ export async function setupAuth(app: Express) {
     passport.authenticate(`replitauth:${req.hostname}`, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
-      failureFlash: true,
     })(req, res, next);
   });
 
@@ -258,10 +257,12 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   } catch (error) {
     // Log the actual error so we can diagnose refresh failures.
     console.error(`[auth] Token refresh failed for session ${sessionId}:`, error);
-    // Only force re-login if the token has genuinely expired.
-    // If it is still within the proactive buffer window, let the request
-    // through — a transient OIDC error should not log the user out.
-    if (!tokenExpired) return next();
+    // Grace period: allow up to 5 minutes past token expiry before forcing
+    // re-login. Transient OIDC/network errors during the refresh window should
+    // not log users out — the next request will retry the refresh.
+    const gracePeriodSeconds = 5 * 60;
+    const withinGrace = now < user.expires_at + gracePeriodSeconds;
+    if (!tokenExpired || withinGrace) return next();
     return res.status(401).json({ message: "Unauthorized" });
   } finally {
     // Always clean up — even on failure — so a retry isn't permanently blocked.
