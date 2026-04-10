@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User, UserCheck } from "lucide-react";
+import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User, UserCheck, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -11,6 +11,13 @@ import { parse, addDays, format, isToday, isSameDay } from "date-fns";
 
 import { Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -83,6 +90,8 @@ export function WeeklyCalendar({
   const [dropTargetCell, setDropTargetCell] = useState<CellData | null>(null);
   const [deleteDragTarget, setDeleteDragTarget] = useState<string | null>(null);
   const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<Set<string>>(new Set());
+  const [clipboardAssignments, setClipboardAssignments] = useState<Assignment[]>([]);
+  const pasteTargetCellRef = useRef<CellData | null>(null);
   const { toast } = useToast();
 
   const updateAssignmentMutation = useMutation({
@@ -170,17 +179,77 @@ export function WeeklyCalendar({
     }
   };
 
+  const handleCopy = (toCopy: Assignment[]) => {
+    setClipboardAssignments(toCopy);
+    toast({
+      title: `${toCopy.length} assignment${toCopy.length !== 1 ? "s" : ""} copied`,
+    });
+  };
+
+  const handlePaste = async (targetCell: CellData) => {
+    const dayIndex = DAYS.indexOf(targetCell.day as typeof DAYS[number]);
+    const targetDate = format(
+      addDays(parse(weekStartDate, "yyyy-MM-dd", new Date()), dayIndex),
+      "yyyy-MM-dd"
+    );
+    const items = clipboardAssignments.map((a) => ({
+      taskId: a.taskId,
+      personId: targetCell.personId,
+      day: targetCell.day,
+      weekStartDate,
+      batchNumber: a.batchNumber,
+      batchSize: a.batchSize,
+      notes: a.notes,
+      customName: a.customName,
+      date: targetDate,
+    }));
+    try {
+      if (items.length === 1) {
+        await apiRequest("POST", "/api/assignments", items[0]);
+      } else {
+        await apiRequest("POST", "/api/assignments/bulk", items);
+      }
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          query.queryKey[0].startsWith("/api/assignments"),
+      });
+    } catch {
+      toast({ title: "Failed to paste", variant: "destructive" });
+    }
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Delete" && event.key !== "Backspace") return;
-      if (selectedAssignmentIds.size === 0) return;
-
       const activeElement = document.activeElement;
       const isTypingElement =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
         activeElement?.getAttribute("contenteditable") === "true";
-      if (isTypingElement) return;
+
+      // Ctrl/Cmd + C — copy selected assignments
+      if ((event.ctrlKey || event.metaKey) && event.key === "c") {
+        if (selectedAssignmentIds.size === 0 || isTypingElement) return;
+        event.preventDefault();
+        handleCopy(assignments.filter((a) => selectedAssignmentIds.has(a.id)));
+        return;
+      }
+
+      // Ctrl/Cmd + V — paste to last right-clicked cell
+      if ((event.ctrlKey || event.metaKey) && event.key === "v") {
+        if (clipboardAssignments.length === 0 || isTypingElement) return;
+        event.preventDefault();
+        const target = pasteTargetCellRef.current;
+        if (target) {
+          void handlePaste(target);
+        } else {
+          toast({ title: "Right-click a cell to paste" });
+        }
+        return;
+      }
+
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      if (selectedAssignmentIds.size === 0 || isTypingElement) return;
 
       event.preventDefault();
       void deleteAssignments(Array.from(selectedAssignmentIds));
@@ -188,7 +257,7 @@ export function WeeklyCalendar({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedAssignmentIds]);
+  }, [selectedAssignmentIds, clipboardAssignments]);
 
   // Pre-group assignments by person+day for O(1) lookup instead of O(A) per cell
   const assignmentsByCell = useMemo(() => {
@@ -440,7 +509,6 @@ export function WeeklyCalendar({
                           isDropTarget && "bg-primary/10 border-2 border-primary",
                           cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
                         )}
-                        style={{ minHeight: isCompactView ? undefined : '120px' }}
                         onDragOver={(e) => {
                           if (draggedAssignment) {
                             e.preventDefault();
@@ -488,7 +556,16 @@ export function WeeklyCalendar({
                         }}
                         data-testid={`cell-${person.id}-${day.toLowerCase()}`}
                       >
-                        <div className={cn("space-y-1", isCompactView && "space-y-0.5")}>
+                        <ContextMenu
+                          onOpenChange={(open) => {
+                            if (open) pasteTargetCellRef.current = currentCell;
+                          }}
+                        >
+                          <ContextMenuTrigger asChild>
+                            <div
+                              className={cn("space-y-1 h-full w-full", isCompactView && "space-y-0.5")}
+                              style={{ minHeight: isCompactView ? undefined : "120px" }}
+                            >
                           {cellAssignments.map(assignment => {
                             const task = getTaskById(assignment.taskId);
                             if (!task) return null;
@@ -496,100 +573,131 @@ export function WeeklyCalendar({
                             const isTaskDark = isDarkColor(task.color);
 
                             return (
-                              <div
-                                key={assignment.id}
-                                className={cn(
-                                  "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
-                                  isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
-                                  draggedAssignment?.id === assignment.id && "opacity-50",
-                                  selectedAssignmentIds.has(assignment.id) && "ring-2 ring-primary ring-offset-1 ring-offset-background"
-                                )}
-                                style={{ 
-                                  backgroundColor: task.color,
-                                  borderColor: person.color,
-                                }}
-                                draggable
-                                onDragStart={(e) => {
-                                  setDraggedAssignment(assignment);
-                                  const assignmentIdsToDrag = selectedAssignmentIds.has(assignment.id)
-                                    ? Array.from(selectedAssignmentIds)
-                                    : [assignment.id];
-                                  setDraggedAssignmentIds(assignmentIdsToDrag);
-                                  e.dataTransfer.effectAllowed = "move";
-                                }}
-                                onDragEnd={() => {
-                                  setDraggedAssignment(null);
-                                  setDraggedAssignmentIds([]);
-                                  setDeleteDragTarget(null);
-                                }}
-                                onClick={(event) => {
-                                  const isMultiSelect = event.ctrlKey || event.metaKey;
-                                  if (isMultiSelect) {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setSelectedAssignmentIds((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(assignment.id)) {
-                                        next.delete(assignment.id);
-                                      } else {
-                                        next.add(assignment.id);
-                                      }
-                                      return next;
-                                    });
-                                    return;
-                                  }
-
-                                  setSelectedAssignmentIds(new Set([assignment.id]));
-                                  onAssignmentClick(assignment);
-                                }}
-                                data-testid={`assignment-${assignment.id}`}
-                              >
-                                <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
-                                  {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
-                                  <div className="flex-1 min-w-0">
-                                    <div className={cn("text-xs font-medium flex items-start justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
-                                      <span className="min-w-0 flex-1 truncate leading-tight">{assignment.customName || task.name}</span>
-                                      {!isCompactView && assignment.notes && (
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <button
-                                              type="button"
-                                              className={cn(
-                                                "relative z-20 mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
-                                                "hover:-translate-y-px hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-                                                isTaskDark
-                                                  ? "border-white/45 bg-black/25 text-white/95 hover:border-white/70 hover:bg-black/45 focus-visible:ring-white/80 focus-visible:ring-offset-transparent"
-                                                  : "border-black/15 bg-white/80 text-foreground/80 hover:border-black/25 hover:bg-white focus-visible:ring-foreground/40 focus-visible:ring-offset-white/50"
-                                              )}
-                                              onClick={(event) => event.stopPropagation()}
-                                              onPointerDown={(event) => event.stopPropagation()}
-                                              aria-label="View assignment notes"
-                                            >
-                                              <Info className="h-3.5 w-3.5 stroke-[2.6]" />
-                                            </button>
-                                          </PopoverTrigger>
-                                          <PopoverContent
-                                            className="z-[70] w-72 p-3"
-                                            align="end"
-                                            onClick={(event) => event.stopPropagation()}
-                                          >
-                                            <div className="space-y-1">
-                                              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Notes</p>
-                                              <p className="text-sm leading-relaxed">{assignment.notes}</p>
-                                            </div>
-                                          </PopoverContent>
-                                        </Popover>
-                                      )}
-                                    </div>
-                                    {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
-                                      <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
-                                        {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
-                                        {assignment.batchSize && <span>({assignment.batchSize})</span>}
-                                      </div>
+                              <ContextMenu key={assignment.id}>
+                                <ContextMenuTrigger asChild>
+                                  <div
+                                    className={cn(
+                                      "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
+                                      isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
+                                      draggedAssignment?.id === assignment.id && "opacity-50",
+                                      selectedAssignmentIds.has(assignment.id) && "ring-2 ring-primary ring-offset-1 ring-offset-background"
                                     )}
+                                    style={{
+                                      backgroundColor: task.color,
+                                      borderColor: person.color,
+                                    }}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      setDraggedAssignment(assignment);
+                                      const assignmentIdsToDrag = selectedAssignmentIds.has(assignment.id)
+                                        ? Array.from(selectedAssignmentIds)
+                                        : [assignment.id];
+                                      setDraggedAssignmentIds(assignmentIdsToDrag);
+                                      e.dataTransfer.effectAllowed = "move";
+                                    }}
+                                    onDragEnd={() => {
+                                      setDraggedAssignment(null);
+                                      setDraggedAssignmentIds([]);
+                                      setDeleteDragTarget(null);
+                                    }}
+                                    onClick={(event) => {
+                                      const isMultiSelect = event.ctrlKey || event.metaKey;
+                                      if (isMultiSelect) {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setSelectedAssignmentIds((prev) => {
+                                          const next = new Set(prev);
+                                          if (next.has(assignment.id)) {
+                                            next.delete(assignment.id);
+                                          } else {
+                                            next.add(assignment.id);
+                                          }
+                                          return next;
+                                        });
+                                        return;
+                                      }
+
+                                      setSelectedAssignmentIds(new Set([assignment.id]));
+                                      onAssignmentClick(assignment);
+                                    }}
+                                    data-testid={`assignment-${assignment.id}`}
+                                  >
+                                    <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
+                                      {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
+                                      <div className="flex-1 min-w-0">
+                                        <div className={cn("text-xs font-medium flex items-start justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
+                                          <span className="min-w-0 flex-1 truncate leading-tight">{assignment.customName || task.name}</span>
+                                          {!isCompactView && assignment.notes && (
+                                            <Popover>
+                                              <PopoverTrigger asChild>
+                                                <button
+                                                  type="button"
+                                                  className={cn(
+                                                    "relative z-20 mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
+                                                    "hover:-translate-y-px hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+                                                    isTaskDark
+                                                      ? "border-white/45 bg-black/25 text-white/95 hover:border-white/70 hover:bg-black/45 focus-visible:ring-white/80 focus-visible:ring-offset-transparent"
+                                                      : "border-black/15 bg-white/80 text-foreground/80 hover:border-black/25 hover:bg-white focus-visible:ring-foreground/40 focus-visible:ring-offset-white/50"
+                                                  )}
+                                                  onClick={(event) => event.stopPropagation()}
+                                                  onPointerDown={(event) => event.stopPropagation()}
+                                                  aria-label="View assignment notes"
+                                                >
+                                                  <Info className="h-3.5 w-3.5 stroke-[2.6]" />
+                                                </button>
+                                              </PopoverTrigger>
+                                              <PopoverContent
+                                                className="z-[70] w-72 p-3"
+                                                align="end"
+                                                onClick={(event) => event.stopPropagation()}
+                                              >
+                                                <div className="space-y-1">
+                                                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Notes</p>
+                                                  <p className="text-sm leading-relaxed">{assignment.notes}</p>
+                                                </div>
+                                              </PopoverContent>
+                                            </Popover>
+                                          )}
+                                        </div>
+                                        {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
+                                          <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
+                                            {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
+                                            {assignment.batchSize && <span>({assignment.batchSize})</span>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              </div>
+                                </ContextMenuTrigger>
+                                <ContextMenuContent className="z-[80]">
+                                  <ContextMenuItem
+                                    onSelect={() => {
+                                      const toCopy = selectedAssignmentIds.has(assignment.id)
+                                        ? assignments.filter((a) => selectedAssignmentIds.has(a.id))
+                                        : [assignment];
+                                      handleCopy(toCopy);
+                                    }}
+                                  >
+                                    <Copy className="w-4 h-4 mr-2" />
+                                    Copy
+                                  </ContextMenuItem>
+                                  <ContextMenuItem onSelect={() => onAssignmentClick(assignment)}>
+                                    Edit Details
+                                  </ContextMenuItem>
+                                  <ContextMenuSeparator />
+                                  <ContextMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onSelect={() => {
+                                      const idsToDelete = selectedAssignmentIds.has(assignment.id)
+                                        ? Array.from(selectedAssignmentIds)
+                                        : [assignment.id];
+                                      void deleteAssignments(idsToDelete);
+                                    }}
+                                  >
+                                    Delete
+                                  </ContextMenuItem>
+                                </ContextMenuContent>
+                              </ContextMenu>
                             );
                           })}
 
@@ -605,7 +713,19 @@ export function WeeklyCalendar({
                               <span className="text-xs">Add</span>
                             </Button>
                           )}
-                        </div>
+                            </div>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent className="z-[80]">
+                            <ContextMenuItem onSelect={() => setSelectedCell(currentCell)}>
+                              Add Task
+                            </ContextMenuItem>
+                            {clipboardAssignments.length > 0 && (
+                              <ContextMenuItem onSelect={() => void handlePaste(currentCell)}>
+                                Paste
+                              </ContextMenuItem>
+                            )}
+                          </ContextMenuContent>
+                        </ContextMenu>
                       </td>
                     );
                   })}
