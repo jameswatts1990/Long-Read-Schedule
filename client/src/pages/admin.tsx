@@ -928,7 +928,7 @@ export default function Admin() {
     resolver: zodResolver(personFormSchema),
     defaultValues: {
       name: "",
-      color: COLOR_PALETTE[1][8], // mid blue
+      color: COLOR_PALETTE[0][0], // light red
     },
   });
 
@@ -936,7 +936,7 @@ export default function Admin() {
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
       name: "",
-      color: COLOR_PALETTE[1][8], // mid blue
+      color: COLOR_PALETTE[0][0], // light red
       description: "",
       isProduction: true,
       requiredDaily: false,
@@ -985,7 +985,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       toast({ title: "Task added", description: "New task is now available", variant: "success" });
-      taskForm.reset();
+      taskForm.reset({
+        name: "",
+        color: COLOR_PALETTE[0][0],
+        description: "",
+        isProduction: true,
+        requiredDaily: false,
+        showInPipelineView: false,
+      });
       setShowAddTask(false);
     },
     onError: () => {
@@ -1002,7 +1009,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       toast({ title: "Task updated", description: "Changes have been saved", variant: "success" });
-      taskForm.reset();
+      taskForm.reset({
+        name: "",
+        color: COLOR_PALETTE[0][0],
+        description: "",
+        isProduction: true,
+        requiredDaily: false,
+        showInPipelineView: false,
+      });
       setEditingTask(null);
     },
     onError: () => {
@@ -1104,6 +1118,18 @@ export default function Admin() {
     personForm.reset({ name: person.name, color: person.color });
   };
 
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    taskForm.reset({
+      name: task.name,
+      color: task.color,
+      description: task.description || "",
+      isProduction: Boolean(task.isProduction),
+      requiredDaily: Boolean(task.requiredDaily),
+      showInPipelineView: Boolean(task.showInPipelineView),
+    });
+  };
+
   const linkedUserIds = new Set(
     people
       .filter((person) => person.userId)
@@ -1115,18 +1141,6 @@ export default function Admin() {
       if (person.userId && user.id === person.userId) return true;
       return !linkedUserIds.has(user.id);
     });
-
-  const handleEditTask = (task: Task) => {
-    setEditingTask(task);
-    taskForm.reset({ 
-      name: task.name, 
-      color: task.color, 
-      description: task.description || "", 
-      isProduction: Boolean(task.isProduction), 
-      requiredDaily: Boolean(task.requiredDaily),
-      showInPipelineView: Boolean(task.showInPipelineView),
-    });
-  };
 
   return (
     <div className="min-h-screen bg-background p-6">
