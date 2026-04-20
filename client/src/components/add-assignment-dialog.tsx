@@ -110,7 +110,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       batchSize: undefined,
       notes: "",
       customName: "",
-      customColor: "#93C5FD",
+      customColor: undefined,
     },
   });
 
@@ -192,6 +192,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchSize: data.batchSize || undefined,
         notes: data.notes || undefined,
         customName: data.customName || undefined,
+        customColor: data.customColor || undefined,
         override,
       });
       
@@ -217,7 +218,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchSize: undefined,
         notes: "",
         customName: "",
-        customColor: "#93C5FD",
+        customColor: undefined,
       });
       setSelectedTaskId("");
       setConflictData(null);
@@ -249,7 +250,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         batchSize: undefined,
         notes: "",
         customName: "",
-        customColor: "#93C5FD",
+        customColor: undefined,
       });
       setSelectedTaskId("");
       setSelectedDays(new Set([day]));
