@@ -37,6 +37,11 @@ export function getSession() {
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
+    // Roll the cookie expiry forward on every response so that an active user
+    // never sees their 180-day window count down. Cookie header overhead is
+    // negligible; we still avoid per-request DB writes via disableTouch above
+    // and the once-per-day extendSessionRow middleware below.
+    rolling: true,
     cookie: {
       httpOnly: true,
       secure: true,
@@ -45,6 +50,31 @@ export function getSession() {
     },
   });
 }
+
+// Periodically refreshes the Postgres session row's `expire` column for an
+// active user. Without this, `disableTouch: true` would let the row TTL count
+// down from the original login even though the browser cookie keeps rolling.
+// We piggy-back on `req.session.save()` (which invokes `store.set()` and
+// writes the row with a new TTL) but throttle to once per day per session.
+const SESSION_EXTEND_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const extendSessionRow: RequestHandler = (req, _res, next) => {
+  const sess = req.session as any;
+  if (!req.isAuthenticated?.() || !sess) return next();
+  const now = Date.now();
+  if (sess.lastExtendedAt && now - sess.lastExtendedAt < SESSION_EXTEND_INTERVAL_MS) {
+    return next();
+  }
+  sess.lastExtendedAt = now;
+  // touch() resets cookie.expires from cookie.maxAge so the subsequent save()
+  // writes a fresh TTL into the Postgres row. Without this, save() can persist
+  // the original (drifting) expiry and the row TTL won't keep up with the
+  // rolling cookie.
+  req.session.touch();
+  req.session.save((err) => {
+    if (err) console.error("[auth] Failed to extend session row TTL:", err);
+    next();
+  });
+};
 
 function updateUserSession(
   user: any,
@@ -113,6 +143,7 @@ export async function setupAuth(app: Express) {
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
+  app.use(extendSessionRow);
 
   const config = await getOidcConfig();
 
@@ -190,6 +221,17 @@ export async function setupAuth(app: Express) {
 // Memory overhead: one Promise reference per session actively refreshing (~0).
 const sessionRefreshPromises = new Map<string, Promise<void>>();
 
+// As long as the long-lived browser/PG session cookie is still valid we treat
+// the user as authenticated even if the OIDC access token can't be refreshed
+// right now. Used by both the leader and the follower (in-flight waiter)
+// branches so concurrent requests never disagree on auth state during a
+// transient refresh outage.
+const TOKEN_REFRESH_GRACE_SECONDS = 7 * 24 * 60 * 60; // 7 days
+function withinRefreshGrace(nowSeconds: number, expiresAt: number | undefined): boolean {
+  if (!expiresAt) return false;
+  return nowSeconds < expiresAt + TOKEN_REFRESH_GRACE_SECONDS;
+}
+
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
@@ -226,27 +268,42 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       await inFlight;
       return next(); // Concurrent refresh succeeded; this request can proceed.
     } catch {
-      // If refresh failed but token is still technically valid, allow the
-      // request through rather than kicking the user out unnecessarily.
-      if (!tokenExpired) return next();
+      // Apply the same long grace window the leader uses so a transient
+      // refresh failure doesn't 401 follower requests (e.g. a burst from
+      // multiple tabs) while the session cookie itself is still valid.
+      if (!tokenExpired || withinRefreshGrace(now, user.expires_at)) return next();
       return res.status(401).json({ message: "Unauthorized" });
     }
   }
 
   // Kick off the refresh and register it so concurrent requests can piggyback.
+  // We retry the refresh once on transient failure (network blip, brief OIDC
+  // outage) before surfacing the error.
   const refreshWork = (async () => {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    await new Promise<void>((resolve, reject) => {
-      req.login(user, (error) => {
-        if (error) { reject(error); return; }
-        req.session.save((sessionError) => {
-          if (sessionError) { reject(sessionError); return; }
-          resolve();
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const config = await getOidcConfig();
+        const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
+        updateUserSession(user, tokenResponse);
+        await new Promise<void>((resolve, reject) => {
+          req.login(user, (error) => {
+            if (error) { reject(error); return; }
+            req.session.save((sessionError) => {
+              if (sessionError) { reject(sessionError); return; }
+              resolve();
+            });
+          });
         });
-      });
-    });
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 250));
+        }
+      }
+    }
+    throw lastErr;
   })();
 
   sessionRefreshPromises.set(sessionId, refreshWork);
@@ -257,12 +314,11 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   } catch (error) {
     // Log the actual error so we can diagnose refresh failures.
     console.error(`[auth] Token refresh failed for session ${sessionId}:`, error);
-    // Grace period: allow up to 5 minutes past token expiry before forcing
-    // re-login. Transient OIDC/network errors during the refresh window should
-    // not log users out — the next request will retry the refresh.
-    const gracePeriodSeconds = 5 * 60;
-    const withinGrace = now < user.expires_at + gracePeriodSeconds;
-    if (!tokenExpired || withinGrace) return next();
+    // Long grace period: as long as the long-lived browser/PG session cookie
+    // is still valid, treat the user as authenticated even if the OIDC access
+    // token can't be refreshed right now. Same window applied to follower
+    // (in-flight waiter) requests above.
+    if (!tokenExpired || withinRefreshGrace(now, user.expires_at)) return next();
     return res.status(401).json({ message: "Unauthorized" });
   } finally {
     // Always clean up — even on failure — so a retry isn't permanently blocked.
