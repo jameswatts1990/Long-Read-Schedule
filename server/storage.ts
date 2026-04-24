@@ -124,6 +124,7 @@ export interface IStorage {
   createNotification(data: InsertNotification): Promise<void>;
   getNotificationsForUser(userId: string, workspaceId: string): Promise<Notification[]>;
   markAllNotificationsRead(userId: string, workspaceId: string): Promise<void>;
+  deleteNotification(id: string, userId: string): Promise<void>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -720,6 +721,12 @@ export class PostgresStorage implements IStorage {
           isNull(notifications.readAt)
         )
       );
+  }
+
+  async deleteNotification(id: string, userId: string): Promise<void> {
+    await this.db
+      .delete(notifications)
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
   }
 }
 

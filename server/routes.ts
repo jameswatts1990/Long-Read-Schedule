@@ -232,12 +232,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get the currently active workspace
-  // Fix Issue 6: trust the session — membership was already validated on POST.
-  // Removes one DB round-trip per request without compromising security.
+  // Get the currently active workspace — auto-selects the first membership if session has none
   app.get("/api/my-workspace", isAuthenticated, async (req: any, res) => {
     try {
-      const workspaceId = (req.session as any).activeWorkspaceId;
+      const userId = req.user.claims.sub;
+      let workspaceId = (req.session as any).activeWorkspaceId;
+
+      if (!workspaceId) {
+        const userEmail = req.user.claims.email;
+        const userWorkspaces = isSuperAdmin(userEmail)
+          ? await storage.getWorkspaces()
+          : await storage.getUserWorkspaces(userId);
+        if (userWorkspaces.length > 0) {
+          workspaceId = userWorkspaces[0].id;
+          (req.session as any).activeWorkspaceId = workspaceId;
+        }
+      }
+
       if (!workspaceId) return res.json(null);
       const workspace = await storage.getWorkspace(workspaceId);
       res.json(workspace || null);
@@ -264,6 +275,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(workspace);
     } catch (error) {
       res.status(500).json({ message: "Failed to set active workspace" });
+    }
+  });
+
+  // List all workspaces — any authenticated user (used by new-user self-join screen)
+  app.get("/api/workspaces/available", isAuthenticated, async (_req, res) => {
+    try {
+      const all = await storage.getWorkspaces();
+      res.json(all);
+    } catch {
+      res.status(500).json({ message: "Failed to fetch workspaces" });
+    }
+  });
+
+  // Self-join a workspace — any authenticated user can join as a member
+  app.post("/api/workspaces/:id/join", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const workspaceId = req.params.id;
+
+      const workspace = await storage.getWorkspace(workspaceId);
+      if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+
+      const existing = await storage.getUserWorkspaceMembership(userId, workspaceId);
+      if (!existing) {
+        await storage.addUserToWorkspace(userId, workspaceId, "member");
+      }
+
+      (req.session as any).activeWorkspaceId = workspaceId;
+      res.json(workspace);
+    } catch {
+      res.status(500).json({ message: "Failed to join workspace" });
     }
   });
 
@@ -632,7 +674,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const creator = await storage.getUser(userId);
         const creatorName = creator?.firstName
           ? `${creator.firstName}${creator.lastName ? " " + creator.lastName : ""}`
-          : "Someone";
+          : creator?.email
+            ? creator.email.split("@")[0]
+            : "Someone";
         await Promise.all(
           created.map(async (assignment) => {
             const person = await storage.getPerson(assignment.personId);
@@ -642,7 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 userId: person.userId,
                 workspaceId: req.workspaceId,
                 type: "assignment_created",
-                title: `New assignment: ${task?.name ?? "Task"}`,
+                title: `New assignment: ${assignment.customName ?? task?.name ?? "Task"}`,
                 body: `${assignment.day} · Week of ${assignment.weekStartDate} · Assigned by ${creatorName}`,
                 relatedEntityType: "assignment",
                 relatedEntityId: assignment.id,
@@ -681,12 +725,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const creator = await storage.getUser(userId);
           const creatorName = creator?.firstName
             ? `${creator.firstName}${creator.lastName ? " " + creator.lastName : ""}`
-            : "Someone";
+            : creator?.email
+              ? creator.email.split("@")[0]
+              : "Someone";
           await storage.createNotification({
             userId: person.userId,
             workspaceId: req.workspaceId,
             type: "assignment_created",
-            title: `New assignment: ${task?.name ?? "Task"}`,
+            title: `New assignment: ${assignment.customName ?? task?.name ?? "Task"}`,
             body: `${assignment.day} · Week of ${assignment.weekStartDate} · Assigned by ${creatorName}`,
             relatedEntityType: "assignment",
             relatedEntityId: assignment.id,
@@ -827,6 +873,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ ok: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to mark notifications as read" });
+    }
+  });
+
+  app.delete("/api/notifications/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      await storage.deleteNotification(req.params.id, userId);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete notification" });
     }
   });
 

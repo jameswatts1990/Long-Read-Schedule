@@ -590,7 +590,7 @@ export default function Scheduler() {
             {isCompactView ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
           </Button>
 
-          <NotificationBell />
+          <NotificationBell onNavigateToWeek={setCurrentWeekStart} />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

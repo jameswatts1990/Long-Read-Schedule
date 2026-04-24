@@ -57,7 +57,8 @@ export function DuplicateAssignmentDialog({
         if (assignment.notes) payload.notes = assignment.notes;
         if (assignment.date) payload.date = assignment.date;
         if (assignment.customName) payload.customName = assignment.customName;
-        
+        if (assignment.customColor) payload.customColor = assignment.customColor;
+
         return apiRequest("POST", "/api/assignments", payload);
       });
 
@@ -155,7 +156,7 @@ export function DuplicateAssignmentDialog({
         <DialogHeader>
           <DialogTitle>Duplicate Task</DialogTitle>
           <DialogDescription>
-            Select days to duplicate this task to. The batch number, batch size, notes, and date will be copied.
+            Select days to duplicate this task to. All task details including custom name, colour, batch, notes, and date will be copied.
           </DialogDescription>
         </DialogHeader>
 

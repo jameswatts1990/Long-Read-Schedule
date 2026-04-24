@@ -1,4 +1,5 @@
-import { Bell } from "lucide-react";
+import { Bell, CalendarPlus, CalendarCheck, X } from "lucide-react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   formatDistanceToNow,
@@ -43,8 +44,13 @@ function getAssignmentDate(a: Assignment): Date {
   return addDays(parseISO(a.weekStartDate), dayIndex < 0 ? 0 : dayIndex);
 }
 
-export function NotificationBell() {
+interface NotificationBellProps {
+  onNavigateToWeek?: (weekStart: Date) => void;
+}
+
+export function NotificationBell({ onNavigateToWeek }: NotificationBellProps) {
   const { user } = useAuth();
+  const [open, setOpen] = useState(false);
 
   const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
@@ -67,6 +73,11 @@ export function NotificationBell() {
 
   const markReadMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/notifications/mark-read"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/notifications/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
   });
 
@@ -115,9 +126,19 @@ export function NotificationBell() {
 
   const unreadCount = notifications.filter((n) => !n.readAt).length;
 
-  const handleOpen = (open: boolean) => {
-    if (open && unreadCount > 0) {
+  const handleOpen = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (isOpen && unreadCount > 0) {
       markReadMutation.mutate();
+    }
+  };
+
+  const handleNotificationClick = (n: AppNotification) => {
+    if (!onNavigateToWeek || !n.body) return;
+    const match = n.body.match(/Week of (\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      onNavigateToWeek(parseISO(match[1]));
+      setOpen(false);
     }
   };
 
@@ -139,7 +160,7 @@ export function NotificationBell() {
   const weekLabel = `${format(weekStart, "d MMM")} – ${format(weekEnd, "d MMM")}`;
 
   return (
-    <Popover onOpenChange={handleOpen}>
+    <Popover open={open} onOpenChange={handleOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -283,14 +304,31 @@ export function NotificationBell() {
             {notifications.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-5">No notifications</p>
             ) : (
-              notifications.slice(0, 8).map((n) => (
-                <div key={n.id} className={cn("px-4 py-2.5", !n.readAt && "bg-primary/5")}>
-                  <div className="flex items-start gap-2">
-                    {!n.readAt && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+              notifications.slice(0, 8).map((n) => {
+                const Icon = n.type === "assignment_updated" ? CalendarCheck : CalendarPlus;
+                const canNavigate = onNavigateToWeek && n.body && /Week of \d{4}-\d{2}-\d{2}/.test(n.body);
+                return (
+                  <div
+                    key={n.id}
+                    onClick={() => handleNotificationClick(n)}
+                    className={cn(
+                      "group px-4 py-2.5 flex items-start gap-2",
+                      !n.readAt && "bg-primary/5",
+                      canNavigate && "cursor-pointer hover:bg-muted/60 transition-colors"
                     )}
-                    <div className={cn("flex-1 min-w-0", n.readAt && "pl-3.5")}>
-                      <p className="text-xs font-medium leading-snug">{n.title}</p>
+                  >
+                    <Icon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-1">
+                        <p className="text-xs font-medium leading-snug flex-1 min-w-0">{n.title}</p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); dismissMutation.mutate(n.id); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-foreground"
+                          aria-label="Dismiss notification"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                       {n.body && (
                         <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
                           {n.body}
@@ -300,9 +338,12 @@ export function NotificationBell() {
                         {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                       </p>
                     </div>
+                    {!n.readAt && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
