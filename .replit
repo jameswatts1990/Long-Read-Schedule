@@ -46,3 +46,7 @@ integrations = ["javascript_mem_db:1.0.0", "javascript_log_in_with_replit:1.0.0"
 
 [userenv.shared]
 ALLOWED_EMAILS = "jw24@sanger.ac.uk"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
