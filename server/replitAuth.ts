@@ -221,15 +221,54 @@ export async function setupAuth(app: Express) {
 // Memory overhead: one Promise reference per session actively refreshing (~0).
 const sessionRefreshPromises = new Map<string, Promise<void>>();
 
-// As long as the long-lived browser/PG session cookie is still valid we treat
-// the user as authenticated even if the OIDC access token can't be refreshed
-// right now. Used by both the leader and the follower (in-flight waiter)
-// branches so concurrent requests never disagree on auth state during a
-// transient refresh outage.
-const TOKEN_REFRESH_GRACE_SECONDS = 7 * 24 * 60 * 60; // 7 days
-function withinRefreshGrace(nowSeconds: number, expiresAt: number | undefined): boolean {
-  if (!expiresAt) return false;
-  return nowSeconds < expiresAt + TOKEN_REFRESH_GRACE_SECONDS;
+// Short grace window applied ONLY to transient refresh failures (network
+// blips, brief OIDC discovery hiccups). It runs from the first failed refresh
+// attempt for a given session, NOT from token expiry — so a session that can
+// never refresh again (e.g. invalid_grant from Replit) starts returning 401
+// promptly and the client can fall through to the silent SSO login path.
+const TRANSIENT_REFRESH_GRACE_MS = 10 * 60 * 1000; // 10 minutes
+
+// sessionId -> timestamp (ms) of the first refresh failure since the last
+// successful refresh. Cleared on any successful refresh. In-memory only —
+// this is purely a tolerance window for transient errors, so losing it on
+// pod restart simply means we re-evaluate on the next request.
+const sessionRefreshFirstFailureAt = new Map<string, number>();
+
+function isPermanentRefreshError(err: unknown): boolean {
+  const e = err as any;
+  if (!e) return false;
+  // openid-client surfaces OAuth error responses (e.g. invalid_grant) as
+  // ResponseBodyError. These are non-recoverable: the refresh token has been
+  // revoked/rotated away or the client is no longer trusted, so retrying or
+  // waiting won't help.
+  if (e instanceof (client as any).ResponseBodyError) {
+    return [
+      "invalid_grant",
+      "invalid_token",
+      "invalid_client",
+      "unauthorized_client",
+    ].includes(e.error);
+  }
+  return false;
+}
+
+// Returns true if we should let the request through despite a refresh
+// failure (transient hiccup within the short grace window), false if the
+// session should be treated as expired and a 401 returned.
+function shouldGracefullyContinue(
+  sessionId: string,
+  err: unknown,
+  nowMs: number,
+): boolean {
+  if (isPermanentRefreshError(err)) {
+    sessionRefreshFirstFailureAt.delete(sessionId);
+    return false;
+  }
+  const firstFailure = sessionRefreshFirstFailureAt.get(sessionId) ?? nowMs;
+  if (!sessionRefreshFirstFailureAt.has(sessionId)) {
+    sessionRefreshFirstFailureAt.set(sessionId, nowMs);
+  }
+  return nowMs - firstFailure < TRANSIENT_REFRESH_GRACE_MS;
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
@@ -267,11 +306,16 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     try {
       await inFlight;
       return next(); // Concurrent refresh succeeded; this request can proceed.
-    } catch {
-      // Apply the same long grace window the leader uses so a transient
-      // refresh failure doesn't 401 follower requests (e.g. a burst from
-      // multiple tabs) while the session cookie itself is still valid.
-      if (!tokenExpired || withinRefreshGrace(now, user.expires_at)) return next();
+    } catch (err) {
+      // If the access token itself is still within its lifetime, let the
+      // request through — the in-flight refresh failure didn't actually cost
+      // us anything yet.
+      if (!tokenExpired) return next();
+      // Otherwise, only tolerate transient failures within the short grace
+      // window. Permanent errors (e.g. invalid_grant) and persistent
+      // failures fall through to a 401 so the client can trigger silent
+      // re-auth via Replit SSO.
+      if (shouldGracefullyContinue(sessionId, err, Date.now())) return next();
       return res.status(401).json({ message: "Unauthorized" });
     }
   }
@@ -295,9 +339,12 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
             });
           });
         });
+        sessionRefreshFirstFailureAt.delete(sessionId);
         return;
       } catch (err) {
         lastErr = err;
+        // Don't retry permanent OAuth errors — they will never succeed.
+        if (isPermanentRefreshError(err)) break;
         if (attempt === 0) {
           await new Promise((r) => setTimeout(r, 250));
         }
@@ -314,11 +361,15 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   } catch (error) {
     // Log the actual error so we can diagnose refresh failures.
     console.error(`[auth] Token refresh failed for session ${sessionId}:`, error);
-    // Long grace period: as long as the long-lived browser/PG session cookie
-    // is still valid, treat the user as authenticated even if the OIDC access
-    // token can't be refreshed right now. Same window applied to follower
-    // (in-flight waiter) requests above.
-    if (!tokenExpired || withinRefreshGrace(now, user.expires_at)) return next();
+    // If the access token hasn't actually expired yet, let the request
+    // through — the failure was during a proactive refresh and the next
+    // request will retry.
+    if (!tokenExpired) return next();
+    // Otherwise: tolerate transient errors for a short window only. Permanent
+    // OAuth errors (invalid_grant etc.) and persistent failures fall through
+    // to a 401 so the client can promptly fall through to the silent SSO
+    // login path rather than appearing authenticated indefinitely.
+    if (shouldGracefullyContinue(sessionId, error, Date.now())) return next();
     return res.status(401).json({ message: "Unauthorized" });
   } finally {
     // Always clean up — even on failure — so a retry isn't permanently blocked.
