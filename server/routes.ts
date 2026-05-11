@@ -762,6 +762,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     weekStartDate: isoDateString.optional(),
   });
 
+  app.get("/api/assignments/trained-persons", isAuthenticated, requireWorkspace, async (req, res) => {
+    const taskId = req.query.taskId as string | undefined;
+    if (!taskId) return res.status(400).json({ message: "taskId is required" });
+    try {
+      const personIds = await storage.getTrainedPersonsByTask(taskId, req.workspaceId!);
+      res.json(personIds);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch trained persons" });
+    }
+  });
+
   app.patch("/api/assignments/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
       const existing = await storage.getAssignment(req.params.id);
@@ -809,6 +820,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete assignment" });
+    }
+  });
+
+  app.delete("/api/assignments/series/:seriesId", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const { deletedCount } = await storage.deleteAssignmentSeries(req.params.seriesId, req.workspaceId!);
+      broadcastUpdate("assignments", req.workspaceId!, {
+        action: "delete-series",
+        record: { seriesId: req.params.seriesId },
+      });
+      res.json({ success: true, deletedCount });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete assignment series" });
     }
   });
 

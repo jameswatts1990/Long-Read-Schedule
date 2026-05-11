@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User, UserCheck, Copy } from "lucide-react";
@@ -92,6 +92,11 @@ export function WeeklyCalendar({
   const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<Set<string>>(new Set());
   const [clipboardAssignments, setClipboardAssignments] = useState<Assignment[]>([]);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+  const [trainedTaskId, setTrainedTaskId] = useState<string | null>(null);
+  const { data: trainedPersonIds = [] } = useQuery<string[]>({
+    queryKey: [`/api/assignments/trained-persons?taskId=${trainedTaskId}`],
+    enabled: trainedTaskId !== null,
+  });
   const pasteTargetCellRef = useRef<CellData | null>(null);
   const { toast } = useToast();
 
@@ -181,6 +186,29 @@ export function WeeklyCalendar({
     }
   };
 
+  const deleteAssignmentSeries = async (seriesId: string) => {
+    try {
+      const res = await apiRequest("DELETE", `/api/assignments/series/${seriesId}`);
+      const { deletedCount } = await res.json();
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments"),
+      });
+      toast({
+        title: "Series deleted",
+        description: `${deletedCount} recurring assignment${deletedCount !== 1 ? "s" : ""} removed`,
+        variant: "destructive",
+        icon: <Trash2 className="h-4 w-4 shrink-0 mt-0.5" />,
+      });
+    } catch {
+      toast({
+        title: "Failed to delete series",
+        description: "Could not remove the recurring series",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCopy = (toCopy: Assignment[]) => {
     setClipboardAssignments(toCopy);
     toast({
@@ -230,9 +258,10 @@ export function WeeklyCalendar({
         activeElement instanceof HTMLTextAreaElement ||
         activeElement?.getAttribute("contenteditable") === "true";
 
-      // Escape — clear task highlight
+      // Escape — clear task highlight and trained filter
       if (event.key === "Escape") {
         setHighlightedTaskId(null);
+        setTrainedTaskId(null);
         return;
       }
 
@@ -439,7 +468,7 @@ export function WeeklyCalendar({
 
             {/* Person Rows */}
             <tbody>
-              {people.map((person, personIndex) => (
+              {(trainedTaskId ? people.filter(p => trainedPersonIds.includes(p.id)) : people).map((person, personIndex) => (
                 <tr 
                   key={person.id}
                   style={{ minHeight: isCompactView ? undefined : '120px' }}
@@ -703,6 +732,13 @@ export function WeeklyCalendar({
                                   >
                                     {highlightedTaskId === task.id ? "Clear Highlight" : `Highlight ${task.name}`}
                                   </ContextMenuItem>
+                                  <ContextMenuItem
+                                    onSelect={() =>
+                                      setTrainedTaskId(trainedTaskId === task.id ? null : task.id)
+                                    }
+                                  >
+                                    {trainedTaskId === task.id ? "Clear trained filter" : "Highlight trained"}
+                                  </ContextMenuItem>
                                   <ContextMenuSeparator />
                                   <ContextMenuItem
                                     className="text-destructive focus:text-destructive"
@@ -715,6 +751,14 @@ export function WeeklyCalendar({
                                   >
                                     Delete
                                   </ContextMenuItem>
+                                  {assignment.seriesId && (
+                                    <ContextMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onSelect={() => void deleteAssignmentSeries(assignment.seriesId!)}
+                                    >
+                                      Delete Series
+                                    </ContextMenuItem>
+                                  )}
                                 </ContextMenuContent>
                               </ContextMenu>
                             );

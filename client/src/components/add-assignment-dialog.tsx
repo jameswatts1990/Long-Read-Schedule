@@ -126,25 +126,25 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   // Generate repeat dates based on settings (only weekdays)
   const generateRepeatDates = (startDate: Date): Date[] => {
     if (!repeatEnabled) return [startDate];
-    
+
     const dates: Date[] = [];
     let current = startDate;
-    let count = 0;
-    const maxOccurrences = 365; // Safety limit
-    
-    while (count < maxOccurrences) {
-      // Check end conditions
+    let safetyCount = 0;
+    const maxIterations = 1000; // Safety limit — prevents infinite loops regardless of end condition
+
+    while (safetyCount < maxIterations) {
+      // Check end conditions against actual occurrence count, not iteration count
       if (endType === "occurrences" && dates.length >= endOccurrences) break;
       if (endType === "date" && endDate && isAfter(current, endDate)) break;
       if (endType === "never" && dates.length >= 52) break; // Limit "never" to 52 occurrences
-      
+
       // Only add weekdays
       if (isWeekday(current)) {
         dates.push(current);
       }
-      
-      count++; // Safety counter to prevent infinite loops
-      
+
+      safetyCount++;
+
       // Calculate next date
       switch (repeatUnit) {
         case "days":
@@ -158,7 +158,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           break;
       }
     }
-    
+
     return dates;
   };
 
@@ -287,70 +287,91 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       const dayIndexMap: Record<string, number> = {
         "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4
       };
-      
+
+      // Single UUID shared by all assignments in this series so they can be
+      // deleted together via DELETE /api/assignments/series/:seriesId.
+      const seriesId = crypto.randomUUID();
+
       // Generate all dates to create assignments for
       const allDates: { date: Date; dayName: string }[] = [];
-      
+
       for (const dayName of daysArray) {
         const dayOffset = dayIndexMap[dayName] ?? 0;
         const startDate = addDays(weekStart, dayOffset);
         const repeatDates = generateRepeatDates(startDate);
-        
+
         for (const date of repeatDates) {
           allDates.push({ date, dayName: format(date, "EEEE") });
         }
       }
-      
-      // Create assignments in chunks
+
+      // Create assignments in chunks — use allSettled so a partial failure doesn't
+      // discard already-created assignments or hide how many succeeded.
       const CHUNK_SIZE = 5;
-      try {
-        for (let i = 0; i < allDates.length; i += CHUNK_SIZE) {
-          const chunk = allDates.slice(i, i + CHUNK_SIZE);
-          const chunkPromises = chunk.map(({ date, dayName }) => {
-            const dateStr = format(date, "yyyy-MM-dd");
-            const weekStartForDate = startOfWeek(date, { weekStartsOn: 1 });
-            const weekStartStr = format(weekStartForDate, "yyyy-MM-dd");
-            
-            return apiRequest("POST", "/api/assignments", {
-              ...data,
-              personId,
-              day: dayName,
-              weekStartDate: weekStartStr,
-              date: dateStr,
-              batchNumber: data.batchNumber || undefined,
-              notes: data.notes || undefined,
-              customName: data.customName || undefined,
-          customColor: data.customColor || undefined,
-            });
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < allDates.length; i += CHUNK_SIZE) {
+        const chunk = allDates.slice(i, i + CHUNK_SIZE);
+        const chunkPromises = chunk.map(({ date, dayName }) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const weekStartForDate = startOfWeek(date, { weekStartsOn: 1 });
+          const weekStartStr = format(weekStartForDate, "yyyy-MM-dd");
+
+          return apiRequest("POST", "/api/assignments", {
+            ...data,
+            personId,
+            day: dayName,
+            weekStartDate: weekStartStr,
+            date: dateStr,
+            seriesId,
+            batchNumber: data.batchNumber || undefined,
+            notes: data.notes || undefined,
+            customName: data.customName || undefined,
+            customColor: data.customColor || undefined,
           });
-          
-          await Promise.all(chunkPromises);
-          
-          if (i + CHUNK_SIZE < allDates.length) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-        }
-        
-        queryClient.invalidateQueries({ predicate: (query) => 
-          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
         });
+
+        const results = await Promise.allSettled(chunkPromises);
+        for (const r of results) {
+          if (r.status === "fulfilled") successCount++;
+          else failCount++;
+        }
+
+        if (i + CHUNK_SIZE < allDates.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+
+      queryClient.invalidateQueries({ predicate: (query) =>
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/assignments')
+      });
+
+      if (failCount === 0) {
         toast({
           title: "Recurring assignments created",
-          description: `Created ${allDates.length} assignment(s)`,
+          description: `Created ${successCount} assignment(s)`,
           variant: "success",
         });
-        form.reset();
-        setSelectedDays(new Set([day]));
-        setRepeatEnabled(false);
-        setRepeatOpen(false);
-        if (shouldCloseAfter) onClose();
-      } catch (error: any) {
+      } else if (successCount === 0) {
         toast({
           title: "Failed to create assignments",
-          description: error.message,
+          description: `All ${failCount} assignment(s) failed. Please try again.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Partially created",
+          description: `Created ${successCount} assignment(s) — ${failCount} failed.`,
           variant: "destructive",
         });
       }
+
+      form.reset();
+      setSelectedDays(new Set([day]));
+      setRepeatEnabled(false);
+      setRepeatOpen(false);
+      if (shouldCloseAfter) onClose();
       return;
     }
     

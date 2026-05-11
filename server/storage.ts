@@ -104,6 +104,7 @@ export interface IStorage {
   deleteAssignment(id: string): Promise<void>;
   deleteAssignmentsByTaskAndDate(taskId: string, workspaceId: string, afterDate?: string): Promise<{ deletedCount: number }>;
   reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]>;
+  getTrainedPersonsByTask(taskId: string, workspaceId: string): Promise<string[]>;
 
   // Premade Filters (scoped to workspace)
   getPremadeFilters(workspaceId: string): Promise<PremadeFilter[]>;
@@ -429,6 +430,14 @@ export class PostgresStorage implements IStorage {
     return result.sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)));
   }
 
+  async getTrainedPersonsByTask(taskId: string, workspaceId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ personId: assignments.personId })
+      .from(assignments)
+      .where(and(eq(assignments.taskId, taskId), eq(assignments.workspaceId, workspaceId)));
+    return rows.map(r => r.personId);
+  }
+
   async createAssignment(insertAssignment: InsertAssignment, createdById?: string): Promise<Assignment> {
     const [a] = await this.db.insert(assignments).values({
       ...insertAssignment,
@@ -474,6 +483,14 @@ export class PostgresStorage implements IStorage {
     if (row?.rotaTaskId) {
       await this.createRotaSkip(row.rotaTaskId, row.weekStartDate, row.day, row.workspaceId);
     }
+  }
+
+  async deleteAssignmentSeries(seriesId: string, workspaceId: string): Promise<{ deletedCount: number }> {
+    const deleted = await this.db
+      .delete(assignments)
+      .where(and(eq(assignments.seriesId, seriesId), eq(assignments.workspaceId, workspaceId)))
+      .returning({ id: assignments.id });
+    return { deletedCount: deleted.length };
   }
 
   async deleteAssignmentsByTaskAndDate(taskId: string, workspaceId: string, afterDate?: string): Promise<{ deletedCount: number }> {
@@ -629,7 +646,7 @@ export class PostgresStorage implements IStorage {
 
       const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00Z`));
       const diffMs = targetMonday.getTime() - startMonday.getTime();
-      const weeksSinceStart = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+      const weeksSinceStart = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
 
       if (weeksSinceStart < 0) continue; // Rota hasn't started yet
 

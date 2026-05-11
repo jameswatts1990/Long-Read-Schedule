@@ -89,6 +89,9 @@ export const assignments = pgTable("assignments", {
   // Set when this assignment was auto-created by a rota task; used to prevent
   // re-creation after the user deliberately deletes a rota-generated slot.
   rotaTaskId: varchar("rota_task_id"),
+  // Groups all assignments created together as a recurring series so the whole
+  // series can be deleted at once. NULL for one-off assignments.
+  seriesId: varchar("series_id"),
 }, (t) => [
   // Unique index on the rota slot triple so concurrent apply calls can use
   // ON CONFLICT DO NOTHING instead of a racy read-then-insert.

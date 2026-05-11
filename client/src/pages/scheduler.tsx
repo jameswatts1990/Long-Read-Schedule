@@ -14,6 +14,7 @@ import { TaskDetailsDrawer } from "@/components/task-details-drawer";
 import { FilterMegaMenu } from "@/components/filter-mega-menu";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { NotificationBell } from "@/components/notification-bell";
+import { HelpGuide } from "@/components/help-guide";
 import { type Person, type Task, type Assignment, type PremadeFilter } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -590,6 +591,7 @@ export default function Scheduler() {
             {isCompactView ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
           </Button>
 
+          <HelpGuide />
           <NotificationBell onNavigateToWeek={setCurrentWeekStart} />
 
           <DropdownMenu>

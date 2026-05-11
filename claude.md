@@ -122,6 +122,9 @@ Use this file to make consistent design choices
 ### 'replit.md'
 This file describes the application
 
+### `client/src/components/help-guide.tsx`
+This is the in-app user help guide. It must be kept up to date. When adding, changing, or removing any user-facing feature — including new dialogs, keyboard shortcuts, views, admin settings, or interaction patterns — update the relevant tab in `help-guide.tsx` to reflect the change. The guide is the single source of truth for end-user documentation.
+
 Keep `CLAUDE.md` stable. Let `learnings.md` grow over time.
 
 ---

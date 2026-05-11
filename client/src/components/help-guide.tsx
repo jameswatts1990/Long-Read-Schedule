@@ -1,0 +1,256 @@
+import { HelpCircle, Mouse, Keyboard, LayoutGrid, Filter, Bell, Shield } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-5">
+      <h3 className="text-sm font-semibold mb-2 text-foreground">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function Item({ label, description }: { label: string; description: string }) {
+  return (
+    <div className="flex gap-2 mb-1.5 text-sm">
+      <span className="font-medium text-foreground min-w-[140px] shrink-0">{label}</span>
+      <span className="text-muted-foreground">{description}</span>
+    </div>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex items-center gap-1 rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground">
+      {children}
+    </kbd>
+  );
+}
+
+function ShortcutRow({ keys, description }: { keys: React.ReactNode; description: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 mb-2 text-sm">
+      <span className="text-muted-foreground">{description}</span>
+      <span className="shrink-0">{keys}</span>
+    </div>
+  );
+}
+
+export function HelpGuide() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Help guide"
+          data-testid="button-help-guide"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </Button>
+      </DialogTrigger>
+
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" data-testid="dialog-help-guide">
+        <DialogHeader>
+          <DialogTitle>Help Guide</DialogTitle>
+        </DialogHeader>
+
+        <Tabs defaultValue="basics" className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="shrink-0 grid w-full grid-cols-6">
+            <TabsTrigger value="basics" className="text-xs">Basics</TabsTrigger>
+            <TabsTrigger value="assignments" className="text-xs">Assignments</TabsTrigger>
+            <TabsTrigger value="views" className="text-xs">Views</TabsTrigger>
+            <TabsTrigger value="filters" className="text-xs">Filters</TabsTrigger>
+            <TabsTrigger value="shortcuts" className="text-xs">Shortcuts</TabsTrigger>
+            <TabsTrigger value="admin" className="text-xs">Admin</TabsTrigger>
+          </TabsList>
+
+          {/* ── Basics ── */}
+          <TabsContent value="basics" className="flex-1 overflow-y-auto mt-4 pr-1">
+            <Section title="Navigation">
+              <Item label="Previous / Next" description="Arrow buttons move the schedule back or forward by one week (or month in Month view)." />
+              <Item label="Today" description="Jumps back to the current week at any time." />
+              <Item label="Date picker" description="Click the displayed date range to open a calendar and jump to any week." />
+            </Section>
+
+            <Section title="Notifications bell">
+              <Item label="This week summary" description="Shows your scheduled tasks and leave for the current week, broken down by day." />
+              <Item label="Upcoming leave" description="Lists your leave assignments over the next 5 weeks." />
+              <Item label="Notifications" description="Assignment changes appear here. Click a notification to jump to that week. Hover a notification and click × to dismiss it." />
+            </Section>
+
+            <Section title="Your schedule">
+              <Item label="Show only my tasks" description="Toggle in the grid header to filter the view to your own assignments only. Requires your account to be linked to a person record in Admin." />
+              <Item label="Person dot colour" description="Each person has an assigned colour shown next to their name and used for notification initials." />
+              <Item label="Green dot" description="Shown next to a person's name when they have an assignment every day of the week." />
+            </Section>
+
+            <Section title="Workspace">
+              <Item label="Switching workspaces" description="If you belong to multiple workspaces, use the workspace badge in the top-left to switch between them." />
+              <Item label="New users" description="First-time users are shown all available workspaces and can self-join one." />
+            </Section>
+          </TabsContent>
+
+          {/* ── Assignments ── */}
+          <TabsContent value="assignments" className="flex-1 overflow-y-auto mt-4 pr-1">
+            <Section title="Adding tasks">
+              <Item label="Click Add" description="Click the + button that appears in any empty cell to open the Add Assignment dialog." />
+              <Item label="Right-click cell" description="Right-click any cell and choose 'Add Task' from the context menu." />
+              <Item label="Repeat" description="Enable 'Add on multiple dates' in the dialog to schedule a task every N days, weeks, or months, with an optional end date." />
+            </Section>
+
+            <Section title="Editing & details">
+              <Item label="Click a task" description="Opens the Task Details drawer where you can edit batch number, batch size, notes, custom name, and custom colour." />
+              <Item label="Custom name" description="Overrides the task name for this assignment only — useful for labelling specific samples." />
+              <Item label="Custom colour" description="Overrides the task colour for this assignment only." />
+              <Item label="Batch number & size" description="Optional identifiers used in reporting. Batch size requires a batch number." />
+              <Item label="Notes" description="Free text attached to an assignment. Shown as an info icon (ℹ) in the grid." />
+            </Section>
+
+            <Section title="Moving & copying">
+              <Item label="Drag to move" description="Drag any task box to a different person/day cell to move it." />
+              <Item label="Reorder in cell" description="Drag a task up or down within the same cell to change its display order." />
+              <Item label="Copy & paste" description="Select tasks with Ctrl+Click, press Ctrl+C, then right-click the target cell and choose Paste (or press Ctrl+V)." />
+              <Item label="Duplicate" description="Open a task's detail drawer and click 'Duplicate' to copy it to multiple people and days in one action." />
+            </Section>
+
+            <Section title="Deleting">
+              <Item label="Delete key" description="Press Delete or Backspace to remove selected assignments." />
+              <Item label="Delete by drag" description="Drag one or more selected tasks onto the person name column (it turns red) to delete them." />
+              <Item label="Delete series" description="Right-click any assignment created as a recurring series and choose 'Delete Series' to remove all occurrences at once." />
+              <Item label="Undo" description="A toast notification appears for 5 seconds after deletion with an 'Undo' button." />
+            </Section>
+
+            <Section title="Highlighting">
+              <Item label="Highlight task type" description="Right-click a task and choose 'Highlight [name]' to fade all other tasks to 20% opacity — useful for focusing on one task across the week." />
+              <Item label="Highlight trained" description="Right-click a task and choose 'Highlight trained' to hide all people who have never been assigned that task — shows only those with prior experience. Right-click again and choose 'Clear trained filter', or press Escape, to restore all rows." />
+              <Item label="Clear highlight" description="Right-click and choose 'Clear Highlight', or press Escape." />
+            </Section>
+          </TabsContent>
+
+          {/* ── Views ── */}
+          <TabsContent value="views" className="flex-1 overflow-y-auto mt-4 pr-1">
+            <Section title="Week view (default)">
+              <Item label="Layout" description="People as rows, Mon–Fri as columns. Today's column is highlighted in blue." />
+              <Item label="Annual leave" description="Cells with leave tasks are highlighted red." />
+              <Item label="Missing tasks" description="A red info icon in a day header means a 'required daily' task has not been scheduled for that day. Hover to see which tasks are missing." />
+            </Section>
+
+            <Section title="Month view">
+              <Item label="Overview" description="Shows all weeks in the selected month. Same editing and drag interactions as week view." />
+              <Item label="Navigation" description="Previous/Next moves by one month. The date picker jumps to any month." />
+            </Section>
+
+            <Section title="Pipeline view">
+              <Item label="Layout" description="Only tasks flagged 'Show in pipeline view' (set in Admin) appear as rows, with people listed per day." />
+              <Item label="Hide empty" description="Toggle the eye icon to hide pipeline rows with no assignments, keeping the view focused." />
+            </Section>
+
+            <Section title="Compact view">
+              <Item label="Toggle" description="Click the Minimise/Maximise icon in the toolbar to switch between normal and compact row heights. Compact mode hides batch details to fit more rows on screen." />
+            </Section>
+
+            <Section title="Export / Import">
+              <Item label="Export" description="Downloads a JSON file of all people, tasks, and assignments — useful as a backup or for migrating data." />
+              <Item label="Import" description="Upload a previously exported JSON file. People, tasks, and assignments are created with remapped IDs." />
+            </Section>
+          </TabsContent>
+
+          {/* ── Filters ── */}
+          <TabsContent value="filters" className="flex-1 overflow-y-auto mt-4 pr-1">
+            <Section title="Filter menu">
+              <Item label="Open" description="Click the filter (funnel) icon in the toolbar." />
+              <Item label="Filter by people" description="Check or uncheck team members to show only their rows." />
+              <Item label="Filter by tasks" description="Check or uncheck task types to show only those assignments." />
+              <Item label="Active indicator" description="A badge on the filter icon shows how many filters are active. A 'Clear Filters' button appears in the toolbar." />
+            </Section>
+
+            <Section title="Saved filters">
+              <Item label="Create" description="Set your desired people/task selection, then click 'Create Filter', give it a name, and save." />
+              <Item label="Apply" description="Click any saved filter name to apply it instantly." />
+              <Item label="Edit / Delete" description="Use the pencil or trash icon next to any saved filter." />
+              <Item label="Folders" description="Drag filters into folders to organise them. Folders are collapsible and saved per workspace in your browser." />
+            </Section>
+          </TabsContent>
+
+          {/* ── Shortcuts ── */}
+          <TabsContent value="shortcuts" className="flex-1 overflow-y-auto mt-4 pr-1">
+            <Section title="Keyboard shortcuts">
+              <ShortcutRow
+                description="Copy selected assignments"
+                keys={<span><Kbd>Ctrl</Kbd> + <Kbd>C</Kbd></span>}
+              />
+              <ShortcutRow
+                description="Paste to last right-clicked cell"
+                keys={<span><Kbd>Ctrl</Kbd> + <Kbd>V</Kbd></span>}
+              />
+              <ShortcutRow
+                description="Delete selected assignments"
+                keys={<span><Kbd>Delete</Kbd> or <Kbd>Backspace</Kbd></span>}
+              />
+              <ShortcutRow
+                description="Clear task highlight"
+                keys={<Kbd>Escape</Kbd>}
+              />
+              <ShortcutRow
+                description="Add/remove task from selection"
+                keys={<span><Kbd>Ctrl</Kbd> + <Kbd>Click</Kbd></span>}
+              />
+            </Section>
+
+            <Section title="Mouse interactions">
+              <Item label="Left-click task" description="Open Task Details drawer." />
+              <Item label="Right-click task" description="Context menu: Edit, Highlight, Highlight trained, Duplicate, Delete, Delete Series (recurring assignments only)." />
+              <Item label="Right-click cell" description="Context menu: Add Task, Paste." />
+              <Item label="Drag task" description="Move to a new person/day cell." />
+              <Item label="Drag to name column" description="Drop on the person name (turns red) to delete." />
+              <Item label="Ctrl+Click" description="Multi-select tasks for bulk copy/delete." />
+            </Section>
+
+            <p className="text-xs text-muted-foreground mt-2">Mac users: use <Kbd>⌘ Cmd</Kbd> in place of <Kbd>Ctrl</Kbd>.</p>
+          </TabsContent>
+
+          {/* ── Admin ── */}
+          <TabsContent value="admin" className="flex-1 overflow-y-auto mt-4 pr-1">
+            <Section title="Accessing admin">
+              <Item label="Admin panel" description="Click the ⋮ menu in the toolbar, then 'Admin'. Only workspace admins and super-admins can access this." />
+            </Section>
+
+            <Section title="People">
+              <Item label="Add team member" description="Set a name and colour. Optionally link to a user account so they can use 'Show only my assignments' and see their schedule in Notifications." />
+              <Item label="Reorder" description="Drag the handle next to a person's name to change their display order in the grid." />
+              <Item label="Exclude" description="Tick 'Exclude' to hide someone from the grid without deleting their assignment history." />
+            </Section>
+
+            <Section title="Tasks">
+              <Item label="Add task" description="Set a name, colour, and optional description. Flags: Production (counts in reporting), Required daily (warns if missing), Show in pipeline view." />
+              <Item label="Required daily" description="When enabled, a red warning appears in the day header if this task has not been assigned to anyone that day." />
+              <Item label="Pipeline view" description="Tasks must be flagged here before they appear in Pipeline view." />
+            </Section>
+
+            <Section title="Rota tasks">
+              <Item label="Purpose" description="Automatically rotate a task assignment across team members each week (e.g., a weekly duty rota)." />
+              <Item label="Frequency" description="Daily (Mon–Fri every week) or Weekly (one specific day per week)." />
+              <Item label="Interval" description="Set to 2 to assign every other week, 3 for every third week, etc." />
+              <Item label="Auto-apply" description="Rota assignments are created automatically when you open a week. Deleting a rota assignment skips that slot permanently." />
+              <Item label="Archive" description="Archive a rota task to stop future assignments without deleting history." />
+            </Section>
+
+            <Section title="Workspaces">
+              <Item label="Members" description="Add users to a workspace, assign them Member or Admin roles, or remove them." />
+              <Item label="Multiple workspaces" description="Super-admins can create and manage multiple workspaces. Each workspace has its own people, tasks, and assignments." />
+            </Section>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
