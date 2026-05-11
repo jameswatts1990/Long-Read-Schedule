@@ -25,15 +25,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface WeeklyCalendarProps {
-  weekStartDate: string;
-  assignments: Assignment[];
-  people: Person[];
-  tasks: Task[];
-  onAssignmentClick: (assignment: Assignment) => void;
-  isCompactView?: boolean;
-}
-
 interface CellData {
   personId: string;
   day: string;
@@ -69,20 +60,22 @@ interface WeeklyCalendarProps {
   showOnlyCurrentPerson?: boolean;
   canToggleCurrentPerson?: boolean;
   onToggleCurrentPerson?: () => void;
+  onTrainedFilterChange?: (taskName: string | null) => void;
 }
 
-export function WeeklyCalendar({ 
-  weekStartDate, 
-  assignments, 
-  people, 
-  tasks, 
-  onAssignmentClick, 
+export function WeeklyCalendar({
+  weekStartDate,
+  assignments,
+  people,
+  tasks,
+  onAssignmentClick,
   isCompactView = false,
   hidePersonColumn = false,
   showColumnHeader = true,
   showOnlyCurrentPerson = false,
   canToggleCurrentPerson = true,
   onToggleCurrentPerson,
+  onTrainedFilterChange,
 }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -97,6 +90,17 @@ export function WeeklyCalendar({
     queryKey: [`/api/assignments/trained-persons?taskId=${trainedTaskId}`],
     enabled: trainedTaskId !== null,
   });
+
+  useEffect(() => {
+    if (!onTrainedFilterChange) return;
+    if (trainedTaskId === null) {
+      onTrainedFilterChange(null);
+    } else {
+      const task = tasks.find((t) => t.id === trainedTaskId);
+      onTrainedFilterChange(task?.name ?? null);
+    }
+  }, [trainedTaskId, tasks, onTrainedFilterChange]);
+
   const pasteTargetCellRef = useRef<CellData | null>(null);
   const { toast } = useToast();
 

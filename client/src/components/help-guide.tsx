@@ -88,7 +88,7 @@ export function HelpGuide() {
             </Section>
 
             <Section title="Your schedule">
-              <Item label="Show only my tasks" description="Toggle in the grid header to filter the view to your own assignments only. Requires your account to be linked to a person record in Admin." />
+              <Item label="Show only my tasks" description="Toggle in the grid header to filter the view to your own assignments only. When active, a blue banner appears in the toolbar — press Escape to cancel. Requires your account to be linked to a person record in Admin." />
               <Item label="Person dot colour" description="Each person has an assigned colour shown next to their name and used for notification initials." />
               <Item label="Green dot" description="Shown next to a person's name when they have an assignment every day of the week." />
             </Section>
@@ -131,7 +131,7 @@ export function HelpGuide() {
 
             <Section title="Highlighting">
               <Item label="Highlight task type" description="Right-click a task and choose 'Highlight [name]' to fade all other tasks to 20% opacity — useful for focusing on one task across the week." />
-              <Item label="Highlight trained" description="Right-click a task and choose 'Highlight trained' to hide all people who have never been assigned that task — shows only those with prior experience. Right-click again and choose 'Clear trained filter', or press Escape, to restore all rows." />
+              <Item label="Highlight trained" description="Right-click a task and choose 'Highlight trained' to hide all people who have never been assigned that task — shows only those with prior experience. An amber banner appears in the toolbar naming the active filter. Right-click again and choose 'Clear trained filter', or press Escape, to restore all rows." />
               <Item label="Clear highlight" description="Right-click and choose 'Clear Highlight', or press Escape." />
             </Section>
           </TabsContent>
@@ -151,7 +151,7 @@ export function HelpGuide() {
 
             <Section title="Pipeline view">
               <Item label="Layout" description="Only tasks flagged 'Show in pipeline view' (set in Admin) appear as rows, with people listed per day." />
-              <Item label="Hide empty" description="Toggle the eye icon to hide pipeline rows with no assignments, keeping the view focused." />
+              <Item label="Hide empty" description="Toggle the eye icon to hide pipeline rows with no assignments, keeping the view focused. When active, a blue banner appears in the toolbar — press Escape to cancel." />
             </Section>
 
             <Section title="Compact view">
@@ -197,7 +197,7 @@ export function HelpGuide() {
                 keys={<span><Kbd>Delete</Kbd> or <Kbd>Backspace</Kbd></span>}
               />
               <ShortcutRow
-                description="Clear task highlight"
+                description="Clear active view filter (highlight trained, show only my assignments, hide empty pipeline rows)"
                 keys={<Kbd>Escape</Kbd>}
               />
               <ShortcutRow

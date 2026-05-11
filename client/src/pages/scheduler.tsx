@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers, Loader2, Users } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers, Loader2, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -80,11 +80,32 @@ export default function Scheduler() {
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [hideEmptyPipelines, setHideEmptyPipelines] = useState(false);
   const [showOnlyMyAssignments, setShowOnlyMyAssignments] = useState(false);
+  const [activeTrainedFilterName, setActiveTrainedFilterName] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
   const { user } = useAuth();
+
+  const handleTrainedFilterChange = useCallback((taskName: string | null) => {
+    setActiveTrainedFilterName(taskName);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        activeEl?.getAttribute("contenteditable") === "true"
+      ) return;
+      if (showOnlyMyAssignments) setShowOnlyMyAssignments(false);
+      if (hideEmptyPipelines) setHideEmptyPipelines(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showOnlyMyAssignments, hideEmptyPipelines]);
 
   const { data: people = [], isLoading: peopleLoading } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -432,8 +453,8 @@ export default function Scheduler() {
   return (
     <div className="flex flex-col h-screen w-full bg-background">
       <LoadingOverlay />
-      <header className="h-16 border-b flex items-center justify-between px-6 bg-background shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="h-16 border-b flex items-center px-6 bg-background shrink-0 gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <CalendarIcon className="w-6 h-6 text-primary" data-testid="icon-logo" />
           <h1 className="text-2xl font-semibold" data-testid="text-app-title">Lab Scheduler</h1>
           {/* Workspace Switcher */}
@@ -470,7 +491,29 @@ export default function Scheduler() {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Active view filter banners */}
+        <div className="flex-1 flex items-center justify-center gap-2 px-4 min-w-0">
+          {activeTrainedFilterName && (
+            <div className="flex items-center gap-2 rounded-full border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-3 py-1 text-sm font-medium shrink-0" data-testid="banner-trained-filter">
+              <span>Highlight trained: {activeTrainedFilterName}</span>
+              <span className="text-xs opacity-60">· Esc to cancel</span>
+            </div>
+          )}
+          {showOnlyMyAssignments && (
+            <div className="flex items-center gap-2 rounded-full border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 px-3 py-1 text-sm font-medium shrink-0" data-testid="banner-my-assignments">
+              <span>Showing only my assignments</span>
+              <span className="text-xs opacity-60">· Esc to cancel</span>
+            </div>
+          )}
+          {hideEmptyPipelines && (
+            <div className="flex items-center gap-2 rounded-full border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 px-3 py-1 text-sm font-medium shrink-0" data-testid="banner-hide-empty-pipelines">
+              <span>Hiding empty pipeline rows</span>
+              <span className="text-xs opacity-60">· Esc to cancel</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
           {/* View Mode Toggles */}
           <Button
             variant={viewMode === "pipeline" ? "default" : "outline"}
@@ -679,6 +722,7 @@ export default function Scheduler() {
             showOnlyCurrentPerson={showOnlyMyAssignments}
             canToggleCurrentPerson={canUseMyAssignmentsToggle}
             onToggleCurrentPerson={toggleMyAssignmentsView}
+            onTrainedFilterChange={handleTrainedFilterChange}
           />
         )}
         {!isInitialLoading && viewMode === "month" && people.length > 0 && (
