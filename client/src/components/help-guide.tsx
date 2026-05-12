@@ -222,7 +222,9 @@ export function HelpGuide() {
           {/* ── Admin ── */}
           <TabsContent value="admin" className="flex-1 overflow-y-auto mt-4 pr-1">
             <Section title="Accessing admin">
-              <Item label="Admin panel" description="Click the ⋮ menu in the toolbar, then 'Admin'. Only workspace admins and super-admins can access this." />
+              <Item label="Admin cog" description="Click the ⚙ cog icon in the toolbar. The dropdown shows admin sections (People, Tasks, Rota), reporting links (Capacity Reporting, AL Reporting), Export, Import, and Logout." />
+              <Item label="Section navigation" description="Use the dropdown next to 'Admin' at the top of the Admin page to switch between sections. Each section (People, Tasks, Rota, Workspaces) is shown as the main focus." />
+              <Item label="Direct links" description="Selecting People, Tasks, or Rota from the cog dropdown takes you straight to that section of the Admin page." />
             </Section>
 
             <Section title="People">

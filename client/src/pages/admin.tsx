@@ -940,6 +940,16 @@ export default function Admin() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverTaskIndex, setDragOverTaskIndex] = useState<number | null>(null);
+  const [activeSection, setActiveSection] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get("section");
+    return (s === "people" || s === "tasks" || s === "rota" || s === "workspaces") ? s : "people";
+  });
+
+  const handleSectionChange = (section: string) => {
+    setActiveSection(section);
+    history.replaceState(null, "", `/admin?section=${section}`);
+  };
 
   const { data: people = [] } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -1177,6 +1187,17 @@ export default function Admin() {
               </Button>
             </Link>
             <h1 className="text-4xl font-bold">Admin</h1>
+            <Select value={activeSection} onValueChange={handleSectionChange}>
+              <SelectTrigger className="w-44" data-testid="select-admin-section">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="people">People</SelectItem>
+                <SelectItem value="tasks">Tasks</SelectItem>
+                <SelectItem value="rota">Rota</SelectItem>
+                {isSuperAdmin && <SelectItem value="workspaces">Workspaces</SelectItem>}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex gap-2">
             <Link href="/reporting">
@@ -1194,9 +1215,8 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* People and Tasks Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* People Management */}
+        {/* People section */}
+        {activeSection === "people" && (
           <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">People</h2>
@@ -1365,8 +1385,10 @@ export default function Admin() {
             )}
           </div>
         </Card>
+        )}
 
-          {/* Tasks Management */}
+        {/* Tasks section */}
+        {activeSection === "tasks" && (
           <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">Tasks</h2>
@@ -1498,12 +1520,15 @@ export default function Admin() {
             )}
           </div>
         </Card>
-        </div>
+        )}
 
-        <RotaTasksSection people={people} tasks={tasks} />
+        {/* Rota section */}
+        {activeSection === "rota" && (
+          <RotaTasksSection people={people} tasks={tasks} />
+        )}
 
-        {/* Super-Admin: Workspace Management */}
-        {isSuperAdmin && (
+        {/* Workspaces section — super-admin only */}
+        {activeSection === "workspaces" && isSuperAdmin && (
           <Card className="p-6">
             <WorkspaceManagementSection currentUser={currentUser ?? null} />
           </Card>

@@ -24,6 +24,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 
 ## Current learnings
 
+## Admin page — section-based navigation via URL param
+
+- Date: 2026-05-12
+- Trigger: Refactored admin page from single stacked layout to section-based navigation.
+- Learning: The admin page now uses a `?section=` URL param (initialised via `window.location.search` in useState, updated via `history.replaceState`) to show one section at a time. The scheduler cog dropdown links directly to `/admin?section=people` etc. Do not revert to stacked layout.
+- Action: When linking to a specific admin section, use `/admin?section=people`, `/admin?section=tasks`, `/admin?section=rota`, `/admin?section=workspaces`.
+- Evidence: `client/src/pages/admin.tsx` `activeSection` state + `handleSectionChange`; `client/src/pages/scheduler.tsx` cog dropdown.
+
 ## Recurring assignments — seriesId migration required after schema change
 
 - Date: 2026-05-11

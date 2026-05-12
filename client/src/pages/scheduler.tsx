@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, MoreVertical, ChevronDown, Layers, Loader2, Users } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { MonthView } from "@/components/month-view";
@@ -654,11 +654,45 @@ export default function Scheduler() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" aria-label="More actions" title="More actions (Export, Import, Admin, Logout)" data-testid="button-more-actions">
-                <MoreVertical className="w-4 h-4" />
+              <Button variant="outline" size="icon" aria-label="Admin & settings" title="Admin, Reporting, Export, Import" data-testid="button-admin-cog">
+                <Settings className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel>Admin</DropdownMenuLabel>
+              <Link href="/admin?section=people">
+                <DropdownMenuItem data-testid="menu-item-admin-people">
+                  <Users className="mr-2 h-4 w-4" />
+                  <span>People</span>
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/admin?section=tasks">
+                <DropdownMenuItem data-testid="menu-item-admin-tasks">
+                  <LayoutList className="mr-2 h-4 w-4" />
+                  <span>Tasks</span>
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/admin?section=rota">
+                <DropdownMenuItem data-testid="menu-item-admin-rota">
+                  <CalendarClock className="mr-2 h-4 w-4" />
+                  <span>Rota</span>
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Reporting</DropdownMenuLabel>
+              <Link href="/reporting">
+                <DropdownMenuItem data-testid="menu-item-capacity-reporting">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  <span>Capacity Reporting</span>
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/al-reporting">
+                <DropdownMenuItem data-testid="menu-item-al-reporting">
+                  <Sun className="mr-2 h-4 w-4" />
+                  <span>AL Reporting</span>
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleExport} data-testid="menu-item-export">
                 <Download className="mr-2 h-4 w-4" />
                 <span>Export</span>
@@ -667,13 +701,8 @@ export default function Scheduler() {
                 <Upload className="mr-2 h-4 w-4" />
                 <span>Import</span>
               </DropdownMenuItem>
-              <Link href="/admin">
-                <DropdownMenuItem data-testid="menu-item-admin">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Admin</span>
-                </DropdownMenuItem>
-              </Link>
-              <DropdownMenuItem 
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
                 onClick={() => window.location.href = "/api/logout"}
                 className="text-destructive focus:text-destructive"
                 data-testid="menu-item-logout"
