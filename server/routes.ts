@@ -11,7 +11,7 @@ import {
   insertWorkspaceSchema,
   isoDateString,
 } from "@shared/schema";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { getDiagnosticsSnapshot } from "./diagnostics";
 
@@ -578,23 +578,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("rota-tasks", req.workspaceId);
       res.json(rotaTask);
     } catch (error) {
-      res.status(400).json({ message: "Invalid rota task data" });
+      if (error instanceof ZodError) {
+        res.status(400).json({ message: error.errors[0]?.message ?? "Invalid rota task data" });
+      } else {
+        res.status(500).json({ message: "Failed to create rota task" });
+      }
     }
   });
 
   app.put("/api/rota-tasks/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
+      const existing = await storage.getRotaTask(req.params.id, req.workspaceId);
+      if (!existing) return res.status(403).json({ message: "Forbidden" });
       const data = insertRotaTaskSchema.partial().parse(req.body);
       const rotaTask = await storage.updateRotaTask(req.params.id, data);
       broadcastUpdate("rota-tasks", req.workspaceId);
       res.json(rotaTask);
     } catch (error) {
-      res.status(400).json({ message: "Invalid rota task data" });
+      if (error instanceof ZodError) {
+        res.status(400).json({ message: error.errors[0]?.message ?? "Invalid rota task data" });
+      } else {
+        res.status(500).json({ message: "Failed to update rota task" });
+      }
     }
   });
 
   app.delete("/api/rota-tasks/:id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
+      const existing = await storage.getRotaTask(req.params.id, req.workspaceId);
+      if (!existing) return res.status(403).json({ message: "Forbidden" });
       const result = await storage.deleteRotaTask(req.params.id);
       broadcastUpdate("rota-tasks", req.workspaceId);
       // Also broadcast assignments deletion since rota task deletion cascades to remove all rota-generated assignments

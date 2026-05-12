@@ -181,6 +181,11 @@ export default function Scheduler() {
         const fresh = newAssignments.filter((a) => !existingIds.has(a.id));
         return fresh.length > 0 ? [...old, ...fresh] : old;
       });
+      toast({
+        title: `${newAssignments.length} rota assignment${newAssignments.length !== 1 ? "s" : ""} applied`,
+        description: "Automatic rota tasks scheduled for this week",
+        variant: "success",
+      });
     },
   });
 
@@ -221,6 +226,9 @@ export default function Scheduler() {
   }
 
   const hasActiveFilters = filterPersonIds.size > 0 || filterTaskIds.size > 0;
+  const totalFilterCount = filterPersonIds.size + filterTaskIds.size +
+    (showOnlyMyAssignments ? 1 : 0) +
+    (activeTrainedFilterName ? 1 : 0);
 
   const visiblePeople = people.filter((p) => !p.excluded);
 
@@ -339,22 +347,24 @@ export default function Scheduler() {
       }
 
       // Import assignments with mapped IDs and normalized weekStartDate
+      let importedCount = 0;
+      let skippedCount = 0;
       for (const assignment of data.assignments) {
         const newPersonId = personIdMap.get(assignment.personId);
         const newTaskId = taskIdMap.get(assignment.taskId);
 
         if (!newPersonId || !newTaskId) {
-          console.warn("Skipping assignment with invalid person or task ID", assignment);
+          skippedCount++;
           continue;
         }
 
         // Normalize weekStartDate by trimming
-        const normalizedWeekStartDate = typeof assignment.weekStartDate === "string" 
-          ? assignment.weekStartDate.trim() 
+        const normalizedWeekStartDate = typeof assignment.weekStartDate === "string"
+          ? assignment.weekStartDate.trim()
           : "";
 
         if (!normalizedWeekStartDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedWeekStartDate)) {
-          console.warn("Skipping assignment with invalid weekStartDate", assignment);
+          skippedCount++;
           continue;
         }
 
@@ -368,22 +378,24 @@ export default function Scheduler() {
           notes: assignment.notes || "",
           date: assignment.date || "",
         });
+        importedCount++;
       }
 
       // Refresh all data - use predicate to invalidate any assignment queries
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/people"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }),
-        queryClient.invalidateQueries({ 
-          predicate: (query) => 
-            typeof query.queryKey[0] === 'string' && 
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            typeof query.queryKey[0] === 'string' &&
             query.queryKey[0].startsWith('/api/assignments')
         }),
       ]);
 
+      const skippedNote = skippedCount > 0 ? ` (${skippedCount} skipped — unknown person or task)` : "";
       toast({
         title: "Import successful",
-        description: `Imported ${data.people.length} people, ${data.tasks.length} tasks, and ${data.assignments.length} assignments.`,
+        description: `Imported ${data.people.length} people, ${data.tasks.length} tasks, and ${importedCount} assignments${skippedNote}.`,
         variant: "success",
       });
     } catch (error) {
@@ -519,6 +531,7 @@ export default function Scheduler() {
             variant={viewMode === "pipeline" ? "default" : "outline"}
             size="default"
             onClick={togglePipelineView}
+            title="Pipeline view — shows tasks flagged for pipeline view as rows"
             data-testid="button-toggle-pipeline-view"
           >
             <LayoutList className="w-4 h-4" />
@@ -528,6 +541,7 @@ export default function Scheduler() {
             variant={viewMode === "month" ? "default" : "outline"}
             size="default"
             onClick={toggleMonthView}
+            title="Month view — shows all weeks in the current month"
             data-testid="button-toggle-month-view"
           >
             <CalendarDays className="w-4 h-4" />
@@ -609,7 +623,7 @@ export default function Scheduler() {
             onDeletePremadeFilter={deletePremadeFilter}
             onClearFilters={clearFilters}
             hasActiveFilters={hasActiveFilters}
-            filterCount={filterPersonIds.size + filterTaskIds.size}
+            filterCount={totalFilterCount}
           />
 
           {hasActiveFilters && (
@@ -624,10 +638,11 @@ export default function Scheduler() {
           )}
 
           <Button
-            variant="outline"
+            variant={isCompactView ? "default" : "outline"}
             size="icon"
             onClick={() => setIsCompactView(!isCompactView)}
             aria-label={isCompactView ? "Expand view" : "Compact view"}
+            title={isCompactView ? "Expand view (show full row heights)" : "Compact view (reduce row heights)"}
             aria-pressed={isCompactView}
             data-testid="button-toggle-compact"
           >
@@ -639,7 +654,7 @@ export default function Scheduler() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" aria-label="More actions" data-testid="button-more-actions">
+              <Button variant="outline" size="icon" aria-label="More actions" title="More actions (Export, Import, Admin, Logout)" data-testid="button-more-actions">
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>

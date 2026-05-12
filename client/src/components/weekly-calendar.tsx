@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User, UserCheck, Copy } from "lucide-react";
+import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User, UserCheck, Copy, MoreHorizontal, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -18,6 +18,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -515,12 +522,17 @@ export function WeeklyCalendar({
                           style={{ backgroundColor: person.color }}
                           data-testid={`person-indicator-${person.id}`}
                         />
-                        <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
-                            {person.name}
-                          </span>
-                          {hasAssignmentEveryDay(person.id) && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium text-sm text-foreground truncate" data-testid={`person-name-${person.id}`}>
+                              {person.name}
+                            </span>
+                            {hasAssignmentEveryDay(person.id) && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                            )}
+                          </div>
+                          {draggedAssignment && (
+                            <span className="text-[9px] text-destructive/70 font-medium leading-none">Drop here to delete</span>
                           )}
                         </div>
                       </div>
@@ -542,7 +554,7 @@ export function WeeklyCalendar({
                         key={`${person.id}-${day}`}
                         className={cn(
                           "border-b border-l hover-elevate relative align-top",
-                          isCompactView ? "p-0.5" : "p-1.5",
+                          isCompactView ? "p-0" : "p-1.5",
                           hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
                           isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                           (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
@@ -605,7 +617,7 @@ export function WeeklyCalendar({
                         >
                           <ContextMenuTrigger asChild>
                             <div
-                              className={cn("space-y-1 h-full w-full", isCompactView && "space-y-0.5")}
+                              className={cn("h-full w-full", isCompactView ? "space-y-0" : "space-y-1")}
                               style={{ minHeight: isCompactView ? undefined : "120px" }}
                             >
                           {cellAssignments.map(assignment => {
@@ -619,15 +631,17 @@ export function WeeklyCalendar({
                                 <ContextMenuTrigger asChild>
                                   <div
                                     className={cn(
-                                      "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2 transition-opacity duration-150",
-                                      isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
+                                      "cursor-grab active:cursor-grabbing group relative transition-opacity duration-150",
+                                      isCompactView
+                                        ? "px-1 py-px"
+                                        : "rounded-md border hover-elevate active-elevate-2 p-1 min-h-6",
                                       draggedAssignment?.id === assignment.id && "opacity-50",
                                       highlightedTaskId && task.id !== highlightedTaskId && "opacity-20",
                                       selectedAssignmentIds.has(assignment.id) && "ring-2 ring-primary ring-offset-1 ring-offset-background"
                                     )}
                                     style={{
                                       backgroundColor: (assignment as any).customColor ?? task.color,
-                                      borderColor: person.color,
+                                      ...(isCompactView ? {} : { borderColor: person.color }),
                                     }}
                                     draggable
                                     onDragStart={(e) => {
@@ -670,36 +684,105 @@ export function WeeklyCalendar({
                                       <div className="flex-1 min-w-0">
                                         <div className={cn("text-xs font-medium flex items-start justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                           <span className="min-w-0 flex-1 truncate leading-tight">{assignment.customName || task.name}</span>
-                                          {!isCompactView && assignment.notes && (
-                                            <Popover>
-                                              <PopoverTrigger asChild>
-                                                <button
-                                                  type="button"
-                                                  className={cn(
-                                                    "relative z-20 mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
-                                                    "hover:-translate-y-px hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-                                                    isTaskDark
-                                                      ? "border-white/45 bg-black/25 text-white/95 hover:border-white/70 hover:bg-black/45 focus-visible:ring-white/80 focus-visible:ring-offset-transparent"
-                                                      : "border-black/15 bg-white/80 text-foreground/80 hover:border-black/25 hover:bg-white focus-visible:ring-foreground/40 focus-visible:ring-offset-white/50"
+                                          {!isCompactView && (
+                                            <div className="flex items-center gap-0.5 shrink-0">
+                                              {assignment.notes && (
+                                                <Popover>
+                                                  <PopoverTrigger asChild>
+                                                    <button
+                                                      type="button"
+                                                      className={cn(
+                                                        "relative z-20 mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
+                                                        "hover:-translate-y-px hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+                                                        isTaskDark
+                                                          ? "border-white/45 bg-black/25 text-white/95 hover:border-white/70 hover:bg-black/45 focus-visible:ring-white/80 focus-visible:ring-offset-transparent"
+                                                          : "border-black/15 bg-white/80 text-foreground/80 hover:border-black/25 hover:bg-white focus-visible:ring-foreground/40 focus-visible:ring-offset-white/50"
+                                                      )}
+                                                      onClick={(event) => event.stopPropagation()}
+                                                      onPointerDown={(event) => event.stopPropagation()}
+                                                      aria-label="View assignment notes"
+                                                    >
+                                                      <Info className="h-3.5 w-3.5 stroke-[2.6]" />
+                                                    </button>
+                                                  </PopoverTrigger>
+                                                  <PopoverContent
+                                                    className="z-[70] w-72 p-3"
+                                                    align="end"
+                                                    onClick={(event) => event.stopPropagation()}
+                                                  >
+                                                    <div className="space-y-1">
+                                                      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Notes</p>
+                                                      <p className="text-sm leading-relaxed">{assignment.notes}</p>
+                                                    </div>
+                                                  </PopoverContent>
+                                                </Popover>
+                                              )}
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                  <button
+                                                    type="button"
+                                                    className={cn(
+                                                      "relative z-20 mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
+                                                      "opacity-0 group-hover:opacity-100 hover:-translate-y-px hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+                                                      isTaskDark
+                                                        ? "border-white/45 bg-black/25 text-white/95 hover:border-white/70 hover:bg-black/45 focus-visible:ring-white/80 focus-visible:ring-offset-transparent"
+                                                        : "border-black/15 bg-white/80 text-foreground/80 hover:border-black/25 hover:bg-white focus-visible:ring-foreground/40 focus-visible:ring-offset-white/50"
+                                                    )}
+                                                    onClick={(event) => event.stopPropagation()}
+                                                    onPointerDown={(event) => event.stopPropagation()}
+                                                    aria-label="Assignment options"
+                                                  >
+                                                    <MoreHorizontal className="h-3.5 w-3.5 stroke-[2.6]" />
+                                                  </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent className="z-[80]" align="end" onClick={(e) => e.stopPropagation()}>
+                                                  <DropdownMenuItem
+                                                    onSelect={() => {
+                                                      const toCopy = selectedAssignmentIds.has(assignment.id)
+                                                        ? assignments.filter((a) => selectedAssignmentIds.has(a.id))
+                                                        : [assignment];
+                                                      handleCopy(toCopy);
+                                                    }}
+                                                  >
+                                                    <Copy className="w-4 h-4 mr-2" />
+                                                    Copy
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuItem onSelect={() => onAssignmentClick(assignment)}>
+                                                    Edit Details
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuItem
+                                                    onSelect={() => setHighlightedTaskId(highlightedTaskId === task.id ? null : task.id)}
+                                                  >
+                                                    {highlightedTaskId === task.id ? "Clear Highlight" : `Highlight ${task.name}`}
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuItem
+                                                    onSelect={() => setTrainedTaskId(trainedTaskId === task.id ? null : task.id)}
+                                                  >
+                                                    {trainedTaskId === task.id ? "Clear trained filter" : "Highlight trained"}
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuSeparator />
+                                                  <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive"
+                                                    onSelect={() => {
+                                                      const idsToDelete = selectedAssignmentIds.has(assignment.id)
+                                                        ? Array.from(selectedAssignmentIds)
+                                                        : [assignment.id];
+                                                      void deleteAssignments(idsToDelete);
+                                                    }}
+                                                  >
+                                                    Delete
+                                                  </DropdownMenuItem>
+                                                  {assignment.seriesId && (
+                                                    <DropdownMenuItem
+                                                      className="text-destructive focus:text-destructive"
+                                                      onSelect={() => void deleteAssignmentSeries(assignment.seriesId!)}
+                                                    >
+                                                      Delete Series
+                                                    </DropdownMenuItem>
                                                   )}
-                                                  onClick={(event) => event.stopPropagation()}
-                                                  onPointerDown={(event) => event.stopPropagation()}
-                                                  aria-label="View assignment notes"
-                                                >
-                                                  <Info className="h-3.5 w-3.5 stroke-[2.6]" />
-                                                </button>
-                                              </PopoverTrigger>
-                                              <PopoverContent
-                                                className="z-[70] w-72 p-3"
-                                                align="end"
-                                                onClick={(event) => event.stopPropagation()}
-                                              >
-                                                <div className="space-y-1">
-                                                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Notes</p>
-                                                  <p className="text-sm leading-relaxed">{assignment.notes}</p>
-                                                </div>
-                                              </PopoverContent>
-                                            </Popover>
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
+                                            </div>
                                           )}
                                         </div>
                                         {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (

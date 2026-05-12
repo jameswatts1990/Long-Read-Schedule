@@ -556,8 +556,11 @@ export class PostgresStorage implements IStorage {
       .orderBy(rotaTasks.order);
   }
 
-  async getRotaTask(id: string): Promise<RotaTask | undefined> {
-    const [rotaTask] = await this.db.select().from(rotaTasks).where(eq(rotaTasks.id, id));
+  async getRotaTask(id: string, workspaceId?: string): Promise<RotaTask | undefined> {
+    const conditions = workspaceId
+      ? and(eq(rotaTasks.id, id), eq(rotaTasks.workspaceId, workspaceId))
+      : eq(rotaTasks.id, id);
+    const [rotaTask] = await this.db.select().from(rotaTasks).where(conditions);
     return rotaTask;
   }
 
@@ -580,13 +583,15 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteRotaTask(id: string): Promise<{ deletedAssignments: number }> {
-    const deletedAssignmentsRows = await this.db
-      .delete(assignments)
-      .where(eq(assignments.rotaTaskId, id))
-      .returning({ id: assignments.id });
-    await this.db.delete(rotaSkips).where(eq(rotaSkips.rotaTaskId, id));
-    await this.db.delete(rotaTasks).where(eq(rotaTasks.id, id));
-    return { deletedAssignments: deletedAssignmentsRows.length };
+    return await this.db.transaction(async (tx) => {
+      const deletedAssignmentsRows = await tx
+        .delete(assignments)
+        .where(eq(assignments.rotaTaskId, id))
+        .returning({ id: assignments.id });
+      await tx.delete(rotaSkips).where(eq(rotaSkips.rotaTaskId, id));
+      await tx.delete(rotaTasks).where(eq(rotaTasks.id, id));
+      return { deletedAssignments: deletedAssignmentsRows.length };
+    });
   }
 
   // ─── Rota Application ─────────────────────────────────────────────────────
@@ -630,15 +635,6 @@ export class PostgresStorage implements IStorage {
     // Build a Set<"rotaTaskId:day"> for O(1) lookup
     const skipSet = new Set(skipRows.map((r) => `${r.rotaTaskId}:${r.day}`));
 
-    const existingAssignments = await this.db
-      .select({ rotaTaskId: assignments.rotaTaskId })
-      .from(assignments)
-      .where(
-        and(
-          eq(assignments.workspaceId, workspaceId),
-          inArray(assignments.rotaTaskId, activeRotaTasks.map((task) => task.id)),
-        ),
-      );
     const created: Assignment[] = [];
 
     for (const rotaTask of activeRotaTasks) {

@@ -104,14 +104,15 @@ export function HelpGuide() {
             <Section title="Adding tasks">
               <Item label="Click Add" description="Click the + button that appears in any empty cell to open the Add Assignment dialog." />
               <Item label="Right-click cell" description="Right-click any cell and choose 'Add Task' from the context menu." />
-              <Item label="Repeat" description="Enable 'Add on multiple dates' in the dialog to schedule a task every N days, weeks, or months, with an optional end date." />
+              <Item label="Repeat" description="Expand 'Repeat' in the dialog to schedule a task every N days, weeks, or months. A live preview shows exactly how many assignments will be created before you confirm." />
             </Section>
 
             <Section title="Editing & details">
               <Item label="Click a task" description="Opens the Task Details drawer where you can edit batch number, batch size, notes, custom name, and custom colour." />
+              <Item label="⋯ menu button" description="Hover any task card to reveal a ⋯ (more) button in the top-right corner. Click it for a quick menu with Copy, Edit Details, Highlight, and Delete options — the same actions as the right-click menu." />
               <Item label="Custom name" description="Overrides the task name for this assignment only — useful for labelling specific samples." />
               <Item label="Custom colour" description="Overrides the task colour for this assignment only." />
-              <Item label="Batch number & size" description="Optional identifiers used in reporting. Batch size requires a batch number." />
+              <Item label="Batch number & size" description="Optional identifiers used in reporting. Batch size requires a batch number. Click 'Auto' (shows a spinner while loading) to generate the next ID in sequence." />
               <Item label="Notes" description="Free text attached to an assignment. Shown as an info icon (ℹ) in the grid." />
             </Section>
 
@@ -124,15 +125,15 @@ export function HelpGuide() {
 
             <Section title="Deleting">
               <Item label="Delete key" description="Press Delete or Backspace to remove selected assignments." />
-              <Item label="Delete by drag" description="Drag one or more selected tasks onto the person name column (it turns red) to delete them." />
-              <Item label="Delete series" description="Right-click any assignment created as a recurring series and choose 'Delete Series' to remove all occurrences at once." />
+              <Item label="Delete by drag" description="Drag one or more selected tasks onto the person name column — it turns red and shows 'Drop here to delete'. Release to confirm deletion." />
+              <Item label="Delete series" description="Right-click (or use the ⋯ button) on any recurring assignment and choose 'Delete Series' to remove all occurrences at once." />
               <Item label="Undo" description="A toast notification appears for 5 seconds after deletion with an 'Undo' button." />
             </Section>
 
             <Section title="Highlighting">
-              <Item label="Highlight task type" description="Right-click a task and choose 'Highlight [name]' to fade all other tasks to 20% opacity — useful for focusing on one task across the week." />
-              <Item label="Highlight trained" description="Right-click a task and choose 'Highlight trained' to hide all people who have never been assigned that task — shows only those with prior experience. An amber banner appears in the toolbar naming the active filter. Right-click again and choose 'Clear trained filter', or press Escape, to restore all rows." />
-              <Item label="Clear highlight" description="Right-click and choose 'Clear Highlight', or press Escape." />
+              <Item label="Highlight task type" description="Use the ⋯ button or right-click a task and choose 'Highlight [name]' to fade all other tasks to 20% opacity." />
+              <Item label="Highlight trained" description="Use the ⋯ button or right-click a task and choose 'Highlight trained' to show only people with prior experience on that task. An amber banner appears in the toolbar — press Escape to clear." />
+              <Item label="Clear highlight" description="Use the ⋯ button, right-click and choose 'Clear Highlight', or press Escape." />
             </Section>
           </TabsContent>
 
@@ -170,7 +171,7 @@ export function HelpGuide() {
               <Item label="Open" description="Click the filter (funnel) icon in the toolbar." />
               <Item label="Filter by people" description="Check or uncheck team members to show only their rows." />
               <Item label="Filter by tasks" description="Check or uncheck task types to show only those assignments." />
-              <Item label="Active indicator" description="A badge on the filter icon shows how many filters are active. A 'Clear Filters' button appears in the toolbar." />
+              <Item label="Active indicator" description="A badge on the filter icon counts all active filters — including people, tasks, 'Show only mine', and 'Highlight trained'. A 'Clear Filters' button appears in the toolbar when people or task filters are active." />
             </Section>
 
             <Section title="Saved filters">
@@ -240,8 +241,10 @@ export function HelpGuide() {
               <Item label="Purpose" description="Automatically rotate a task assignment across team members each week (e.g., a weekly duty rota)." />
               <Item label="Frequency" description="Daily (Mon–Fri every week) or Weekly (one specific day per week)." />
               <Item label="Interval" description="Set to 2 to assign every other week, 3 for every third week, etc." />
-              <Item label="Auto-apply" description="Rota assignments are created automatically when you open a week. Deleting a rota assignment skips that slot permanently." />
+              <Item label="People search" description="When building the rota order, use the search box in the 'Available people' panel to filter by name — useful for large teams." />
+              <Item label="Auto-apply" description="Rota assignments are created automatically when you open a week. A toast confirms how many were added. Deleting a rota assignment skips that slot permanently." />
               <Item label="Archive" description="Archive a rota task to stop future assignments without deleting history." />
+              <Item label="Error messages" description="If creating or updating a rota task fails, the toast notification shows the specific reason rather than a generic error." />
             </Section>
 
             <Section title="Workspaces">

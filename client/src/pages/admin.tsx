@@ -81,6 +81,12 @@ type PersonFormData = z.infer<typeof personFormSchema>;
 type TaskFormData = z.infer<typeof taskFormSchema>;
 type RotaTaskFormData = z.infer<typeof rotaTaskFormSchema>;
 
+const extractErrorMessage = (error: unknown): string => {
+  const raw = error instanceof Error ? error.message : "Unexpected error";
+  const colonIdx = raw.indexOf(": ");
+  return colonIdx !== -1 ? raw.slice(colonIdx + 2) : raw;
+};
+
 type WorkspaceMember = User & { role: string };
 
 function WorkspaceManagementSection({ currentUser }: { currentUser: User | null }) {
@@ -398,6 +404,7 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
   const [showDialog, setShowDialog] = useState(false);
   const [editingRotaTask, setEditingRotaTask] = useState<RotaTask | null>(null);
   const [draggedRosterPersonId, setDraggedRosterPersonId] = useState<string | null>(null);
+  const [rosterSearch, setRosterSearch] = useState("");
 
   const { data: rotaTasks = [] } = useQuery<RotaTask[]>({ queryKey: ["/api/rota-tasks"] });
 
@@ -429,7 +436,8 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       setShowDialog(false);
       rotaTaskForm.reset();
     },
-    onError: () => toast({ title: "Failed to create rota task", variant: "destructive" }),
+    onError: (error: unknown) =>
+      toast({ title: "Failed to create rota task", description: extractErrorMessage(error), variant: "destructive" }),
   });
 
   const updateRotaTaskMutation = useMutation({
@@ -448,7 +456,8 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       setEditingRotaTask(null);
       rotaTaskForm.reset();
     },
-    onError: () => toast({ title: "Failed to update rota task", variant: "destructive" }),
+    onError: (error: unknown) =>
+      toast({ title: "Failed to update rota task", description: extractErrorMessage(error), variant: "destructive" }),
   });
 
   const deleteRotaTaskMutation = useMutation({
@@ -467,7 +476,8 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
           : "Future repeats will stop immediately.",
       });
     },
-    onError: () => toast({ title: "Failed to delete rota task", variant: "destructive" }),
+    onError: (error: unknown) =>
+      toast({ title: "Failed to delete rota task", description: extractErrorMessage(error), variant: "destructive" }),
   });
 
   const personIds = rotaTaskForm.watch("personIds");
@@ -499,20 +509,20 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
 
     if (!orderedPeople.length) return "No people assigned";
 
-    // Compute Monday of rotaTask.startDate week
+    // Compute Monday of rotaTask.startDate week (UTC, matching server logic)
     const getMondayOf = (d: Date): Date => {
       const copy = new Date(d);
-      copy.setHours(0, 0, 0, 0);
-      const dow = copy.getDay();
+      copy.setUTCHours(0, 0, 0, 0);
+      const dow = copy.getUTCDay();
       const diff = dow === 0 ? -6 : 1 - dow;
-      copy.setDate(copy.getDate() + diff);
+      copy.setUTCDate(copy.getUTCDate() + diff);
       return copy;
     };
 
-    const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00`));
+    const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00Z`));
     const thisMonday = getMondayOf(new Date());
     const diffMs = thisMonday.getTime() - startMonday.getTime();
-    const weeksSinceStart = Math.max(0, Math.round(diffMs / (7 * 24 * 60 * 60 * 1000)));
+    const weeksSinceStart = Math.max(0, Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)));
     const intervalWeeks = rotaTask.intervalWeeks ?? 1;
 
     if (weeksSinceStart % intervalWeeks !== 0) return "Off this week";
@@ -685,8 +695,8 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
         </Tabs>
       )}
 
-      <Dialog open={showDialog} onOpenChange={(open) => { if (!open) { setShowDialog(false); setEditingRotaTask(null); } }}>
-        <DialogContent className="max-w-4xl" data-testid="dialog-rota-task">
+      <Dialog open={showDialog} onOpenChange={(open) => { if (!open) { setShowDialog(false); setEditingRotaTask(null); setRosterSearch(""); } }}>
+        <DialogContent className="w-[95vw] max-w-4xl" data-testid="dialog-rota-task">
           <DialogHeader>
             <DialogTitle>{editingRotaTask ? "Edit Rota Task" : "Create Rota Task"}</DialogTitle>
             <DialogDescription>
@@ -830,18 +840,31 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
               <div className="grid grid-cols-2 gap-4">
                 <Card className="p-3">
                   <p className="font-medium mb-2">Available people</p>
-                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                    {people.filter((person) => !personIds.includes(person.id)).map((person) => (
-                      <button
-                        type="button"
-                        key={person.id}
-                        className="w-full flex items-center justify-between rounded-md border px-3 py-2 text-left hover:bg-muted/50 transition-colors"
-                        onClick={() => addPersonToRoster(person.id)}
-                      >
-                        <span>{person.name}</span>
-                        <Plus className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                    ))}
+                  <Input
+                    placeholder="Search..."
+                    value={rosterSearch}
+                    onChange={(e) => setRosterSearch(e.target.value)}
+                    className="h-7 text-sm mb-2"
+                  />
+                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                    {people
+                      .filter((person) => !personIds.includes(person.id))
+                      .filter((person) => rosterSearch === "" || person.name.toLowerCase().includes(rosterSearch.toLowerCase()))
+                      .map((person) => (
+                        <button
+                          type="button"
+                          key={person.id}
+                          className="w-full flex items-center justify-between rounded-md border px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+                          onClick={() => addPersonToRoster(person.id)}
+                        >
+                          <span>{person.name}</span>
+                          <Plus className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      ))}
+                    {people.filter((p) => !personIds.includes(p.id)).length > 0 &&
+                      people.filter((p) => !personIds.includes(p.id)).filter((p) => p.name.toLowerCase().includes(rosterSearch.toLowerCase())).length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-2">No matches</p>
+                      )}
                   </div>
                 </Card>
                 <Card className="p-3">
@@ -955,8 +978,8 @@ export default function Admin() {
       personForm.reset();
       setShowAddPerson(false);
     },
-    onError: () => {
-      toast({ title: "Failed to add person", description: "Could not create the team member", variant: "destructive" });
+    onError: (error: unknown) => {
+      toast({ title: "Failed to add person", description: extractErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -972,8 +995,8 @@ export default function Admin() {
       personForm.reset();
       setEditingPerson(null);
     },
-    onError: () => {
-      toast({ title: "Failed to update person", description: "Could not save your changes", variant: "destructive" });
+    onError: (error: unknown) => {
+      toast({ title: "Failed to update person", description: extractErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -995,8 +1018,8 @@ export default function Admin() {
       });
       setShowAddTask(false);
     },
-    onError: () => {
-      toast({ title: "Failed to add task", description: "Could not create the task", variant: "destructive" });
+    onError: (error: unknown) => {
+      toast({ title: "Failed to add task", description: extractErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -1019,8 +1042,8 @@ export default function Admin() {
       });
       setEditingTask(null);
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update task", variant: "destructive" });
+    onError: (error: unknown) => {
+      toast({ title: "Failed to update task", description: extractErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -1033,8 +1056,8 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
       toast({ title: "Person deleted", description: "Team member has been removed", variant: "destructive" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to delete person", variant: "destructive" });
+    onError: (error: unknown) => {
+      toast({ title: "Failed to delete person", description: extractErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -1087,8 +1110,8 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       toast({ title: "Task deleted", description: "Task has been removed", variant: "destructive" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to delete task", variant: "destructive" });
+    onError: (error: unknown) => {
+      toast({ title: "Failed to delete task", description: extractErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -1172,7 +1195,7 @@ export default function Admin() {
         </div>
 
         {/* People and Tasks Grid */}
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* People Management */}
           <Card className="p-6">
           <div className="flex items-center justify-between mb-6">

@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CheckCircle, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { CheckCircle, AlertCircle, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { insertAssignmentSchema, type Task, type Assignment, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -651,7 +651,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                             }
                           }}
                         >
-                          {isGeneratingBatchId ? "..." : "Auto"}
+                          {isGeneratingBatchId ? <Loader2 className="h-3 w-3 animate-spin" /> : "Auto"}
                         </Button>
                       </div>
                       <FormControl>
@@ -859,20 +859,22 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                         {repeatEnabled && (
                           <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 space-y-1">
                             <div>
-                              This will create {
-                                endType === "occurrences" ? endOccurrences :
-                                endType === "never" ? "up to 52" : 
-                                endDate ? "multiple" : "(select an end date)"
-                              } assignments
+                              {(() => {
+                                if (endType === "occurrences") return `Will create ${endOccurrences} assignment${endOccurrences !== 1 ? "s" : ""}`;
+                                if (endType === "never") return "Will create up to 52 assignments";
+                                if (endType === "date" && endDate) {
+                                  const dayIndexMap: Record<string, number> = { Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4 };
+                                  const weekStart = parse(weekStartDate, "yyyy-MM-dd", new Date());
+                                  const startDate = addDays(weekStart, dayIndexMap[day] ?? 0);
+                                  const count = generateRepeatDates(startDate).length;
+                                  return `Will create ${count} assignment${count !== 1 ? "s" : ""} (until ${format(endDate, "MMM d, yyyy")})`;
+                                }
+                                return "Select an end date above";
+                              })()}
                             </div>
                             {repeatUnit === "days" && (
                               <div className="text-muted-foreground/70">
                                 Note: Only weekdays (Mon-Fri) will be scheduled
-                              </div>
-                            )}
-                            {endType === "date" && !endDate && (
-                              <div className="text-destructive">
-                                Please select an end date
                               </div>
                             )}
                           </div>
