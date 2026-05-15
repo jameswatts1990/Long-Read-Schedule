@@ -52,6 +52,18 @@ const requireWorkspace = async (req: Request, res: Response, next: NextFunction)
   next();
 };
 
+// Middleware: require admin or super-admin privileges
+const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  const userEmail = (req as any).user?.claims?.email;
+  if (isSuperAdmin(userEmail)) return next();
+  const userId = (req as any).user?.claims?.sub;
+  if (userId) {
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role === "admin" || dbUser?.role === "super_admin") return next();
+  }
+  return res.status(403).json({ message: "Forbidden: Admin access required" });
+};
+
 // Middleware: require super-admin privileges (env var list OR db role)
 const requireSuperAdmin = async (req: Request, res: Response, next: NextFunction) => {
   const userEmail = (req as any).user?.claims?.email;
@@ -961,7 +973,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/site-announcements", isAuthenticated, async (req: any, res) => {
+  app.post("/api/site-announcements", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const { message, type } = req.body;
       if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -977,7 +989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/site-announcements/:id/activate", isAuthenticated, async (req, res) => {
+  app.patch("/api/site-announcements/:id/activate", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const announcement = await storage.activateSiteAnnouncement(req.params.id);
       res.json(announcement);
@@ -986,7 +998,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/site-announcements/:id/deactivate", isAuthenticated, async (req, res) => {
+  app.patch("/api/site-announcements/:id/deactivate", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const announcement = await storage.deactivateSiteAnnouncement(req.params.id);
       res.json(announcement);
@@ -995,7 +1007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/site-announcements/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/site-announcements/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteSiteAnnouncement(req.params.id);
       res.json({ ok: true });

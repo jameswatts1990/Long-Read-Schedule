@@ -1136,6 +1136,7 @@ export default function Admin() {
   const { data: allUsers = [] } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
   const { data: currentUser } = useQuery<User & { isSuperAdmin?: boolean }>({ queryKey: ["/api/auth/user"] });
   const isSuperAdmin = currentUser?.isSuperAdmin === true;
+  const isAdminUser = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.isSuperAdmin === true;
 
   const personForm = useForm<PersonFormData>({
     resolver: zodResolver(personFormSchema),
@@ -1390,7 +1391,7 @@ export default function Admin() {
                 <SelectItem value="tasks">Tasks</SelectItem>
                 <SelectItem value="rota">Rota</SelectItem>
                 {isSuperAdmin && <SelectItem value="workspaces">Workspaces</SelectItem>}
-                <SelectItem value="announcements">Announcements</SelectItem>
+                {isAdminUser && <SelectItem value="announcements">Announcements</SelectItem>}
               </SelectContent>
             </Select>
           </div>
@@ -1734,8 +1735,8 @@ export default function Admin() {
           </Card>
         )}
 
-        {/* Announcements section */}
-        {activeSection === "announcements" && (
+        {/* Announcements section — admin and super-admin only */}
+        {activeSection === "announcements" && isAdminUser && (
           <AnnouncementsSection />
         )}
       </div>

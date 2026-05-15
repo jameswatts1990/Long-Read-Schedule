@@ -103,6 +103,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: Whenever a new reporting page (or any admin-only page) is added, immediately add a corresponding `DropdownMenuItem` to the cog menu in `scheduler.tsx`. Also update `help-guide.tsx` admin tab to document the new entry.
 - Evidence: `client/src/pages/scheduler.tsx` cog dropdown; `client/src/components/help-guide.tsx` admin tab.
 
+## Admin cog menu must be kept in sync with all admin sections
+
+- Date: 2026-05-15
+- Trigger: Announcements section existed in admin.tsx but was not linked from the cog dropdown.
+- Learning: The cog dropdown in `scheduler.tsx` is the primary navigation entry point. Every section in the Admin `<Select>` (`people`, `tasks`, `rota`, `announcements`, and `workspaces` for super admins) must have a matching `DropdownMenuItem` under the Admin label in the cog menu. Workspaces is gated with `user.role === 'super_admin' || user.isSuperAdmin`.
+- Action: Whenever a new section is added to admin.tsx, immediately add a corresponding link to the Admin section of the cog dropdown in `scheduler.tsx`.
+- Evidence: `client/src/pages/scheduler.tsx` cog dropdown; `client/src/pages/admin.tsx` `<Select>` options.
+
 ## Replit deployment — npm commands cannot be run directly on the hosted app
 
 - Date: 2026-05-15

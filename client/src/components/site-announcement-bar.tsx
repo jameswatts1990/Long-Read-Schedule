@@ -29,7 +29,7 @@ export function SiteAnnouncementBar() {
   const styles = TYPE_STYLES[announcement.type] ?? TYPE_STYLES.info;
 
   return (
-    <div className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm font-medium ${styles.bar}`}>
+    <div className={`sticky top-0 z-50 w-full px-4 py-2.5 flex items-center justify-center gap-3 text-sm font-medium ${styles.bar}`}>
       {styles.icon}
       <span>{announcement.message}</span>
     </div>

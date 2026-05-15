@@ -405,7 +405,7 @@ export default function Reporting() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href="/admin">
+            <Link href="/">
               <Button variant="outline" size="icon" data-testid="button-back-to-admin">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
