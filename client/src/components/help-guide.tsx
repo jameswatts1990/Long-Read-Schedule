@@ -253,6 +253,17 @@ export function HelpGuide() {
               <Item label="Members" description="Add users to a workspace, assign them Member or Admin roles, or remove them." />
               <Item label="Multiple workspaces" description="Super-admins can create and manage multiple workspaces. Each workspace has its own people, tasks, and assignments." />
             </Section>
+
+            <Section title="Capacity Report">
+              <Item label="View granularity" description="Switch between Weekly, Monthly, and Yearly views using the tabs at the top. Monthly and Yearly views aggregate weekly totals." />
+              <Item label="Chart type" description="Toggle between Bar and Line chart using the Bar / Line tabs." />
+              <Item label="Show empty periods" description="Tick 'Show empty periods' to include weeks, months, or years with no data in the chart and table. Unticked by default." />
+              <Item label="Fullscreen chart" description="Click the expand icon (⤢) in the top-right corner of the chart card to open it in a fullscreen dialog." />
+              <Item label="Date filter" description="Use the Filter Dates button to restrict the report to a specific date range." />
+              <Item label="Task filter" description="Use the Tasks button to show or hide individual production tasks from the chart and table." />
+              <Item label="Export CSV" description="Downloads the currently visible data (respecting view mode, date range, and task filter) as a CSV file." />
+              <Item label="Data table" description="Shown below the chart; expands vertically to fit all rows — no internal scroll." />
+            </Section>
           </TabsContent>
         </Tabs>
       </DialogContent>
