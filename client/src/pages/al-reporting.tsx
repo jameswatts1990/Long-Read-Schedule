@@ -68,14 +68,12 @@ export default function ALReporting() {
     return selectedPersonId === "all" ? byTask : byTask.filter(a => a.personId === selectedPersonId);
   }, [assignments, alTask, selectedPersonId]);
 
-  // Count occurrences per day
-  const dailyCounts = useMemo(() => {
+  // Count occurrences per day and collect names
+  const { dailyCounts, dailyNames } = useMemo(() => {
     const counts: Record<string, number> = {};
+    const names: Record<string, string[]> = {};
     alAssignments.forEach(a => {
-      // If a.date is set, it's a specific day assignment (from repeat or month mode)
-      // Otherwise it's a week-view assignment where 'day' determines the date
       let dateKey = a.date;
-      
       if (!dateKey && a.weekStartDate && a.day) {
         const weekStart = parse(a.weekStartDate, "yyyy-MM-dd", new Date());
         const daysInWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
@@ -84,13 +82,17 @@ export default function ALReporting() {
           dateKey = format(addDays(weekStart, dayOffset), "yyyy-MM-dd");
         }
       }
-      
       if (dateKey) {
         counts[dateKey] = (counts[dateKey] || 0) + 1;
+        const person = people.find(p => p.id === a.personId);
+        if (person) {
+          if (!names[dateKey]) names[dateKey] = [];
+          if (!names[dateKey].includes(person.name)) names[dateKey].push(person.name);
+        }
       }
     });
-    return counts;
-  }, [alAssignments]);
+    return { dailyCounts: counts, dailyNames: names };
+  }, [alAssignments, people]);
 
   // Calculate AL per person (AL (AM/PM) as 0.5, Annual Leave as 1.0)
   const alPerPerson = useMemo(() => {
@@ -290,6 +292,9 @@ export default function ALReporting() {
                               <p className="text-xs font-medium">{format(day, "MMM d, yyyy")}</p>
                               {isBankHoliday && <p className="text-xs font-bold text-zinc-400">Bank Holiday</p>}
                               <p className="text-xs">{count} AL event{count !== 1 ? "s" : ""}</p>
+                              {(dailyNames[dateKey] ?? []).map(name => (
+                                <p key={name} className="text-xs text-muted-foreground">{name}</p>
+                              ))}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>

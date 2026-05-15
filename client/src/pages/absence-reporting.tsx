@@ -77,15 +77,23 @@ export default function AbsenceReporting() {
     return null;
   };
 
-  // Count absences per day (number of people absent)
-  const dailyCounts = useMemo(() => {
+  // Count absences per day and collect names
+  const { dailyCounts, dailyNames } = useMemo(() => {
     const counts: Record<string, number> = {};
+    const names: Record<string, string[]> = {};
     absenceAssignments.forEach(a => {
       const dateKey = resolveDate(a);
-      if (dateKey) counts[dateKey] = (counts[dateKey] || 0) + 1;
+      if (dateKey) {
+        counts[dateKey] = (counts[dateKey] || 0) + 1;
+        const person = people.find(p => p.id === a.personId);
+        if (person) {
+          if (!names[dateKey]) names[dateKey] = [];
+          if (!names[dateKey].includes(person.name)) names[dateKey].push(person.name);
+        }
+      }
     });
-    return counts;
-  }, [absenceAssignments]);
+    return { dailyCounts: counts, dailyNames: names };
+  }, [absenceAssignments, people]);
 
   // Total absence days per person
   const absencePerPerson = useMemo(() => {
@@ -210,7 +218,10 @@ export default function AbsenceReporting() {
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs font-medium">{format(day, "MMM d, yyyy")}</p>
-                              <p className="text-xs">{count} absent{count !== 1 ? "" : ""}</p>
+                              <p className="text-xs">{count} absent</p>
+                              {(dailyNames[dateKey] ?? []).map(name => (
+                                <p key={name} className="text-xs text-muted-foreground">{name}</p>
+                              ))}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
