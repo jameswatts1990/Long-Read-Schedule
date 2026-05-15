@@ -55,6 +55,22 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: Grep for `Math.round` near week/day calculations before any rota-related change. Also ensure `getMondayOf` uses UTC methods (`setUTCHours`, `getUTCDay`, `setUTCDate`) — using local-time equivalents gives wrong results for non-UTC timezones.
 - Evidence: Fixed in `client/src/pages/admin.tsx` `getRotationPreview` (was using local time + Math.round; now uses UTC + Math.floor to match server logic)
 
+## Rota applyRotaMutation missing onError — silent failures hide scheduling problems
+
+- Date: 2026-05-15
+- Trigger: User reported still unable to see rota assignments after the ZodError fix. Code review found `applyRotaMutation` in `scheduler.tsx` had no `onError` handler.
+- Learning: When `POST /api/rota-tasks/apply` fails (any reason), TanStack Query silently discards the error if no `onError` is defined. The user sees no toast and no assignments, with zero feedback.
+- Action: All useMutation calls that modify data the user expects to see must have an `onError` handler. Auto-triggered mutations (fired from useEffect) are especially easy to miss because there's no explicit user action to associate the failure with.
+- Evidence: `client/src/pages/scheduler.tsx` `applyRotaMutation`; fixed by adding `onError` toast.
+
+## Rota startDate default uses UTC — wrong person assigned for BST users near midnight
+
+- Date: 2026-05-15
+- Trigger: `startDate` form default used `new Date().toISOString().slice(0, 10)` (UTC date). For UK users in BST (+1), this yields yesterday's date during the 00:00–01:00 UTC window, making the server calculate `weeksSinceStart = 1` on the first active week, skipping person #1 and assigning person #2 instead.
+- Learning: Any date input defaulting to "today" must use local calendar date methods (`getFullYear`, `getMonth`, `getDate`), not `toISOString()` which is UTC.
+- Action: Use `\`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}\`` pattern instead of `toISOString().slice(0,10)`.
+- Evidence: `client/src/pages/admin.tsx` form `defaultValues.startDate` and reset on "Add" button click.
+
 ## Rota error messages — server catch blocks must distinguish ZodError from other errors
 
 - Date: 2026-05-11

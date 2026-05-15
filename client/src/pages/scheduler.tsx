@@ -187,6 +187,15 @@ export default function Scheduler() {
         variant: "success",
       });
     },
+    onError: (error: unknown) => {
+      const raw = error instanceof Error ? error.message : "Unknown error";
+      const colonIdx = raw.indexOf(": ");
+      toast({
+        title: "Failed to apply rota tasks",
+        description: colonIdx !== -1 ? raw.slice(colonIdx + 2) : raw,
+        variant: "destructive",
+      });
+    },
   });
 
   // Only auto-apply in week/pipeline views; month view fetches a date range and

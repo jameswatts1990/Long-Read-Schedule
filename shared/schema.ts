@@ -171,7 +171,7 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id:
   weekStartDate: isoDateString,
 });
 export const insertPremadeFilterSchema = createInsertSchema(premadeFilters).omit({ id: true });
-export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: true, createdAt: true }).extend({
+export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: true, createdAt: true, archivedAt: true }).extend({
   day: z.enum(DAYS),
   frequency: z.enum(["daily", "weekly"]),
   startDate: isoDateString,

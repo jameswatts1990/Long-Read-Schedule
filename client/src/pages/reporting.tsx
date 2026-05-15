@@ -25,6 +25,57 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+function hexToLinear(c: number) {
+  return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+function hslToRgb(h: number, s: number, l: number) {
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const r = s === 0 ? l : hue2rgb(p, q, h + 1 / 3);
+  const g = s === 0 ? l : hue2rgb(p, q, h);
+  const b = s === 0 ? l : hue2rgb(p, q, h - 1 / 3);
+  return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+}
+
+// Returns a darkened hex color if the original has insufficient contrast against white (< 3:1).
+function ensureChartContrast(hex: string): string {
+  if (!hex || hex.length < 7) return hex;
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const L = 0.2126 * hexToLinear(r) + 0.7152 * hexToLinear(g) + 0.0722 * hexToLinear(b);
+  if (1.05 / (L + 0.05) >= 3.0) return hex;
+
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+
+  for (let newL = l - 0.05; newL >= 0; newL -= 0.05) {
+    const rgb = hslToRgb(h, s, newL);
+    const nL = 0.2126 * hexToLinear(rgb.r / 255) + 0.7152 * hexToLinear(rgb.g / 255) + 0.0722 * hexToLinear(rgb.b / 255);
+    if (1.05 / (nL + 0.05) >= 3.0) {
+      return `#${rgb.r.toString(16).padStart(2, "0")}${rgb.g.toString(16).padStart(2, "0")}${rgb.b.toString(16).padStart(2, "0")}`;
+    }
+  }
+  return "#000000";
+}
+
 export default function Reporting() {
   const { activeWorkspace } = useWorkspace();
 
@@ -128,7 +179,7 @@ export default function Reporting() {
     return productionTasks.reduce((acc, task) => {
       acc[task.id] = {
         label: task.name,
-        color: task.color,
+        color: ensureChartContrast(task.color),
       };
       return acc;
     }, {} as any);
@@ -258,7 +309,7 @@ export default function Reporting() {
                           htmlFor={`task-${task.id}`}
                           className="text-sm font-normal cursor-pointer flex items-center gap-2"
                         >
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: task.color }} />
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ensureChartContrast(task.color) }} />
                           {task.name}
                         </Label>
                       </div>
@@ -375,7 +426,7 @@ export default function Reporting() {
                         <div className="flex items-center gap-2">
                           <div
                             className="w-3 h-3 rounded flex-shrink-0"
-                            style={{ backgroundColor: task.color }}
+                            style={{ backgroundColor: ensureChartContrast(task.color) }}
                           />
                           {task.name}
                         </div>
