@@ -224,7 +224,8 @@ export function HelpGuide() {
             <Section title="Accessing admin">
               <Item label="Admin cog" description="Click the ⚙ cog icon in the toolbar. The dropdown shows admin sections (People, Tasks, Rota), a Reporting link, Export, Import, and Logout." />
               <Item label="Reporting" description="The Reporting page has a section dropdown to switch between Capacity, Annual Leave, and Absence reports." />
-              <Item label="Absence report" description="Shows a monthly heatmap of days where team members were recorded as absent, plus a per-person bar chart of total absence days for the selected year. Requires a task named 'Absent' or 'Absence' to exist in the system." />
+              <Item label="Absence report" description="Shows a monthly heatmap of days where team members were recorded as absent, plus a per-person bar chart of total absence days for the selected year. Requires a task named 'Absent' or 'Absence' to exist in the system. Use the person filter dropdown (top-right) to show only one person's absences on the heatmap." />
+              <Item label="Annual Leave report" description="Shows a monthly heatmap of AL events and a per-person AL summary bar chart. Use the person filter dropdown (top-right) to isolate one person's leave on the heatmap." />
               <Item label="Section navigation" description="Use the dropdown next to 'Admin' at the top of the Admin page to switch between sections. Each section (People, Tasks, Rota, Workspaces) is shown as the main focus." />
               <Item label="Direct links" description="Selecting People, Tasks, or Rota from the cog dropdown takes you straight to that section of the Admin page." />
             </Section>
@@ -254,6 +255,13 @@ export function HelpGuide() {
             <Section title="Workspaces">
               <Item label="Members" description="Add users to a workspace, assign them Member or Admin roles, or remove them." />
               <Item label="Multiple workspaces" description="Super-admins can create and manage multiple workspaces. Each workspace has its own people, tasks, and assignments." />
+            </Section>
+
+            <Section title="Announcements (super-admin)">
+              <Item label="Sitewide bar" description="Set a notification bar that appears at the top of the app for all users. Navigate to Admin → Announcements to manage them." />
+              <Item label="Types" description="Choose Info (blue), Warning (amber), or Success (green) to match the urgency of the message." />
+              <Item label="Activate / Deactivate" description="Only one announcement is shown at a time. Use Activate to make one live and Deactivate to hide it without deleting it." />
+              <Item label="Dismiss" description="Users can dismiss the bar with the × button. Dismissed announcements stay hidden in that browser until a new announcement is activated." />
             </Section>
 
             <Section title="Capacity Report">

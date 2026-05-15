@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BarChart3, Filter, Layers, Download, Maximize2 } from "lucide-react";
+import { ArrowLeft, BarChart3, Filter, Download, Maximize2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Select,
@@ -399,8 +399,8 @@ export default function Reporting() {
     viewMode === "weekly" ? "Week Commencing" : viewMode === "monthly" ? "Month" : "Year";
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-4 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-4">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -424,12 +424,6 @@ export default function Reporting() {
                 <SelectItem value="absence">Absence</SelectItem>
               </SelectContent>
             </Select>
-            {activeWorkspace && (
-              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5" />
-                {activeWorkspace.name}
-              </p>
-            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

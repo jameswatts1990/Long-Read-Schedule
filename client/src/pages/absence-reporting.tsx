@@ -43,6 +43,7 @@ export default function AbsenceReporting() {
   const { activeWorkspace } = useWorkspace();
   const [, navigate] = useLocation();
   const [year, setYear] = useState(new Date().getFullYear());
+  const [selectedPersonId, setSelectedPersonId] = useState<string>("all");
 
   const { data: assignments = [] } = useQuery<Assignment[]>({
     queryKey: [`/api/assignments?startDate=${year}-01-01&endDate=${year}-12-31`],
@@ -60,8 +61,9 @@ export default function AbsenceReporting() {
 
   const absenceAssignments = useMemo(() => {
     if (!absenceTask) return [];
-    return assignments.filter(a => a.taskId === absenceTask.id);
-  }, [assignments, absenceTask]);
+    const byTask = assignments.filter(a => a.taskId === absenceTask.id);
+    return selectedPersonId === "all" ? byTask : byTask.filter(a => a.personId === selectedPersonId);
+  }, [assignments, absenceTask, selectedPersonId]);
 
   // Resolve each assignment to a calendar date
   const resolveDate = (a: Assignment): string | null => {
@@ -153,7 +155,18 @@ export default function AbsenceReporting() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
+              <SelectTrigger className="w-44" data-testid="select-person-filter">
+                <SelectValue placeholder="All People" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All People</SelectItem>
+                {people.map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setYear(year - 1)}>{year - 1}</Button>
             <span className="text-lg font-bold px-2">{year}</span>
             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setYear(year + 1)}>{year + 1}</Button>

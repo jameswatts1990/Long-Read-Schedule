@@ -47,6 +47,7 @@ export default function ALReporting() {
   const { activeWorkspace } = useWorkspace();
   const [, navigate] = useLocation();
   const [year, setYear] = useState(new Date().getFullYear());
+  const [selectedPersonId, setSelectedPersonId] = useState<string>("all");
 
   // Fix Issue 7: scope to selected year only — server returns only that year's data
   const { data: assignments = [] } = useQuery<Assignment[]>({
@@ -60,11 +61,12 @@ export default function ALReporting() {
     tasks.find(t => t.name.toLowerCase().includes("al") || t.name.toLowerCase().includes("annual leave")), 
   [tasks]);
 
-  // Server already scoped to the selected year — just filter by AL task client-side
+  // Server already scoped to the selected year — filter by AL task, then optionally by person
   const alAssignments = useMemo(() => {
     if (!alTask) return [];
-    return assignments.filter(a => a.taskId === alTask.id);
-  }, [assignments, alTask]);
+    const byTask = assignments.filter(a => a.taskId === alTask.id);
+    return selectedPersonId === "all" ? byTask : byTask.filter(a => a.personId === selectedPersonId);
+  }, [assignments, alTask, selectedPersonId]);
 
   // Count occurrences per day
   const dailyCounts = useMemo(() => {
@@ -226,7 +228,18 @@ export default function ALReporting() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
+              <SelectTrigger className="w-44" data-testid="select-person-filter">
+                <SelectValue placeholder="All People" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All People</SelectItem>
+                {people.map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setYear(year - 1)}>{year - 1}</Button>
             <span className="text-lg font-bold px-2">{year}</span>
             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setYear(year + 1)}>{year + 1}</Button>

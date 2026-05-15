@@ -16,6 +16,7 @@ import {
   type WorkspaceUser,
   type Notification,
   type InsertNotification,
+  type SiteAnnouncement,
   DAYS,
   people,
   tasks,
@@ -27,6 +28,7 @@ import {
   workspaces,
   workspaceUsers,
   notifications,
+  siteAnnouncements,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
@@ -126,6 +128,14 @@ export interface IStorage {
   getNotificationsForUser(userId: string, workspaceId: string): Promise<Notification[]>;
   markAllNotificationsRead(userId: string, workspaceId: string): Promise<void>;
   deleteNotification(id: string, userId: string): Promise<void>;
+
+  // Site announcement operations
+  getActiveSiteAnnouncement(): Promise<SiteAnnouncement | undefined>;
+  getAllSiteAnnouncements(): Promise<SiteAnnouncement[]>;
+  createSiteAnnouncement(data: { message: string; type: string; createdById: string }): Promise<SiteAnnouncement>;
+  activateSiteAnnouncement(id: string): Promise<SiteAnnouncement>;
+  deactivateSiteAnnouncement(id: string): Promise<SiteAnnouncement>;
+  deleteSiteAnnouncement(id: string): Promise<void>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -740,6 +750,54 @@ export class PostgresStorage implements IStorage {
     await this.db
       .delete(notifications)
       .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
+  }
+
+  async getActiveSiteAnnouncement(): Promise<SiteAnnouncement | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(siteAnnouncements)
+      .where(eq(siteAnnouncements.isActive, 1))
+      .limit(1);
+    return row;
+  }
+
+  async getAllSiteAnnouncements(): Promise<SiteAnnouncement[]> {
+    return this.db
+      .select()
+      .from(siteAnnouncements)
+      .orderBy(siteAnnouncements.createdAt);
+  }
+
+  async createSiteAnnouncement(data: { message: string; type: string; createdById: string }): Promise<SiteAnnouncement> {
+    const [row] = await this.db
+      .insert(siteAnnouncements)
+      .values({ id: randomUUID(), ...data, isActive: 0 })
+      .returning();
+    return row;
+  }
+
+  async activateSiteAnnouncement(id: string): Promise<SiteAnnouncement> {
+    // Deactivate all, then activate the target — kept in one round trip via two statements
+    await this.db.update(siteAnnouncements).set({ isActive: 0 });
+    const [row] = await this.db
+      .update(siteAnnouncements)
+      .set({ isActive: 1 })
+      .where(eq(siteAnnouncements.id, id))
+      .returning();
+    return row;
+  }
+
+  async deactivateSiteAnnouncement(id: string): Promise<SiteAnnouncement> {
+    const [row] = await this.db
+      .update(siteAnnouncements)
+      .set({ isActive: 0 })
+      .where(eq(siteAnnouncements.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteSiteAnnouncement(id: string): Promise<void> {
+    await this.db.delete(siteAnnouncements).where(eq(siteAnnouncements.id, id));
   }
 }
 

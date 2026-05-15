@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun, UserCheck, UserX, Layers, Users, X, Loader2, CalendarClock } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun, UserCheck, UserX, Layers, Users, X, Loader2, CalendarClock, Megaphone, CheckCircle, Info, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -38,7 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DAYS, type Person, type Task, type User, type Workspace, type RotaTask } from "@shared/schema";
+import { DAYS, type Person, type Task, type User, type Workspace, type RotaTask, type SiteAnnouncement } from "@shared/schema";
 
 
 // Full-spectrum palette: 12 hues (Red→Pink) × 3 shades (light / mid / dark)
@@ -930,6 +930,186 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
   );
 }
 
+const ANNOUNCEMENT_TYPE_OPTIONS = [
+  { value: "info", label: "Info", icon: <Info className="h-4 w-4 text-blue-500" /> },
+  { value: "warning", label: "Warning", icon: <AlertTriangle className="h-4 w-4 text-amber-500" /> },
+  { value: "success", label: "Success", icon: <CheckCircle className="h-4 w-4 text-green-500" /> },
+];
+
+function AnnouncementsSection() {
+  const { toast } = useToast();
+  const [newMessage, setNewMessage] = useState("");
+  const [newType, setNewType] = useState<"info" | "warning" | "success">("info");
+
+  const { data: announcements = [], isLoading } = useQuery<SiteAnnouncement[]>({
+    queryKey: ["/api/site-announcements"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/site-announcements", { message: newMessage, type: newType });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcements"] });
+      toast({ title: "Announcement created", variant: "success" });
+      setNewMessage("");
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to create announcement", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("PATCH", `/api/site-announcements/${id}/activate`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcement/active"] });
+      toast({ title: "Announcement activated", variant: "success" });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to activate", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("PATCH", `/api/site-announcements/${id}/deactivate`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcement/active"] });
+      toast({ title: "Announcement deactivated" });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to deactivate", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/site-announcements/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcement/active"] });
+      toast({ title: "Announcement deleted" });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to delete", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-center gap-2 mb-6">
+        <Megaphone className="h-5 w-5" />
+        <h2 className="text-2xl font-bold">Announcements</h2>
+      </div>
+      <p className="text-sm text-muted-foreground mb-6">
+        Display a sitewide notification bar for all users. Only one announcement can be active at a time.
+      </p>
+
+      {/* Create form */}
+      <div className="space-y-3 mb-8 p-4 border rounded-lg bg-muted/30">
+        <h3 className="text-sm font-semibold">New announcement</h3>
+        <div className="flex gap-2">
+          <Select value={newType} onValueChange={(v) => setNewType(v as "info" | "warning" | "success")}>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ANNOUNCEMENT_TYPE_OPTIONS.map(opt => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className="flex items-center gap-2">{opt.icon}{opt.label}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="Enter announcement message..."
+            className="flex-1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newMessage.trim()) createMutation.mutate();
+            }}
+          />
+          <Button
+            onClick={() => createMutation.mutate()}
+            disabled={!newMessage.trim() || createMutation.isPending}
+          >
+            {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Add
+          </Button>
+        </div>
+      </div>
+
+      {/* List */}
+      {isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+      ) : announcements.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-8">No announcements yet</p>
+      ) : (
+        <div className="space-y-2">
+          {announcements.map((ann) => {
+            const typeOpt = ANNOUNCEMENT_TYPE_OPTIONS.find(o => o.value === ann.type) ?? ANNOUNCEMENT_TYPE_OPTIONS[0];
+            return (
+              <div
+                key={ann.id}
+                className={`flex items-center gap-3 p-3 rounded-lg border ${ann.isActive ? "border-primary bg-primary/5" : ""}`}
+              >
+                {typeOpt.icon}
+                <span className="flex-1 text-sm">{ann.message}</span>
+                {ann.isActive && (
+                  <Badge variant="default" className="text-xs">Active</Badge>
+                )}
+                <div className="flex gap-1">
+                  {ann.isActive ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => deactivateMutation.mutate(ann.id)}
+                      disabled={deactivateMutation.isPending}
+                    >
+                      <EyeOff className="h-3.5 w-3.5 mr-1" />
+                      Deactivate
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => activateMutation.mutate(ann.id)}
+                      disabled={activateMutation.isPending}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" />
+                      Activate
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteMutation.mutate(ann.id)}
+                    disabled={deleteMutation.isPending}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const [showAddPerson, setShowAddPerson] = useState(false);
@@ -943,7 +1123,7 @@ export default function Admin() {
   const [activeSection, setActiveSection] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const s = params.get("section");
-    return (s === "people" || s === "tasks" || s === "rota" || s === "workspaces") ? s : "people";
+    return (s === "people" || s === "tasks" || s === "rota" || s === "workspaces" || s === "announcements") ? s : "people";
   });
 
   const handleSectionChange = (section: string) => {
@@ -1196,6 +1376,7 @@ export default function Admin() {
                 <SelectItem value="tasks">Tasks</SelectItem>
                 <SelectItem value="rota">Rota</SelectItem>
                 {isSuperAdmin && <SelectItem value="workspaces">Workspaces</SelectItem>}
+                {isSuperAdmin && <SelectItem value="announcements">Announcements</SelectItem>}
               </SelectContent>
             </Select>
           </div>
@@ -1532,6 +1713,11 @@ export default function Admin() {
           <Card className="p-6">
             <WorkspaceManagementSection currentUser={currentUser ?? null} />
           </Card>
+        )}
+
+        {/* Announcements section — super-admin only */}
+        {activeSection === "announcements" && isSuperAdmin && (
+          <AnnouncementsSection />
         )}
       </div>
 

@@ -78,3 +78,11 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Learning: Always differentiate `ZodError` (return 400 + `error.errors[0]?.message`) from unexpected errors (return 500) in route catch blocks. Also ensure client `onError` callbacks read the `error` argument rather than ignoring it.
 - Action: When adding a new API route, use the pattern: `if (error instanceof ZodError) { res.status(400).json({ message: error.errors[0]?.message ?? "..." }); } else { res.status(500).json({ message: "..." }); }`. On the client, use `extractErrorMessage(error)` as the toast `description`.
 - Evidence: `server/routes.ts` POST/PUT /api/rota-tasks; `client/src/pages/admin.tsx` mutation onError callbacks
+
+## Sitewide announcement bar — new DB table requires migration
+
+- Date: 2026-05-15
+- Trigger: Added sitewide notification bar feature (Admin → Announcements section).
+- Learning: The `site_announcements` table is new and requires a DB migration before the app can use the feature. Only one announcement can be active (`is_active=1`) at a time; `activateSiteAnnouncement` deactivates all rows before setting the target. Dismissal is per-user per-browser via localStorage key `dismissed_announcements` (array of IDs) — no DB needed for dismiss state.
+- Action: Alert the user to run `npm run db:push` via Replit before testing. The feature is gated to super-admins on the Admin page (same as Workspaces section).
+- Evidence: `shared/schema.ts` siteAnnouncements table; `client/src/components/site-announcement-bar.tsx`; `server/routes.ts` /api/site-announcements routes

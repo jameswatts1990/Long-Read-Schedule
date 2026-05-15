@@ -922,5 +922,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Site announcement routes
+  app.get("/api/site-announcement/active", isAuthenticated, async (_req, res) => {
+    try {
+      const announcement = await storage.getActiveSiteAnnouncement();
+      res.json(announcement ?? null);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch site announcement" });
+    }
+  });
+
+  app.get("/api/site-announcements", isAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const announcements = await storage.getAllSiteAnnouncements();
+      res.json(announcements);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch site announcements" });
+    }
+  });
+
+  app.post("/api/site-announcements", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { message, type } = req.body;
+      if (!message || typeof message !== "string" || message.trim().length === 0) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+      const validTypes = ["info", "warning", "success"];
+      const announcementType = validTypes.includes(type) ? type : "info";
+      const createdById = req.user.claims.sub;
+      const announcement = await storage.createSiteAnnouncement({ message: message.trim(), type: announcementType, createdById });
+      res.json(announcement);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create site announcement" });
+    }
+  });
+
+  app.patch("/api/site-announcements/:id/activate", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const announcement = await storage.activateSiteAnnouncement(req.params.id);
+      res.json(announcement);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to activate site announcement" });
+    }
+  });
+
+  app.patch("/api/site-announcements/:id/deactivate", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const announcement = await storage.deactivateSiteAnnouncement(req.params.id);
+      res.json(announcement);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to deactivate site announcement" });
+    }
+  });
+
+  app.delete("/api/site-announcements/:id", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      await storage.deleteSiteAnnouncement(req.params.id);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete site announcement" });
+    }
+  });
+
   return httpServer;
 }

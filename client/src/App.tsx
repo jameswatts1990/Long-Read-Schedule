@@ -18,6 +18,7 @@ import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import FirstLoginOnboarding from "@/pages/first-login-onboarding";
 import NotFound from "@/pages/not-found";
+import { SiteAnnouncementBar } from "@/components/site-announcement-bar";
 
 // Predicate that matches any cached query whose key starts with "/api/assignments"
 const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
@@ -187,15 +188,18 @@ function Router() {
   }
 
   return (
-    <Switch>
-      <Route path="/" component={Scheduler} />
-      <Route path="/my-day" component={MyDay} />
-      <Route path="/admin" component={Admin} />
-      <Route path="/reporting" component={Reporting} />
-      <Route path="/al-reporting" component={ALReporting} />
-      <Route path="/absence-reporting" component={AbsenceReporting} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <SiteAnnouncementBar />
+      <Switch>
+        <Route path="/" component={Scheduler} />
+        <Route path="/my-day" component={MyDay} />
+        <Route path="/admin" component={Admin} />
+        <Route path="/reporting" component={Reporting} />
+        <Route path="/al-reporting" component={ALReporting} />
+        <Route path="/absence-reporting" component={AbsenceReporting} />
+        <Route component={NotFound} />
+      </Switch>
+    </>
   );
 }
 
