@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, BarChart3, Sun, UserCheck, UserX, Layers, Users, X, Loader2, CalendarClock, Megaphone, CheckCircle, Info, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, UserCheck, UserX, Layers, Users, X, Loader2, CalendarClock, Megaphone, CheckCircle, Info, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1326,6 +1326,20 @@ export default function Admin() {
     },
   });
 
+  const updateUserRoleMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const res = await apiRequest("PATCH", `/api/admin/users/${userId}/role`, { role });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "User level updated" });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to update user level", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
   const handleEditPerson = (person: Person) => {
     setEditingPerson(person);
     personForm.reset({ name: person.name, color: person.color });
@@ -1376,23 +1390,9 @@ export default function Admin() {
                 <SelectItem value="tasks">Tasks</SelectItem>
                 <SelectItem value="rota">Rota</SelectItem>
                 {isSuperAdmin && <SelectItem value="workspaces">Workspaces</SelectItem>}
-                {isSuperAdmin && <SelectItem value="announcements">Announcements</SelectItem>}
+                <SelectItem value="announcements">Announcements</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/reporting">
-              <Button variant="outline" data-testid="button-reporting">
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Capacity Reporting
-              </Button>
-            </Link>
-            <Link href="/al-reporting">
-              <Button variant="outline" data-testid="button-al-reporting">
-                <Sun className="h-4 w-4 mr-2" />
-                AL Reporting
-              </Button>
-            </Link>
           </div>
         </div>
 
@@ -1483,7 +1483,7 @@ export default function Admin() {
                             </span>
                           )}
                         </div>
-                        <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="mt-1 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                           <Select
                             value={person.userId || "__none__"}
                             onValueChange={(value) => {
@@ -1505,6 +1505,25 @@ export default function Admin() {
                               ))}
                             </SelectContent>
                           </Select>
+                          {person.userId && (() => {
+                            const linkedUser = allUsers.find(u => u.id === person.userId);
+                            if (!linkedUser) return null;
+                            return (
+                              <Select
+                                value={(linkedUser as any).role || "member"}
+                                onValueChange={(role) => updateUserRoleMutation.mutate({ userId: linkedUser.id, role })}
+                              >
+                                <SelectTrigger className="h-7 text-xs w-32" data-testid={`select-user-role-${person.id}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="member">Member</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -1715,8 +1734,8 @@ export default function Admin() {
           </Card>
         )}
 
-        {/* Announcements section — super-admin only */}
-        {activeSection === "announcements" && isSuperAdmin && (
+        {/* Announcements section */}
+        {activeSection === "announcements" && (
           <AnnouncementsSection />
         )}
       </div>

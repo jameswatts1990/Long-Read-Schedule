@@ -61,6 +61,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   getUsers(): Promise<User[]>;
+  updateUserRole(userId: string, role: string): Promise<User>;
 
   // Workspace operations
   getWorkspaces(): Promise<Workspace[]>;
@@ -162,6 +163,15 @@ export class PostgresStorage implements IStorage {
 
   async getUsers(): Promise<User[]> {
     return await this.db.select().from(users).orderBy(users.createdAt);
+  }
+
+  async updateUserRole(userId: string, role: string): Promise<User> {
+    const [updated] = await this.db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
   }
 
   // ─── Workspace operations ──────────────────────────────────────────────────

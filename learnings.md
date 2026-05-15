@@ -83,6 +83,29 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 
 - Date: 2026-05-15
 - Trigger: Added sitewide notification bar feature (Admin → Announcements section).
-- Learning: The `site_announcements` table is new and requires a DB migration before the app can use the feature. Only one announcement can be active (`is_active=1`) at a time; `activateSiteAnnouncement` deactivates all rows before setting the target. Dismissal is per-user per-browser via localStorage key `dismissed_announcements` (array of IDs) — no DB needed for dismiss state.
-- Action: Alert the user to run `npm run db:push` via Replit before testing. The feature is gated to super-admins on the Admin page (same as Workspaces section).
-- Evidence: `shared/schema.ts` siteAnnouncements table; `client/src/components/site-announcement-bar.tsx`; `server/routes.ts` /api/site-announcements routes
+- Learning: The `site_announcements` table is new and requires a raw SQL migration. Only one announcement can be active (`is_active=1`) at a time; `activateSiteAnnouncement` deactivates all rows before setting the target. The bar is not dismissible — it stays visible until an admin deactivates it. All authenticated users (not just super-admins) can manage announcements via the Admin page.
+- Action: Always provide the raw SQL for the user to run directly in Replit's database shell. Do NOT instruct `npm run db:push` — npm commands cannot be run on the Replit hosted app. See Evidence for the exact SQL.
+- Evidence: `shared/schema.ts` siteAnnouncements table; SQL: `CREATE TABLE IF NOT EXISTS site_announcements (id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(), message TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'info', is_active INTEGER NOT NULL DEFAULT 0, created_by_id VARCHAR, created_at TIMESTAMP DEFAULT NOW());`
+
+## User role field — added to users table for in-app role management
+
+- Date: 2026-05-15
+- Trigger: Added user-level dropdown (Member / Admin / Super Admin) to the People section in Admin.
+- Learning: The `users` table now has a `role` VARCHAR column (default `'member'`). The `requireSuperAdmin` middleware checks both the `SUPER_ADMIN_EMAILS` env var and the DB `role = 'super_admin'`, so super-admin can be granted via UI without redeployment. The `isSuperAdmin` flag in `/api/auth/user` also reflects the DB role.
+- Action: When adding role-gated features, check both `isSuperAdmin` (env var path) and `user.role` (DB path). Always provide the raw SQL migration for Replit.
+- Evidence: `shared/schema.ts` users table; `server/storage.ts` `updateUserRole`; `server/routes.ts` `PATCH /api/admin/users/:userId/role`; SQL: `ALTER TABLE users ADD COLUMN role VARCHAR NOT NULL DEFAULT 'member';`
+
+## Cog menu (scheduler.tsx) must be kept in sync with all reporting pages
+
+- Date: 2026-05-15
+- Trigger: Absence Reporting page was added but not linked from the cog dropdown until requested.
+- Learning: The settings cog dropdown in `scheduler.tsx` is the primary navigation entry point for admin users. Every reporting page (`/reporting`, `/al-reporting`, `/absence-reporting`) must have a corresponding link in the Reporting section of that menu. The Reporting section is wrapped in `{isAdmin && (...)}` and is only shown to Admin/Super Admin users.
+- Action: Whenever a new reporting page (or any admin-only page) is added, immediately add a corresponding `DropdownMenuItem` to the cog menu in `scheduler.tsx`. Also update `help-guide.tsx` admin tab to document the new entry.
+- Evidence: `client/src/pages/scheduler.tsx` cog dropdown; `client/src/components/help-guide.tsx` admin tab.
+
+## Replit deployment — npm commands cannot be run directly on the hosted app
+
+- Date: 2026-05-15
+- Trigger: User confirmed that `npm run db:push` cannot be executed on the Replit-hosted app.
+- Learning: Never instruct the user to run npm/node commands to apply DB changes on Replit. Instead, provide the raw SQL `CREATE TABLE` / `ALTER TABLE` statements for the user to run directly in Replit's PostgreSQL database shell.
+- Action: Whenever a schema change is made, output the exact SQL DDL statements needed alongside a note to run them in Replit's database tool.

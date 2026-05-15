@@ -146,7 +146,8 @@ function useIsMobile() {
 }
 
 function Router() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const isAdminUser = (user as any)?.role === 'admin' || (user as any)?.role === 'super_admin' || (user as any)?.isSuperAdmin === true;
   const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const { data: onboardingStatus, isLoading: onboardingLoading } = useQuery<{ needsOnboarding: boolean }>({
     queryKey: ["/api/auth/onboarding-status"],
@@ -194,9 +195,9 @@ function Router() {
         <Route path="/" component={Scheduler} />
         <Route path="/my-day" component={MyDay} />
         <Route path="/admin" component={Admin} />
-        <Route path="/reporting" component={Reporting} />
-        <Route path="/al-reporting" component={ALReporting} />
-        <Route path="/absence-reporting" component={AbsenceReporting} />
+        <Route path="/reporting" component={isAdminUser ? Reporting : NotFound} />
+        <Route path="/al-reporting" component={isAdminUser ? ALReporting : NotFound} />
+        <Route path="/absence-reporting" component={isAdminUser ? AbsenceReporting : NotFound} />
         <Route component={NotFound} />
       </Switch>
     </>

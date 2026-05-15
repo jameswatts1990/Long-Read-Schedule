@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock, UserX } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -86,6 +86,7 @@ export default function Scheduler() {
   const { toast } = useToast();
   const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
   const { user } = useAuth();
+  const isAdmin = (user as any)?.role === 'admin' || (user as any)?.role === 'super_admin' || (user as any)?.isSuperAdmin === true;
 
   const handleTrainedFilterChange = useCallback((taskName: string | null) => {
     setActiveTrainedFilterName(taskName);
@@ -687,20 +688,30 @@ export default function Scheduler() {
                   <span>Rota</span>
                 </DropdownMenuItem>
               </Link>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Reporting</DropdownMenuLabel>
-              <Link href="/reporting">
-                <DropdownMenuItem data-testid="menu-item-capacity-reporting">
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                  <span>Capacity Reporting</span>
-                </DropdownMenuItem>
-              </Link>
-              <Link href="/al-reporting">
-                <DropdownMenuItem data-testid="menu-item-al-reporting">
-                  <Sun className="mr-2 h-4 w-4" />
-                  <span>AL Reporting</span>
-                </DropdownMenuItem>
-              </Link>
+              {isAdmin && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Reporting</DropdownMenuLabel>
+                  <Link href="/reporting">
+                    <DropdownMenuItem data-testid="menu-item-capacity-reporting">
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      <span>Capacity Reporting</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/al-reporting">
+                    <DropdownMenuItem data-testid="menu-item-al-reporting">
+                      <Sun className="mr-2 h-4 w-4" />
+                      <span>AL Reporting</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/absence-reporting">
+                    <DropdownMenuItem data-testid="menu-item-absence-reporting">
+                      <UserX className="mr-2 h-4 w-4" />
+                      <span>Absence Reporting</span>
+                    </DropdownMenuItem>
+                  </Link>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleExport} data-testid="menu-item-export">
                 <Download className="mr-2 h-4 w-4" />

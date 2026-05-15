@@ -222,8 +222,8 @@ export function HelpGuide() {
           {/* ── Admin ── */}
           <TabsContent value="admin" className="flex-1 overflow-y-auto mt-4 pr-1">
             <Section title="Accessing admin">
-              <Item label="Admin cog" description="Click the ⚙ cog icon in the toolbar. The dropdown shows admin sections (People, Tasks, Rota), a Reporting link, Export, Import, and Logout." />
-              <Item label="Reporting" description="The Reporting page has a section dropdown to switch between Capacity, Annual Leave, and Absence reports." />
+              <Item label="Admin cog" description="Click the ⚙ cog icon in the toolbar. The dropdown shows admin sections (People, Tasks, Rota) and — for admins — a Reporting section (Capacity, Annual Leave, Absence), plus Export, Import, and Logout." />
+              <Item label="Reporting (admin only)" description="Reporting links are visible in the cog menu only to Admin and Super Admin users. There are three reports: Capacity Reporting, AL Reporting, and Absence Reporting." />
               <Item label="Absence report" description="Shows a monthly heatmap of days where team members were recorded as absent, plus a per-person bar chart of total absence days for the selected year. Requires a task named 'Absent' or 'Absence' to exist in the system. Use the person filter dropdown (top-right) to show only one person's absences on the heatmap." />
               <Item label="Annual Leave report" description="Shows a monthly heatmap of AL events and a per-person AL summary bar chart. Use the person filter dropdown (top-right) to isolate one person's leave on the heatmap." />
               <Item label="Section navigation" description="Use the dropdown next to 'Admin' at the top of the Admin page to switch between sections. Each section (People, Tasks, Rota, Workspaces) is shown as the main focus." />
@@ -234,6 +234,7 @@ export function HelpGuide() {
               <Item label="Add team member" description="Set a name and colour. Optionally link to a user account so they can use 'Show only my assignments' and see their schedule in Notifications." />
               <Item label="Reorder" description="Drag the handle next to a person's name to change their display order in the grid." />
               <Item label="Exclude" description="Tick 'Exclude' to hide someone from the grid without deleting their assignment history." />
+              <Item label="User level" description="When a person is linked to a user account, a second dropdown appears next to the user link. Set their level: Member (default), Admin, or Super Admin. Super Admins can manage workspaces and are treated the same as env-var super admins." />
             </Section>
 
             <Section title="Tasks">
@@ -257,11 +258,11 @@ export function HelpGuide() {
               <Item label="Multiple workspaces" description="Super-admins can create and manage multiple workspaces. Each workspace has its own people, tasks, and assignments." />
             </Section>
 
-            <Section title="Announcements (super-admin)">
+            <Section title="Announcements">
               <Item label="Sitewide bar" description="Set a notification bar that appears at the top of the app for all users. Navigate to Admin → Announcements to manage them." />
               <Item label="Types" description="Choose Info (blue), Warning (amber), or Success (green) to match the urgency of the message." />
               <Item label="Activate / Deactivate" description="Only one announcement is shown at a time. Use Activate to make one live and Deactivate to hide it without deleting it." />
-              <Item label="Dismiss" description="Users can dismiss the bar with the × button. Dismissed announcements stay hidden in that browser until a new announcement is activated." />
+              <Item label="Persistent" description="The bar cannot be dismissed by users — it stays visible until deactivated or deleted by an admin." />
             </Section>
 
             <Section title="Capacity Report">

@@ -52,14 +52,17 @@ const requireWorkspace = async (req: Request, res: Response, next: NextFunction)
   next();
 };
 
-// Middleware: require super-admin privileges
+// Middleware: require super-admin privileges (env var list OR db role)
 const requireSuperAdmin = async (req: Request, res: Response, next: NextFunction) => {
   const userEmail = (req as any).user?.claims?.email;
-  if (!isSuperAdmin(userEmail)) {
-    console.warn(`[SuperAdmin Check] Access denied for ${userEmail}`);
-    return res.status(403).json({ message: "Forbidden: Super-admin access required" });
+  if (isSuperAdmin(userEmail)) return next();
+  const userId = (req as any).user?.claims?.sub;
+  if (userId) {
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role === "super_admin") return next();
   }
-  next();
+  console.warn(`[SuperAdmin Check] Access denied for ${userEmail}`);
+  return res.status(403).json({ message: "Forbidden: Super-admin access required" });
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -104,7 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
-      res.json({ ...user, isSuperAdmin: isSuperAdmin(req.user.claims.email) });
+      res.json({ ...user, isSuperAdmin: isSuperAdmin(req.user.claims.email) || user?.role === "super_admin" });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -203,6 +206,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(users);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  const userRoleSchema = z.object({
+    role: z.enum(["member", "admin", "super_admin"]),
+  });
+
+  app.patch("/api/admin/users/:userId/role", isAuthenticated, async (req: any, res) => {
+    try {
+      const { role } = userRoleSchema.parse(req.body);
+      const updated = await storage.updateUserRole(req.params.userId, role);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid role" });
+      }
+      res.status(500).json({ message: "Failed to update user role" });
     }
   });
 
@@ -932,7 +952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/site-announcements", isAuthenticated, requireSuperAdmin, async (_req, res) => {
+  app.get("/api/site-announcements", isAuthenticated, async (_req, res) => {
     try {
       const announcements = await storage.getAllSiteAnnouncements();
       res.json(announcements);
@@ -941,7 +961,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/site-announcements", isAuthenticated, requireSuperAdmin, async (req: any, res) => {
+  app.post("/api/site-announcements", isAuthenticated, async (req: any, res) => {
     try {
       const { message, type } = req.body;
       if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -957,7 +977,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/site-announcements/:id/activate", isAuthenticated, requireSuperAdmin, async (req, res) => {
+  app.patch("/api/site-announcements/:id/activate", isAuthenticated, async (req, res) => {
     try {
       const announcement = await storage.activateSiteAnnouncement(req.params.id);
       res.json(announcement);
@@ -966,7 +986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/site-announcements/:id/deactivate", isAuthenticated, requireSuperAdmin, async (req, res) => {
+  app.patch("/api/site-announcements/:id/deactivate", isAuthenticated, async (req, res) => {
     try {
       const announcement = await storage.deactivateSiteAnnouncement(req.params.id);
       res.json(announcement);
@@ -975,7 +995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/site-announcements/:id", isAuthenticated, requireSuperAdmin, async (req, res) => {
+  app.delete("/api/site-announcements/:id", isAuthenticated, async (req, res) => {
     try {
       await storage.deleteSiteAnnouncement(req.params.id);
       res.json({ ok: true });
