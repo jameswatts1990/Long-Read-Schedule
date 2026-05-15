@@ -1,7 +1,14 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, Filter, Layers, Download, Maximize2 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { type Assignment, type Task } from "@shared/schema";
@@ -168,6 +175,7 @@ function ChartPanel({ chartType, data, config, tasks, selectedIds }: ChartPanelP
 
 export default function Reporting() {
   const { activeWorkspace } = useWorkspace();
+  const [, navigate] = useLocation();
 
   const defaultFrom = useMemo(() => subMonths(new Date(), 12), []);
   const defaultTo = useMemo(() => new Date(), []);
@@ -193,11 +201,30 @@ export default function Reporting() {
 
   const productionTasks = useMemo(() => allTasks.filter(t => (t as any).isProduction !== 0), [allTasks]);
 
-  useMemo(() => {
-    if (selectedTaskIds.length === 0 && productionTasks.length > 0) {
-      setSelectedTaskIds(productionTasks.map(t => t.id));
+  const hasInitializedTasks = useRef(false);
+
+  // Initialise from localStorage once tasks are loaded; fall back to all selected
+  useEffect(() => {
+    if (hasInitializedTasks.current || productionTasks.length === 0) return;
+    hasInitializedTasks.current = true;
+    const key = activeWorkspace ? `capacity-report-tasks-${activeWorkspace.id}` : null;
+    const stored = key ? localStorage.getItem(key) : null;
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as string[];
+        const valid = parsed.filter(id => productionTasks.some(t => t.id === id));
+        setSelectedTaskIds(valid.length > 0 ? valid : productionTasks.map(t => t.id));
+        return;
+      } catch { /* fall through */ }
     }
-  }, [productionTasks]);
+    setSelectedTaskIds(productionTasks.map(t => t.id));
+  }, [productionTasks, activeWorkspace]);
+
+  // Persist selection whenever it changes (after initialisation)
+  useEffect(() => {
+    if (!hasInitializedTasks.current || !activeWorkspace) return;
+    localStorage.setItem(`capacity-report-tasks-${activeWorkspace.id}`, JSON.stringify(selectedTaskIds));
+  }, [selectedTaskIds, activeWorkspace]);
 
   const filteredAssignments = useMemo(
     () => assignments.filter(a => selectedTaskIds.includes(a.taskId)),
@@ -383,15 +410,26 @@ export default function Reporting() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-bold">Capacity Report</h1>
-              {activeWorkspace && (
-                <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
-                  <Layers className="h-3.5 w-3.5" />
-                  {activeWorkspace.name}
-                </p>
-              )}
-            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold">Reporting</h1>
+            <Select value="capacity" onValueChange={(v) => {
+              if (v === "al") navigate("/al-reporting");
+              if (v === "absence") navigate("/absence-reporting");
+            }}>
+              <SelectTrigger className="w-44" data-testid="select-report-section">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="capacity">Capacity</SelectItem>
+                <SelectItem value="al">Annual Leave</SelectItem>
+                <SelectItem value="absence">Absence</SelectItem>
+              </SelectContent>
+            </Select>
+            {activeWorkspace && (
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5" />
+                {activeWorkspace.name}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -401,14 +439,6 @@ export default function Reporting() {
                 <TabsTrigger value="weekly">Weekly</TabsTrigger>
                 <TabsTrigger value="monthly">Monthly</TabsTrigger>
                 <TabsTrigger value="yearly">Yearly</TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            {/* Chart type */}
-            <Tabs value={chartType} onValueChange={(v) => setChartType(v as any)} className="w-auto">
-              <TabsList>
-                <TabsTrigger value="bar">Bar</TabsTrigger>
-                <TabsTrigger value="line">Line</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -423,11 +453,6 @@ export default function Reporting() {
                 Show empty periods
               </Label>
             </div>
-
-            <Button variant="outline" onClick={exportCsv} disabled={activeChartData.length === 0} data-testid="button-export-csv">
-              <Download className="h-4 w-4 mr-1.5" />
-              Export CSV
-            </Button>
 
             <Popover>
               <PopoverTrigger asChild>
@@ -511,9 +536,17 @@ export default function Reporting() {
                   <BarChart3 className="h-5 w-5 text-primary" />
                   Production Volume by Task
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setChartFullscreen(true)} title="Fullscreen">
-                  <Maximize2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Tabs value={chartType} onValueChange={(v) => setChartType(v as any)} className="w-auto">
+                    <TabsList>
+                      <TabsTrigger value="bar">Bar</TabsTrigger>
+                      <TabsTrigger value="line">Line</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <Button variant="ghost" size="icon" onClick={() => setChartFullscreen(true)} title="Fullscreen">
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="px-0 pb-0 h-[400px] w-full">
@@ -550,7 +583,13 @@ export default function Reporting() {
         {/* Data table — auto-expands vertically */}
         <Card className="p-6">
           <CardHeader className="px-0 pt-0">
-            <CardTitle>Data Table</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              Data Table
+              <Button variant="outline" size="sm" onClick={exportCsv} disabled={activeChartData.length === 0} data-testid="button-export-csv">
+                <Download className="h-4 w-4 mr-1.5" />
+                Export CSV
+              </Button>
+            </CardTitle>
           </CardHeader>
           <div className="overflow-x-auto">
             {activeChartData.length === 0 ? (

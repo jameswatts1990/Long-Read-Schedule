@@ -12,6 +12,7 @@ import Scheduler from "@/pages/scheduler";
 import Admin from "@/pages/admin";
 import Reporting from "@/pages/reporting";
 import ALReporting from "@/pages/al-reporting";
+import AbsenceReporting from "@/pages/absence-reporting";
 import MyDay from "@/pages/my-day";
 import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
@@ -192,6 +193,7 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/reporting" component={Reporting} />
       <Route path="/al-reporting" component={ALReporting} />
+      <Route path="/absence-reporting" component={AbsenceReporting} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Calendar as CalendarIcon, Info, Users, Layers } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { type Assignment, type Task, type Person } from "@shared/schema";
@@ -38,6 +45,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 
 export default function ALReporting() {
   const { activeWorkspace } = useWorkspace();
+  const [, navigate] = useLocation();
   const [year, setYear] = useState(new Date().getFullYear());
 
   // Fix Issue 7: scope to selected year only — server returns only that year's data
@@ -191,21 +199,32 @@ export default function ALReporting() {
     <div className="min-h-screen bg-background p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <Link href="/admin">
-              <Button variant="outline" size="icon" className="h-8 w-8">
+              <Button variant="outline" size="icon">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">AL Reporting</h1>
-              {activeWorkspace && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                  <Layers className="h-3 w-3" />
-                  {activeWorkspace.name}
-                </p>
-              )}
-            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold">Reporting</h1>
+            <Select value="al" onValueChange={(v) => {
+              if (v === "capacity") navigate("/reporting");
+              if (v === "absence") navigate("/absence-reporting");
+            }}>
+              <SelectTrigger className="w-44" data-testid="select-report-section">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="capacity">Capacity</SelectItem>
+                <SelectItem value="al">Annual Leave</SelectItem>
+                <SelectItem value="absence">Absence</SelectItem>
+              </SelectContent>
+            </Select>
+            {activeWorkspace && (
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5" />
+                {activeWorkspace.name}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setYear(year - 1)}>{year - 1}</Button>

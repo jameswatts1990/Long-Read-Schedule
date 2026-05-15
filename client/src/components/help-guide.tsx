@@ -222,7 +222,9 @@ export function HelpGuide() {
           {/* ── Admin ── */}
           <TabsContent value="admin" className="flex-1 overflow-y-auto mt-4 pr-1">
             <Section title="Accessing admin">
-              <Item label="Admin cog" description="Click the ⚙ cog icon in the toolbar. The dropdown shows admin sections (People, Tasks, Rota), reporting links (Capacity Reporting, AL Reporting), Export, Import, and Logout." />
+              <Item label="Admin cog" description="Click the ⚙ cog icon in the toolbar. The dropdown shows admin sections (People, Tasks, Rota), a Reporting link, Export, Import, and Logout." />
+              <Item label="Reporting" description="The Reporting page has a section dropdown to switch between Capacity, Annual Leave, and Absence reports." />
+              <Item label="Absence report" description="Shows a monthly heatmap of days where team members were recorded as absent, plus a per-person bar chart of total absence days for the selected year. Requires a task named 'Absent' or 'Absence' to exist in the system." />
               <Item label="Section navigation" description="Use the dropdown next to 'Admin' at the top of the Admin page to switch between sections. Each section (People, Tasks, Rota, Workspaces) is shown as the main focus." />
               <Item label="Direct links" description="Selecting People, Tasks, or Rota from the cog dropdown takes you straight to that section of the Admin page." />
             </Section>
@@ -256,12 +258,12 @@ export function HelpGuide() {
 
             <Section title="Capacity Report">
               <Item label="View granularity" description="Switch between Weekly, Monthly, and Yearly views using the tabs at the top. Monthly and Yearly views aggregate weekly totals." />
-              <Item label="Chart type" description="Toggle between Bar and Line chart using the Bar / Line tabs." />
+              <Item label="Chart type" description="Toggle between Bar and Line chart using the Bar / Line tabs in the top-right corner of the chart card." />
               <Item label="Show empty periods" description="Tick 'Show empty periods' to include weeks, months, or years with no data in the chart and table. Unticked by default." />
               <Item label="Fullscreen chart" description="Click the expand icon (⤢) in the top-right corner of the chart card to open it in a fullscreen dialog." />
               <Item label="Date filter" description="Use the Filter Dates button to restrict the report to a specific date range." />
               <Item label="Task filter" description="Use the Tasks button to show or hide individual production tasks from the chart and table." />
-              <Item label="Export CSV" description="Downloads the currently visible data (respecting view mode, date range, and task filter) as a CSV file." />
+              <Item label="Export CSV" description="Click 'Export CSV' in the Data Table card header to download the currently visible data (respecting view mode, date range, and task filter) as a CSV file." />
               <Item label="Data table" description="Shown below the chart; expands vertically to fit all rows — no internal scroll." />
             </Section>
           </TabsContent>
