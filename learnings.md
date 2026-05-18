@@ -149,6 +149,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
     WHERE rota_task_id IS NOT NULL;
   ```
 
+## Slack Events API — inbound bot messages for week schedule
+
+- Date: 2026-05-18
+- Trigger: Added feature for users to DM the bot and receive their week schedule.
+- Learning: (1) Requires `SLACK_SIGNING_SECRET` env var (from Slack app Basic Information page) and Event Subscriptions enabled in the Slack app with `message.im` bot event subscribed. (2) The `/slack/events` route is unauthenticated — it validates Slack's HMAC-SHA256 request signature instead. (3) Always respond with 200 immediately (before async work) so Slack doesn't retry within its 3-second window. (4) Filter out `event.bot_id` and `event.subtype` to avoid infinite loops from the bot's own messages.
+- Action: If extending Slack bot interactions, add the new event type subscription in the Slack app dashboard and re-verify the URL. The `im:history` bot scope must be present for `message.im` events to fire.
+- Evidence: `server/slack.ts` (verifySlackSignature, formatWeekScheduleMessage); `server/routes.ts` POST /slack/events; `server/storage.ts` getWeekAssignmentsForSlackUserId, isSlackUserIdRegistered.
+
 ## applyRotaTasksForWeek — must isolate per-rota errors to avoid all-or-nothing failures
 
 - Date: 2026-05-18

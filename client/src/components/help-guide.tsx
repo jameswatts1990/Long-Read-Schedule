@@ -115,6 +115,7 @@ export function HelpGuide() {
               <Item label="Batch number & size" description="Optional identifiers used in reporting. Batch size requires a batch number. Click 'Auto' (shows a spinner while loading) to generate the next ID in sequence." />
               <Item label="Notes" description="Free text attached to an assignment. Shown as an info icon (ℹ) in the grid." />
               <Item label="Slack reminder" description="When Slack integration is active, tick 'Send Slack reminder on the day of this task' to receive a direct message at 09:00 UTC (10:00 BST in summer) on the day of the assignment. The checkbox appears both when creating and when editing an assignment." />
+              <Item label="Weekly schedule via Slack bot" description="Message the Lab Scheduler bot directly in Slack (send any message) to receive your full week's schedule as a DM — with colour-coded emoji per task and a day-by-day breakdown. Requires your Slack User ID to be linked in People settings." />
             </Section>
 
             <Section title="Moving & copying">

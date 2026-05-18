@@ -14,7 +14,7 @@ import {
 import { z, ZodError } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { getDiagnosticsSnapshot } from "./diagnostics";
-import { sendSlackDM, isSlackEnabled } from "./slack.js";
+import { sendSlackDM, isSlackEnabled, verifySlackSignature, getMondayUTC, formatWeekScheduleMessage } from "./slack.js";
 
 // Super-admin email list — loaded from SUPER_ADMIN_EMAILS env var (comma-separated)
 // so access can be changed without a code deployment.
@@ -1090,6 +1090,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ ok: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete site announcement" });
+    }
+  });
+
+  // ─── Slack Events API ────────────────────────────────────────────────────
+  // Receives direct messages from users and replies with their week schedule.
+  // Requires SLACK_SIGNING_SECRET env var and the message.im bot event subscription.
+  app.post("/slack/events", async (req, res) => {
+    const signingSecret = process.env.SLACK_SIGNING_SECRET;
+    const timestamp = req.headers["x-slack-request-timestamp"] as string | undefined;
+    const signature = req.headers["x-slack-signature"] as string | undefined;
+
+    if (signingSecret) {
+      if (!timestamp || !signature) {
+        return res.status(403).json({ error: "Missing Slack signature headers" });
+      }
+      const rawBody = (req as any).rawBody as Buffer | undefined;
+      if (!verifySlackSignature(signingSecret, timestamp, rawBody ?? JSON.stringify(req.body), signature)) {
+        return res.status(403).json({ error: "Invalid Slack signature" });
+      }
+    } else {
+      console.warn("[slack-events] SLACK_SIGNING_SECRET not set — skipping signature verification");
+    }
+
+    const body = req.body as any;
+
+    // Slack sends a one-time challenge when first registering the URL
+    if (body.type === "url_verification") {
+      return res.json({ challenge: body.challenge });
+    }
+
+    // Acknowledge immediately so Slack doesn't retry (3 s deadline)
+    res.status(200).send();
+
+    if (body.type !== "event_callback") return;
+    const event = body.event;
+    // Ignore bot messages, edits, deletions, and non-message events
+    if (!event || event.type !== "message" || event.bot_id || event.subtype) return;
+
+    const slackUserId = event.user as string | undefined;
+    if (!slackUserId) return;
+
+    try {
+      const personExists = await storage.isSlackUserIdRegistered(slackUserId);
+      if (!personExists) {
+        await sendSlackDM(
+          slackUserId,
+          "👋 Your Slack account isn't linked to anyone in the Lab Scheduler. Ask an admin to add your Slack Member ID in the People settings.",
+        );
+        return;
+      }
+
+      const weekStartDate = getMondayUTC();
+      const rows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate);
+      const reply = formatWeekScheduleMessage(rows, weekStartDate);
+      await sendSlackDM(slackUserId, reply);
+    } catch (err) {
+      console.error("[slack-events] Error handling message event:", err);
     }
   });
 

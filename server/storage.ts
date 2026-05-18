@@ -112,6 +112,8 @@ export interface IStorage {
 
   // Slack notifications
   getTodaysSlackAssignments(): Promise<Array<{ taskName: string; personName: string; slackUserId: string }>>;
+  isSlackUserIdRegistered(slackUserId: string): Promise<boolean>;
+  getWeekAssignmentsForSlackUserId(slackUserId: string, weekStartDate: string): Promise<Array<{ day: string; taskName: string; taskColor: string; customName: string | null; batchNumber: string | null; batchSize: number | null; notes: string | null; workspaceName: string }>>;
 
   // Premade Filters (scoped to workspace)
   getPremadeFilters(workspaceId: string): Promise<PremadeFilter[]>;
@@ -581,6 +583,38 @@ export class PostgresStorage implements IStorage {
     return rows.filter((r): r is { taskName: string; personName: string; slackUserId: string } =>
       r.slackUserId !== null,
     );
+  }
+
+  async isSlackUserIdRegistered(slackUserId: string): Promise<boolean> {
+    const rows = await this.db.select({ id: people.id }).from(people).where(eq(people.slackUserId, slackUserId)).limit(1);
+    return rows.length > 0;
+  }
+
+  async getWeekAssignmentsForSlackUserId(
+    slackUserId: string,
+    weekStartDate: string,
+  ): Promise<Array<{ day: string; taskName: string; taskColor: string; customName: string | null; batchNumber: string | null; batchSize: number | null; notes: string | null; workspaceName: string }>> {
+    return await this.db
+      .select({
+        day: assignments.day,
+        taskName: tasks.name,
+        taskColor: tasks.color,
+        customName: assignments.customName,
+        batchNumber: assignments.batchNumber,
+        batchSize: assignments.batchSize,
+        notes: assignments.notes,
+        workspaceName: workspaces.name,
+      })
+      .from(assignments)
+      .innerJoin(tasks, eq(assignments.taskId, tasks.id))
+      .innerJoin(people, eq(assignments.personId, people.id))
+      .innerJoin(workspaces, eq(assignments.workspaceId, workspaces.id))
+      .where(
+        and(
+          eq(people.slackUserId, slackUserId),
+          eq(assignments.weekStartDate, weekStartDate),
+        ),
+      );
   }
 
   // ─── Premade Filters ───────────────────────────────────────────────────────
