@@ -249,7 +249,7 @@ export default function Reporting() {
       all.push(format(cur, "yyyy-MM-dd"));
       cur = addWeeks(cur, 1);
     }
-    return [...new Set([...dataWeeks, ...all])].sort();
+    return Array.from(new Set([...dataWeeks, ...all])).sort();
   }, [assignmentsByWeek, showEmptyPeriods, dateRange]);
 
   const getWeekTotal = (weekDate: string, taskId: string): number => {
