@@ -18,6 +18,7 @@ interface MonthViewProps {
   onAssignmentClick: (assignment: Assignment) => void;
   isCompactView?: boolean;
   formatDate: (date: Date) => string;
+  slackEnabled?: boolean;
 }
 
 interface CellData {
@@ -37,14 +38,15 @@ const getLuminance = (hexColor: string): number => {
 
 const isDarkColor = (hexColor: string): boolean => getLuminance(hexColor) < 0.5;
 
-export function MonthView({ 
-  weeksInMonth, 
-  weekAssignments, 
-  people, 
-  tasks, 
-  onAssignmentClick, 
+export function MonthView({
+  weeksInMonth,
+  weekAssignments,
+  people,
+  tasks,
+  onAssignmentClick,
   isCompactView = false,
-  formatDate: formatDateFn
+  formatDate: formatDateFn,
+  slackEnabled = false,
 }: MonthViewProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -352,6 +354,7 @@ export function MonthView({
         day={selectedCell?.day || ""}
         tasks={tasks}
         isMonthMode={true}
+        slackEnabled={slackEnabled}
       />
     </>
   );

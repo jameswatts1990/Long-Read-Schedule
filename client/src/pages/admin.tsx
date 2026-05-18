@@ -940,6 +940,9 @@ function AnnouncementsSection() {
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
   const [newType, setNewType] = useState<"info" | "warning" | "success">("info");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editMessage, setEditMessage] = useState("");
+  const [editType, setEditType] = useState<"info" | "warning" | "success">("info");
 
   const { data: announcements = [], isLoading } = useQuery<SiteAnnouncement[]>({
     queryKey: ["/api/site-announcements"],
@@ -952,6 +955,7 @@ function AnnouncementsSection() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/site-announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcement/active"] });
       toast({ title: "Announcement created", variant: "success" });
       setNewMessage("");
     },
@@ -1002,6 +1006,22 @@ function AnnouncementsSection() {
     },
     onError: (error: unknown) => {
       toast({ title: "Failed to delete", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async ({ id, message, type }: { id: string; message: string; type: string }) => {
+      const res = await apiRequest("PATCH", `/api/site-announcements/${id}`, { message, type });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/site-announcement/active"] });
+      toast({ title: "Announcement updated", variant: "success" });
+      setEditingId(null);
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to update", description: extractErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -1059,48 +1079,92 @@ function AnnouncementsSection() {
         <div className="space-y-2">
           {announcements.map((ann) => {
             const typeOpt = ANNOUNCEMENT_TYPE_OPTIONS.find(o => o.value === ann.type) ?? ANNOUNCEMENT_TYPE_OPTIONS[0];
+            const isEditing = editingId === ann.id;
             return (
               <div
                 key={ann.id}
-                className={`flex items-center gap-3 p-3 rounded-lg border ${ann.isActive ? "border-primary bg-primary/5" : ""}`}
+                className={`flex flex-col gap-2 p-3 rounded-lg border ${ann.isActive ? "border-primary bg-primary/5" : ""}`}
               >
-                {typeOpt.icon}
-                <span className="flex-1 text-sm">{ann.message}</span>
-                {ann.isActive && (
-                  <Badge variant="default" className="text-xs">Active</Badge>
+                {isEditing ? (
+                  <div className="flex gap-2 items-center">
+                    <Select value={editType} onValueChange={(v) => setEditType(v as "info" | "warning" | "success")}>
+                      <SelectTrigger className="w-36">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ANNOUNCEMENT_TYPE_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            <span className="flex items-center gap-2">{opt.icon}{opt.label}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={editMessage}
+                      onChange={(e) => setEditMessage(e.target.value)}
+                      className="flex-1"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && editMessage.trim()) editMutation.mutate({ id: ann.id, message: editMessage, type: editType });
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => editMutation.mutate({ id: ann.id, message: editMessage, type: editType })}
+                      disabled={!editMessage.trim() || editMutation.isPending}
+                    >
+                      {editMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    {typeOpt.icon}
+                    <span className="flex-1 text-sm">{ann.message}</span>
+                    {ann.isActive && (
+                      <Badge variant="default" className="text-xs">Active</Badge>
+                    )}
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => { setEditingId(ann.id); setEditMessage(ann.message); setEditType(ann.type as "info" | "warning" | "success"); }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      {ann.isActive ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => deactivateMutation.mutate(ann.id)}
+                          disabled={deactivateMutation.isPending}
+                        >
+                          <EyeOff className="h-3.5 w-3.5 mr-1" />
+                          Deactivate
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => activateMutation.mutate(ann.id)}
+                          disabled={activateMutation.isPending}
+                        >
+                          <Eye className="h-3.5 w-3.5 mr-1" />
+                          Activate
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => deleteMutation.mutate(ann.id)}
+                        disabled={deleteMutation.isPending}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                 )}
-                <div className="flex gap-1">
-                  {ann.isActive ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => deactivateMutation.mutate(ann.id)}
-                      disabled={deactivateMutation.isPending}
-                    >
-                      <EyeOff className="h-3.5 w-3.5 mr-1" />
-                      Deactivate
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => activateMutation.mutate(ann.id)}
-                      disabled={activateMutation.isPending}
-                    >
-                      <Eye className="h-3.5 w-3.5 mr-1" />
-                      Activate
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteMutation.mutate(ann.id)}
-                    disabled={deleteMutation.isPending}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
               </div>
             );
           })}
@@ -1341,6 +1405,24 @@ export default function Admin() {
     },
   });
 
+  const [editingSlackId, setEditingSlackId] = useState<string | null>(null);
+  const [slackIdDraft, setSlackIdDraft] = useState("");
+
+  const updateSlackUserIdMutation = useMutation({
+    mutationFn: async ({ personId, slackUserId }: { personId: string; slackUserId: string | null }) => {
+      const res = await apiRequest("PATCH", `/api/people/${personId}/slack-user-id`, { slackUserId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      setEditingSlackId(null);
+      toast({ title: "Slack user ID updated" });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to update Slack user ID", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
   const handleEditPerson = (person: Person) => {
     setEditingPerson(person);
     personForm.reset({ name: person.name, color: person.color });
@@ -1526,6 +1608,40 @@ export default function Admin() {
                             );
                           })()}
                         </div>
+                        {(currentUser as any)?.slackEnabled && (
+                          <div className="mt-1 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            {editingSlackId === person.id ? (
+                              <>
+                                <input
+                                  className="h-7 text-xs border rounded px-2 w-40 bg-background"
+                                  placeholder="Slack member ID (U…)"
+                                  value={slackIdDraft}
+                                  onChange={(e) => setSlackIdDraft(e.target.value)}
+                                  autoFocus
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => updateSlackUserIdMutation.mutate({ personId: person.id, slackUserId: slackIdDraft.trim() || null })}
+                                  disabled={updateSlackUserIdMutation.isPending}
+                                >
+                                  Save
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingSlackId(null)}>
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <button
+                                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                onClick={() => { setEditingSlackId(person.id); setSlackIdDraft((person as any).slackUserId || ""); }}
+                              >
+                                <span className="font-medium">Slack:</span>
+                                {(person as any).slackUserId ? (person as any).slackUserId : <span className="italic">not set</span>}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">

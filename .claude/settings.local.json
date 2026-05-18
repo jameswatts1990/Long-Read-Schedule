@@ -6,7 +6,9 @@
       "Bash(Select-Object -First 50)",
       "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
       "Bash(node_modules/.bin/tsc --noEmit --project client/tsconfig.json)",
-      "PowerShell(Get-Command node, npm, npx -ErrorAction SilentlyContinue)"
+      "PowerShell(Get-Command node, npm, npx -ErrorAction SilentlyContinue)",
+      "Bash(Get-ChildItem -Path \"u:\\\\github\\\\jw24\\\\Long-Read-Schedule\\\\Long-Read-Schedule\" -Recurse -Force)",
+      "Bash(Format-Table FullName)"
     ]
   }
 }

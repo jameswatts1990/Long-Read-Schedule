@@ -111,6 +111,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: Whenever a new section is added to admin.tsx, immediately add a corresponding link to the Admin section of the cog dropdown in `scheduler.tsx`.
 - Evidence: `client/src/pages/scheduler.tsx` cog dropdown; `client/src/pages/admin.tsx` `<Select>` options.
 
+## Slack notifications — slackEnabled gate and new DB columns
+
+- Date: 2026-05-15
+- Trigger: Added Slack DM reminders for assignments (per-assignment toggle, 9 AM Mon–Fri cron).
+- Learning: (1) `slackEnabled` is exposed via `/api/auth/user` as `!!process.env.SLACK_BOT_TOKEN` — all UI elements that reference Slack must guard on this flag so they're invisible when Slack is not configured. (2) The Slack Bot token must have `chat:write` scope; posting to a user's DM uses their Slack Member ID as the `channel` parameter. (3) node-cron runs in-process, started once via `startCron()` in `server/index.ts` after routes mount. (4) `people.slack_user_id` is per-workspace person row, not on the `users` table, because assignments link to people not users.
+- Action: When extending Slack features, guard all UI with `slackEnabled`; the cron uses `getTodaysSlackAssignments()` which computes today's weekStartDate (UTC Monday) and day name. New packages (`@slack/web-api`, `node-cron`, `@types/node-cron`) were added to package.json — Replit must run `npm install` to pick them up.
+- Evidence: `server/slack.ts`, `server/cron.ts`; SQL migration below.
+
 ## Replit deployment — npm commands cannot be run directly on the hosted app
 
 - Date: 2026-05-15

@@ -53,6 +53,7 @@ interface AddAssignmentDialogProps {
   day: string;
   tasks: Task[];
   isMonthMode?: boolean;
+  slackEnabled?: boolean;
 }
 
 const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: true, day: true, date: true }).extend({
@@ -74,7 +75,7 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
 
 type FormData = z.infer<typeof formSchema>;
 
-export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, day, tasks, isMonthMode = false }: AddAssignmentDialogProps) {
+export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, day, tasks, isMonthMode = false, slackEnabled = false }: AddAssignmentDialogProps) {
   const { toast } = useToast();
   const [conflictData, setConflictData] = useState<{ conflicts: any[], conflictCount: number } | null>(null);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
@@ -111,6 +112,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       notes: "",
       customName: "",
       customColor: undefined,
+      slackNotify: 0,
     },
   });
 
@@ -219,6 +221,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         notes: "",
         customName: "",
         customColor: undefined,
+        slackNotify: 0,
       });
       setSelectedTaskId("");
       setConflictData(null);
@@ -251,6 +254,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         notes: "",
         customName: "",
         customColor: undefined,
+        slackNotify: 0,
       });
       setSelectedTaskId("");
       setSelectedDays(new Set([day]));
@@ -710,6 +714,27 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   </FormItem>
                 )}
               />
+
+              {slackEnabled && (
+                <FormField
+                  control={form.control}
+                  name="slackNotify"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value === 1}
+                          onCheckedChange={(checked) => field.onChange(checked ? 1 : 0)}
+                          id="slack-notify"
+                        />
+                      </FormControl>
+                      <FormLabel htmlFor="slack-notify" className="cursor-pointer font-normal">
+                        Send Slack reminder on the day of this task
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {!isMonthMode && (
                 <div className="space-y-2">

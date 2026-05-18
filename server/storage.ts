@@ -87,6 +87,7 @@ export interface IStorage {
   updatePersonOrder(id: string, newOrder: number): Promise<Person>;
   reorderPeople(personIds: string[]): Promise<Person[]>;
   togglePersonExcluded(id: string): Promise<Person>;
+  updatePersonSlackUserId(id: string, slackUserId: string | null): Promise<Person>;
 
   // Tasks (scoped to workspace)
   getTasks(workspaceId: string): Promise<Task[]>;
@@ -108,6 +109,9 @@ export interface IStorage {
   deleteAssignmentsByTaskAndDate(taskId: string, workspaceId: string, afterDate?: string): Promise<{ deletedCount: number }>;
   reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]>;
   getTrainedPersonsByTask(taskId: string, workspaceId: string): Promise<string[]>;
+
+  // Slack notifications
+  getTodaysSlackAssignments(): Promise<Array<{ taskName: string; personName: string; slackUserId: string }>>;
 
   // Premade Filters (scoped to workspace)
   getPremadeFilters(workspaceId: string): Promise<PremadeFilter[]>;
@@ -134,6 +138,7 @@ export interface IStorage {
   getActiveSiteAnnouncement(): Promise<SiteAnnouncement | undefined>;
   getAllSiteAnnouncements(): Promise<SiteAnnouncement[]>;
   createSiteAnnouncement(data: { message: string; type: string; createdById: string }): Promise<SiteAnnouncement>;
+  updateSiteAnnouncement(id: string, data: { message: string; type: string }): Promise<SiteAnnouncement>;
   activateSiteAnnouncement(id: string): Promise<SiteAnnouncement>;
   deactivateSiteAnnouncement(id: string): Promise<SiteAnnouncement>;
   deleteSiteAnnouncement(id: string): Promise<void>;
@@ -359,6 +364,12 @@ export class PostgresStorage implements IStorage {
     return updated;
   }
 
+  async updatePersonSlackUserId(id: string, slackUserId: string | null): Promise<Person> {
+    const [p] = await this.db.update(people).set({ slackUserId }).where(eq(people.id, id)).returning();
+    if (!p) throw new Error("Person not found");
+    return p;
+  }
+
   // ─── Tasks ─────────────────────────────────────────────────────────────────
 
   async getTasks(workspaceId: string): Promise<Task[]> {
@@ -533,6 +544,43 @@ export class PostgresStorage implements IStorage {
       assignmentIds.map((id, i) => this.db.update(assignments).set({ order: i }).where(eq(assignments.id, id)))
     );
     return await this.getConflictingAssignments(personId, day, weekStartDate);
+  }
+
+  // ─── Slack Notifications ───────────────────────────────────────────────────
+
+  async getTodaysSlackAssignments(): Promise<Array<{ taskName: string; personName: string; slackUserId: string }>> {
+    // Compute today's weekStartDate (Monday, UTC) and day name
+    const now = new Date();
+    const dow = now.getUTCDay(); // 0=Sun … 6=Sat
+    const diff = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(now);
+    monday.setUTCDate(now.getUTCDate() + diff);
+    monday.setUTCHours(0, 0, 0, 0);
+    const weekStartDate = monday.toISOString().slice(0, 10);
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const todayName = dayNames[now.getUTCDay()];
+
+    const rows = await this.db
+      .select({
+        taskName: tasks.name,
+        personName: people.name,
+        slackUserId: people.slackUserId,
+      })
+      .from(assignments)
+      .innerJoin(tasks, eq(assignments.taskId, tasks.id))
+      .innerJoin(people, eq(assignments.personId, people.id))
+      .where(
+        and(
+          eq(assignments.slackNotify, 1),
+          eq(assignments.weekStartDate, weekStartDate),
+          eq(assignments.day, todayName),
+          sql`${people.slackUserId} IS NOT NULL`,
+        ),
+      );
+
+    return rows.filter((r): r is { taskName: string; personName: string; slackUserId: string } =>
+      r.slackUserId !== null,
+    );
   }
 
   // ─── Premade Filters ───────────────────────────────────────────────────────
@@ -779,9 +827,20 @@ export class PostgresStorage implements IStorage {
   }
 
   async createSiteAnnouncement(data: { message: string; type: string; createdById: string }): Promise<SiteAnnouncement> {
+    // Deactivate all existing announcements before inserting the new active one
+    await this.db.update(siteAnnouncements).set({ isActive: 0 });
     const [row] = await this.db
       .insert(siteAnnouncements)
-      .values({ id: randomUUID(), ...data, isActive: 0 })
+      .values({ id: randomUUID(), ...data, isActive: 1 })
+      .returning();
+    return row;
+  }
+
+  async updateSiteAnnouncement(id: string, data: { message: string; type: string }): Promise<SiteAnnouncement> {
+    const [row] = await this.db
+      .update(siteAnnouncements)
+      .set(data)
+      .where(eq(siteAnnouncements.id, id))
       .returning();
     return row;
   }

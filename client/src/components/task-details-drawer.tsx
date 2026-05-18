@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { DuplicateAssignmentDialog } from "@/components/duplicate-assignment-dialog";
 import {
@@ -33,14 +34,16 @@ interface TaskDetailsDrawerProps {
   tasks: Task[];
   open: boolean;
   onClose: () => void;
+  slackEnabled?: boolean;
 }
 
-export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: TaskDetailsDrawerProps) {
+export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, slackEnabled = false }: TaskDetailsDrawerProps) {
   const [batchNumber, setBatchNumber] = useState("");
   const [batchSize, setBatchSize] = useState("");
   const [notes, setNotes] = useState("");
   const [customName, setCustomName] = useState("");
   const [customColor, setCustomColor] = useState("");
+  const [slackNotify, setSlackNotify] = useState(0);
   const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -58,6 +61,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       setNotes(assignment.notes || "");
       setCustomName(assignment.customName || "");
       setCustomColor((assignment as any).customColor || "");
+      setSlackNotify((assignment as any).slackNotify ?? 0);
     }
   }, [assignment]);
 
@@ -164,6 +168,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
       customName: customName || undefined,
       customColor: customColor || undefined,
       weekStartDate: assignment.weekStartDate,
+      slackNotify,
     });
   };
 
@@ -404,6 +409,19 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose }: 
               data-testid="input-notes"
             />
           </div>
+
+          {slackEnabled && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="drawer-slack-notify"
+                checked={slackNotify === 1}
+                onCheckedChange={(checked) => setSlackNotify(checked ? 1 : 0)}
+              />
+              <Label htmlFor="drawer-slack-notify" className="cursor-pointer font-normal text-sm">
+                Send Slack reminder on the day of this task
+              </Label>
+            </div>
+          )}
 
           <div className="pt-6 border-t space-y-4">
             <div className="flex justify-between text-xs text-muted-foreground">

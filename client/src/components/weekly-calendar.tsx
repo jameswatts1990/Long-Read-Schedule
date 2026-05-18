@@ -68,6 +68,7 @@ interface WeeklyCalendarProps {
   canToggleCurrentPerson?: boolean;
   onToggleCurrentPerson?: () => void;
   onTrainedFilterChange?: (taskName: string | null) => void;
+  slackEnabled?: boolean;
 }
 
 export function WeeklyCalendar({
@@ -83,6 +84,7 @@ export function WeeklyCalendar({
   canToggleCurrentPerson = true,
   onToggleCurrentPerson,
   onTrainedFilterChange,
+  slackEnabled = false,
 }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -893,6 +895,7 @@ export function WeeklyCalendar({
         personId={selectedCell?.personId || ""}
         day={selectedCell?.day || ""}
         tasks={tasks}
+        slackEnabled={slackEnabled}
       />
     </>
   );

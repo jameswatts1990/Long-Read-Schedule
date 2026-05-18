@@ -119,7 +119,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
-      res.json({ ...user, isSuperAdmin: isSuperAdmin(req.user.claims.email) || user?.role === "super_admin" });
+      res.json({
+        ...user,
+        isSuperAdmin: isSuperAdmin(req.user.claims.email) || user?.role === "super_admin",
+        slackEnabled: !!process.env.SLACK_BOT_TOKEN,
+      });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -506,6 +510,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const slackUserIdSchema = z.object({ slackUserId: z.string().trim().nullable() });
+
+  app.patch("/api/people/:id/slack-user-id", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const { slackUserId } = slackUserIdSchema.parse(req.body);
+      const person = await storage.updatePersonSlackUserId(req.params.id, slackUserId);
+      broadcastUpdate("people", req.workspaceId);
+      res.json(person);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid data" });
+      }
+      res.status(500).json({ message: "Failed to update Slack user ID" });
+    }
+  });
+
   // ── Tasks (workspace-scoped) ────────────────────────────────────────────────
 
   app.get("/api/tasks", isAuthenticated, requireWorkspace, async (req, res) => {
@@ -804,6 +824,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     customColor: z.string().optional().nullable(),
     day: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]).optional(),
     weekStartDate: isoDateString.optional(),
+    slackNotify: z.number().int().min(0).max(1).optional(),
   });
 
   app.get("/api/assignments/trained-persons", isAuthenticated, requireWorkspace, async (req, res) => {
@@ -986,6 +1007,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(announcement);
     } catch (error) {
       res.status(500).json({ message: "Failed to create site announcement" });
+    }
+  });
+
+  app.patch("/api/site-announcements/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const { message, type } = req.body;
+      if (!message || typeof message !== "string" || message.trim().length === 0) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+      const validTypes = ["info", "warning", "success"];
+      const announcementType = validTypes.includes(type) ? type : "info";
+      const announcement = await storage.updateSiteAnnouncement(req.params.id, { message: message.trim(), type: announcementType });
+      res.json(announcement);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update site announcement" });
     }
   });
 

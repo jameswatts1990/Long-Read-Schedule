@@ -55,6 +55,7 @@ export const people = pgTable("people", {
   excluded: integer("excluded").default(0),
   userId: varchar("user_id"),
   workspaceId: varchar("workspace_id").notNull().default("default"),
+  slackUserId: varchar("slack_user_id"),
 });
 
 export const tasks = pgTable("tasks", {
@@ -93,6 +94,8 @@ export const assignments = pgTable("assignments", {
   // Groups all assignments created together as a recurring series so the whole
   // series can be deleted at once. NULL for one-off assignments.
   seriesId: varchar("series_id"),
+  // When 1, a Slack DM is sent to the assigned person at 9 AM on the day.
+  slackNotify: integer("slack_notify").notNull().default(0),
 }, (t) => [
   // Unique index on the rota slot triple so concurrent apply calls can use
   // ON CONFLICT DO NOTHING instead of a racy read-then-insert.

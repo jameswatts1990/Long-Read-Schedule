@@ -801,6 +801,7 @@ export default function Scheduler() {
             canToggleCurrentPerson={canUseMyAssignmentsToggle}
             onToggleCurrentPerson={toggleMyAssignmentsView}
             onTrainedFilterChange={handleTrainedFilterChange}
+            slackEnabled={!!(user as any)?.slackEnabled}
           />
         )}
         {!isInitialLoading && viewMode === "month" && people.length > 0 && (
@@ -812,6 +813,7 @@ export default function Scheduler() {
             onAssignmentClick={setSelectedAssignment}
             isCompactView={isCompactView}
             formatDate={formatDate}
+            slackEnabled={!!(user as any)?.slackEnabled}
           />
         )}
         {!isInitialLoading && viewMode === "pipeline" && (
@@ -833,6 +835,7 @@ export default function Scheduler() {
         tasks={tasks}
         open={!!selectedAssignment}
         onClose={() => setSelectedAssignment(null)}
+        slackEnabled={!!(user as any)?.slackEnabled}
       />
     </div>
   );
