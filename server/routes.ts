@@ -14,6 +14,7 @@ import {
 import { z, ZodError } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { getDiagnosticsSnapshot } from "./diagnostics";
+import { sendSlackDM, isSlackEnabled } from "./slack.js";
 
 // Super-admin email list — loaded from SUPER_ADMIN_EMAILS env var (comma-separated)
 // so access can be changed without a code deployment.
@@ -510,7 +511,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const slackUserIdSchema = z.object({ slackUserId: z.string().trim().nullable() });
+  const slackUserIdSchema = z.object({
+    slackUserId: z
+      .string()
+      .trim()
+      .nullable()
+      .refine(
+        (v) => v === null || v === "" || /^[UW][A-Z0-9]{8,}$/.test(v),
+        { message: "Must be a valid Slack member ID (e.g. U012AB3CD)" },
+      )
+      .transform((v) => (v === "" ? null : v)),
+  });
 
   app.patch("/api/people/:id/slack-user-id", isAuthenticated, requireWorkspace, async (req, res) => {
     try {
@@ -523,6 +534,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid data" });
       }
       res.status(500).json({ message: "Failed to update Slack user ID" });
+    }
+  });
+
+  app.post("/api/people/:id/slack-test", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      if (!isSlackEnabled()) {
+        return res.status(400).json({ message: "Slack is not configured on this server" });
+      }
+      const people = await storage.getPeople(req.workspaceId!);
+      const person = people.find((p) => p.id === req.params.id);
+      if (!person) return res.status(404).json({ message: "Person not found" });
+      const slackUserId = (person as any).slackUserId;
+      if (!slackUserId) {
+        return res.status(400).json({ message: "No Slack member ID set for this person" });
+      }
+      const sent = await sendSlackDM(slackUserId, `:white_check_mark: Test message from Lab Scheduler — Slack reminders are working for *${person.name}*.`);
+      if (!sent) {
+        return res.status(502).json({ message: "Failed to send test DM — check server logs for details" });
+      }
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to send test Slack DM" });
     }
   });
 

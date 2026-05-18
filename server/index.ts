@@ -5,6 +5,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
 import { startDiagnosticsLogging } from "./diagnostics";
 import { startCron } from "./cron";
+import { validateSlackToken } from "./slack";
 
 const app = express();
 
@@ -197,6 +198,7 @@ app.use((req, res, next) => {
   await initializeDatabase();
   const server = await registerRoutes(app);
   startDiagnosticsLogging(log);
+  await validateSlackToken();
   startCron();
   setupRuntimeGuardrails(server);
 

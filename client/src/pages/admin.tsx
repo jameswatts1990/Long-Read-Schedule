@@ -1407,6 +1407,7 @@ export default function Admin() {
 
   const [editingSlackId, setEditingSlackId] = useState<string | null>(null);
   const [slackIdDraft, setSlackIdDraft] = useState("");
+  const [slackIdError, setSlackIdError] = useState<string | null>(null);
 
   const updateSlackUserIdMutation = useMutation({
     mutationFn: async ({ personId, slackUserId }: { personId: string; slackUserId: string | null }) => {
@@ -1420,6 +1421,23 @@ export default function Admin() {
     },
     onError: (error: unknown) => {
       toast({ title: "Failed to update Slack user ID", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const testSlackDMMutation = useMutation({
+    mutationFn: async (personId: string) => {
+      const res = await apiRequest("POST", `/api/people/${personId}/slack-test`, {});
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to send test DM");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Test DM sent", description: "Check Slack for the test message." });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Test DM failed", description: extractErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -1609,36 +1627,59 @@ export default function Admin() {
                           })()}
                         </div>
                         {(currentUser as any)?.slackEnabled && (
-                          <div className="mt-1 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="mt-1 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
                             {editingSlackId === person.id ? (
                               <>
-                                <input
-                                  className="h-7 text-xs border rounded px-2 w-40 bg-background"
-                                  placeholder="Slack member ID (U…)"
-                                  value={slackIdDraft}
-                                  onChange={(e) => setSlackIdDraft(e.target.value)}
-                                  autoFocus
-                                />
-                                <Button
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() => updateSlackUserIdMutation.mutate({ personId: person.id, slackUserId: slackIdDraft.trim() || null })}
-                                  disabled={updateSlackUserIdMutation.isPending}
-                                >
-                                  Save
-                                </Button>
-                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingSlackId(null)}>
-                                  Cancel
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    className={`h-7 text-xs border rounded px-2 w-40 bg-background ${slackIdError ? "border-destructive" : ""}`}
+                                    placeholder="Slack member ID (U…)"
+                                    value={slackIdDraft}
+                                    onChange={(e) => {
+                                      setSlackIdDraft(e.target.value);
+                                      const v = e.target.value.trim();
+                                      setSlackIdError(v && !/^[UW][A-Z0-9]{8,}$/.test(v) ? "Must start with U or W followed by 8+ uppercase letters/numbers (e.g. U012AB3CD)" : null);
+                                    }}
+                                    autoFocus
+                                  />
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => {
+                                      if (slackIdError) return;
+                                      updateSlackUserIdMutation.mutate({ personId: person.id, slackUserId: slackIdDraft.trim() || null });
+                                    }}
+                                    disabled={updateSlackUserIdMutation.isPending || !!slackIdError}
+                                  >
+                                    Save
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingSlackId(null); setSlackIdError(null); }}>
+                                    Cancel
+                                  </Button>
+                                </div>
+                                {slackIdError && <p className="text-xs text-destructive">{slackIdError}</p>}
                               </>
                             ) : (
-                              <button
-                                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                onClick={() => { setEditingSlackId(person.id); setSlackIdDraft((person as any).slackUserId || ""); }}
-                              >
-                                <span className="font-medium">Slack:</span>
-                                {(person as any).slackUserId ? (person as any).slackUserId : <span className="italic">not set</span>}
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                  onClick={() => { setEditingSlackId(person.id); setSlackIdDraft((person as any).slackUserId || ""); setSlackIdError(null); }}
+                                >
+                                  <span className="font-medium">Slack:</span>
+                                  {(person as any).slackUserId ? (person as any).slackUserId : <span className="italic">not set</span>}
+                                </button>
+                                {(person as any).slackUserId && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs px-2"
+                                    onClick={() => testSlackDMMutation.mutate(person.id)}
+                                    disabled={testSlackDMMutation.isPending}
+                                  >
+                                    {testSlackDMMutation.isPending ? "Sending…" : "Test"}
+                                  </Button>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}

@@ -114,7 +114,7 @@ export function HelpGuide() {
               <Item label="Custom colour" description="Overrides the task colour for this assignment only." />
               <Item label="Batch number & size" description="Optional identifiers used in reporting. Batch size requires a batch number. Click 'Auto' (shows a spinner while loading) to generate the next ID in sequence." />
               <Item label="Notes" description="Free text attached to an assignment. Shown as an info icon (ℹ) in the grid." />
-              <Item label="Slack reminder" description="When Slack integration is active, tick 'Send Slack reminder on the day of this task' to receive a direct message at 9 AM on the day of the assignment. The checkbox appears both when creating and when editing an assignment." />
+              <Item label="Slack reminder" description="When Slack integration is active, tick 'Send Slack reminder on the day of this task' to receive a direct message at 09:00 UTC (10:00 BST in summer) on the day of the assignment. The checkbox appears both when creating and when editing an assignment." />
             </Section>
 
             <Section title="Moving & copying">
@@ -236,7 +236,7 @@ export function HelpGuide() {
               <Item label="Reorder" description="Drag the handle next to a person's name to change their display order in the grid." />
               <Item label="Exclude" description="Tick 'Exclude' to hide someone from the grid without deleting their assignment history." />
               <Item label="User level" description="When a person is linked to a user account, a second dropdown appears next to the user link. Set their level: Member (default), Admin, or Super Admin. Super Admins can manage workspaces and are treated the same as env-var super admins." />
-              <Item label="Slack User ID" description="When Slack integration is active, a 'Slack:' row appears under each person. Click it to enter the person's Slack Member ID (starts with U, e.g. U012AB3CD). Find it in Slack under their profile → More → Copy member ID. This is required for Slack reminders to reach them." />
+              <Item label="Slack User ID" description="When Slack integration is active, a 'Slack:' row appears under each person. Click it to enter the person's Slack Member ID (starts with U or W, e.g. U012AB3CD). Find it in Slack under their profile → More → Copy member ID. This is required for Slack reminders to reach them. Once set, a 'Test' button appears — click it to send a test DM immediately and confirm the ID is correct." />
             </Section>
 
             <Section title="Tasks">

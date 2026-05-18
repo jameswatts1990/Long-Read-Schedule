@@ -15,7 +15,7 @@ export function startCron(): void {
       const rows = await storage.getTodaysSlackAssignments();
       if (rows.length === 0) return;
 
-      await Promise.allSettled(
+      const results = await Promise.allSettled(
         rows.map((r) =>
           sendSlackDM(
             r.slackUserId,
@@ -24,7 +24,13 @@ export function startCron(): void {
         ),
       );
 
-      console.log(`[cron] Sent ${rows.length} Slack reminder(s)`);
+      const sent = results.filter((r) => r.status === "fulfilled" && r.value === true).length;
+      const failed = results.length - sent;
+      if (failed > 0) {
+        console.warn(`[cron] Slack reminders: ${sent} sent, ${failed} failed — check logs above for details`);
+      } else {
+        console.log(`[cron] Sent ${sent} Slack reminder(s) successfully`);
+      }
     } catch (err) {
       console.error("[cron] Error running Slack reminders:", err);
     }
