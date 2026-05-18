@@ -125,3 +125,34 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Trigger: User confirmed that `npm run db:push` cannot be executed on the Replit-hosted app.
 - Learning: Never instruct the user to run npm/node commands to apply DB changes on Replit. Instead, provide the raw SQL `CREATE TABLE` / `ALTER TABLE` statements for the user to run directly in Replit's PostgreSQL database shell.
 - Action: Whenever a schema change is made, output the exact SQL DDL statements needed alongside a note to run them in Replit's database tool.
+
+## rota_skips table — missing migration silently breaks all rota assignments
+
+- Date: 2026-05-18
+- Trigger: Users reported rota task assignments never appearing despite rota tasks being created successfully. The `applyRotaTasksForWeek` function opens with a SELECT against `rota_skips`; if that table doesn't exist the function throws immediately and no assignments are created.
+- Learning: The `rota_skips` table and `assignments_rota_slot_unique` partial unique index must be present in the DB for rota assignment creation to work. The CREATE/apply failure was invisible because (a) the catch block had no `console.error`, and (b) it returned 400 for all errors including DB errors.
+- Action: Always provide the SQL below when rota features are deployed. Also: always add `console.error(error)` to every route catch block so DB failures leave a server-side trace.
+- Evidence: `server/storage.ts` `applyRotaTasksForWeek`; SQL migrations required:
+  ```sql
+  CREATE TABLE IF NOT EXISTS rota_skips (
+    id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+    rota_task_id VARCHAR NOT NULL,
+    week_start_date TEXT NOT NULL,
+    day TEXT NOT NULL,
+    workspace_id VARCHAR NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS rota_skips_unique
+    ON rota_skips (rota_task_id, week_start_date, day);
+  CREATE UNIQUE INDEX IF NOT EXISTS assignments_rota_slot_unique
+    ON assignments (rota_task_id, week_start_date, day)
+    WHERE rota_task_id IS NOT NULL;
+  ```
+
+## applyRotaTasksForWeek — must isolate per-rota errors to avoid all-or-nothing failures
+
+- Date: 2026-05-18
+- Trigger: One rota task with a bad DB reference (or a transient error) was found to fail the entire `applyRotaTasksForWeek` call, leaving all other valid rota tasks unapplied for that week.
+- Learning: Wrap the outer `for (const rotaTask of activeRotaTasks)` body in a try/catch. Log the error with `console.error` including the `rotaTask.id` and `weekStartDate`, then `continue` to the next task. This makes the function partially tolerant rather than all-or-nothing.
+- Action: In any loop that processes independent records (rota tasks, bulk assignments), always wrap each iteration in try/catch so one failure doesn't abort the rest.
+- Evidence: `server/storage.ts` `applyRotaTasksForWeek` — fixed 2026-05-18.

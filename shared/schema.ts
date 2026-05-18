@@ -180,7 +180,10 @@ export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: tru
   frequency: z.enum(["daily", "weekly"]),
   startDate: isoDateString,
   personIds: z.array(z.string()).min(1, "At least one person is required"),
-  intervalWeeks: z.coerce.number().int().min(1).max(52).default(1),
+  intervalWeeks: z.preprocess(
+    (value) => (value === "" || value === undefined) ? 1 : value,
+    z.coerce.number().int().min(1).max(52).default(1),
+  ),
   weekLimit: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.coerce.number().int().min(1).max(500).optional(),

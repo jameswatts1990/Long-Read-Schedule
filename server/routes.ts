@@ -663,6 +663,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("rota-tasks", req.workspaceId);
       res.json(rotaTask);
     } catch (error) {
+      console.error("Error creating rota task:", error);
       if (error instanceof ZodError) {
         res.status(400).json({ message: error.errors[0]?.message ?? "Invalid rota task data" });
       } else {
@@ -680,6 +681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastUpdate("rota-tasks", req.workspaceId);
       res.json(rotaTask);
     } catch (error) {
+      console.error("Error updating rota task:", error);
       if (error instanceof ZodError) {
         res.status(400).json({ message: error.errors[0]?.message ?? "Invalid rota task data" });
       } else {
@@ -700,6 +702,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ success: true, ...result });
     } catch (error) {
+      console.error("Error deleting rota task:", error);
       res.status(500).json({ message: "Failed to delete rota task" });
     }
   });
@@ -718,7 +721,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(created);
     } catch (error) {
-      res.status(400).json({ message: "Failed to apply rota tasks" });
+      console.error("Error applying rota tasks:", error);
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid weekStartDate" });
+      }
+      res.status(500).json({ message: "Failed to apply rota tasks" });
     }
   });
 
@@ -917,6 +924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.json({ success: true });
     } catch (error) {
+      console.error("Error deleting assignment:", error);
       res.status(500).json({ message: "Failed to delete assignment" });
     }
   });

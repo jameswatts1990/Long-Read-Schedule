@@ -706,63 +706,68 @@ export class PostgresStorage implements IStorage {
     const created: Assignment[] = [];
 
     for (const rotaTask of activeRotaTasks) {
-      if (rotaTask.personIds.length === 0) continue;
+      try {
+        if (rotaTask.personIds.length === 0) continue;
 
-      const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00Z`));
-      const diffMs = targetMonday.getTime() - startMonday.getTime();
-      const weeksSinceStart = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+        const startMonday = getMondayOf(new Date(`${rotaTask.startDate}T00:00:00Z`));
+        const diffMs = targetMonday.getTime() - startMonday.getTime();
+        const weeksSinceStart = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
 
-      if (weeksSinceStart < 0) continue; // Rota hasn't started yet
+        if (weeksSinceStart < 0) continue; // Rota hasn't started yet
 
-      const intervalWeeks = rotaTask.intervalWeeks ?? 1;
+        const intervalWeeks = rotaTask.intervalWeeks ?? 1;
 
-      // Skip inactive weeks (Option A: gap between turns)
-      if (weeksSinceStart % intervalWeeks !== 0) continue;
+        // Skip inactive weeks (Option A: gap between turns)
+        if (weeksSinceStart % intervalWeeks !== 0) continue;
 
-      const weekLimit = rotaTask.weekLimit;
-      // Calculate how many active weeks have passed (0-indexed, so active week count is turnIndex + 1)
-      const turnIndex = Math.floor(weeksSinceStart / intervalWeeks);
-      const activeWeekCount = turnIndex + 1;
+        const weekLimit = rotaTask.weekLimit;
+        // Calculate how many active weeks have passed (0-indexed, so active week count is turnIndex + 1)
+        const turnIndex = Math.floor(weeksSinceStart / intervalWeeks);
+        const activeWeekCount = turnIndex + 1;
 
-      if (weekLimit != null && activeWeekCount > weekLimit) {
-        await this.db
-          .update(rotaTasks)
-          .set({ archivedAt: new Date() })
-          .where(and(eq(rotaTasks.id, rotaTask.id), isNull(rotaTasks.archivedAt)));
-        continue;
-      }
-
-      const personId = rotaTask.personIds[turnIndex % rotaTask.personIds.length];
-
-      // Daily cadence → assign all Mon-Fri; weekly → only the configured day
-      const daysToAssign: string[] = rotaTask.frequency === "daily"
-        ? [...DAYS]
-        : [rotaTask.day];
-
-      for (const day of daysToAssign) {
-
-        // Layer 1: tombstone check — user explicitly deleted this slot
-        if (skipSet.has(`${rotaTask.id}:${day}`)) continue;
-
-        // Layer 2: atomic insert with ON CONFLICT DO NOTHING (unique index on
-        // rota_task_id+week_start_date+day handles concurrent requests safely).
-        const [newAssignment] = await this.db
-          .insert(assignments)
-          .values({
-            id: randomUUID(),
-            taskId: rotaTask.taskId,
-            personId,
-            day,
-            weekStartDate,
-            workspaceId,
-            rotaTaskId: rotaTask.id,
-          })
-          .onConflictDoNothing()
-          .returning();
-
-        if (newAssignment) {
-          created.push(newAssignment);
+        if (weekLimit != null && activeWeekCount > weekLimit) {
+          await this.db
+            .update(rotaTasks)
+            .set({ archivedAt: new Date() })
+            .where(and(eq(rotaTasks.id, rotaTask.id), isNull(rotaTasks.archivedAt)));
+          continue;
         }
+
+        const personId = rotaTask.personIds[turnIndex % rotaTask.personIds.length];
+
+        // Daily cadence → assign all Mon-Fri; weekly → only the configured day
+        const daysToAssign: string[] = rotaTask.frequency === "daily"
+          ? [...DAYS]
+          : [rotaTask.day];
+
+        for (const day of daysToAssign) {
+
+          // Layer 1: tombstone check — user explicitly deleted this slot
+          if (skipSet.has(`${rotaTask.id}:${day}`)) continue;
+
+          // Layer 2: atomic insert with ON CONFLICT DO NOTHING (unique index on
+          // rota_task_id+week_start_date+day handles concurrent requests safely).
+          const [newAssignment] = await this.db
+            .insert(assignments)
+            .values({
+              id: randomUUID(),
+              taskId: rotaTask.taskId,
+              personId,
+              day,
+              weekStartDate,
+              workspaceId,
+              rotaTaskId: rotaTask.id,
+            })
+            .onConflictDoNothing()
+            .returning();
+
+          if (newAssignment) {
+            created.push(newAssignment);
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to apply rota task ${rotaTask.id} for week ${weekStartDate}:`, err);
+        // Continue with remaining rota tasks rather than failing the entire request
       }
     }
 

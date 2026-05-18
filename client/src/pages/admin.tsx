@@ -70,7 +70,10 @@ const rotaTaskFormSchema = z.object({
   day: z.enum(DAYS),
   startDate: z.string().min(1, "Start date is required"),
   personIds: z.array(z.string()).min(1, "Add at least one person to the rota order"),
-  intervalWeeks: z.coerce.number().int().min(1).max(52).default(1),
+  intervalWeeks: z.preprocess(
+    (value) => (value === "" || value === undefined) ? 1 : value,
+    z.coerce.number().int().min(1).max(52).default(1),
+  ),
   weekLimit: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.coerce.number().int().min(1, "Minimum 1 week").max(500, "Maximum 500 weeks").optional(),
@@ -422,6 +425,11 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
     },
   });
 
+  const freshStartDate = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
   const createRotaTaskMutation = useMutation({
     mutationFn: async (data: RotaTaskFormData) => {
       const res = await apiRequest("POST", "/api/rota-tasks", {
@@ -434,7 +442,10 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       queryClient.invalidateQueries({ queryKey: ["/api/rota-tasks"] });
       toast({ title: "Rota task created", description: "The rotation is now active for this workspace." });
       setShowDialog(false);
-      rotaTaskForm.reset();
+      rotaTaskForm.reset({
+        name: "", taskId: "", frequency: "weekly", day: "Monday",
+        startDate: freshStartDate(), personIds: [], intervalWeeks: 1, weekLimit: undefined,
+      });
     },
     onError: (error: unknown) =>
       toast({ title: "Failed to create rota task", description: extractErrorMessage(error), variant: "destructive" }),
@@ -454,7 +465,10 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
       toast({ title: "Rota task updated" });
       setShowDialog(false);
       setEditingRotaTask(null);
-      rotaTaskForm.reset();
+      rotaTaskForm.reset({
+        name: "", taskId: "", frequency: "weekly", day: "Monday",
+        startDate: freshStartDate(), personIds: [], intervalWeeks: 1, weekLimit: undefined,
+      });
     },
     onError: (error: unknown) =>
       toast({ title: "Failed to update rota task", description: extractErrorMessage(error), variant: "destructive" }),
@@ -825,7 +839,10 @@ function RotaTasksSection({ people, tasks }: { people: Person[]; tasks: Task[] }
                           max={500}
                           placeholder="Leave blank to keep repeating"
                           value={field.value ?? ""}
-                          onChange={(event) => field.onChange(event.target.value)}
+                          onChange={(event) => {
+                            const val = event.target.value;
+                            field.onChange(val === "" ? undefined : Number(val));
+                          }}
                         />
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
