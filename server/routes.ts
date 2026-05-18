@@ -1097,6 +1097,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Receives direct messages from users and replies with their week schedule.
   // Requires SLACK_SIGNING_SECRET env var and the message.im bot event subscription.
   app.post("/slack/events", async (req, res) => {
+    const body = req.body as any;
+
+    // Respond to the one-time URL verification challenge before anything else
+    if (body.type === "url_verification") {
+      return res.json({ challenge: body.challenge });
+    }
+
     const signingSecret = process.env.SLACK_SIGNING_SECRET;
     const timestamp = req.headers["x-slack-request-timestamp"] as string | undefined;
     const signature = req.headers["x-slack-signature"] as string | undefined;
@@ -1111,13 +1118,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } else {
       console.warn("[slack-events] SLACK_SIGNING_SECRET not set — skipping signature verification");
-    }
-
-    const body = req.body as any;
-
-    // Slack sends a one-time challenge when first registering the URL
-    if (body.type === "url_verification") {
-      return res.json({ challenge: body.challenge });
     }
 
     // Acknowledge immediately so Slack doesn't retry (3 s deadline)
