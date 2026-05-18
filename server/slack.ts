@@ -1,27 +1,15 @@
-type SlackClient = {
-  chat: {
-    postMessage(input: { channel: string; text: string }): Promise<unknown>;
-  };
-};
+import { WebClient } from "@slack/web-api";
 
-let client: SlackClient | null = null;
+let client: WebClient | null = null;
 
-async function getClient(): Promise<SlackClient | null> {
+function getClient(): WebClient | null {
   if (!process.env.SLACK_BOT_TOKEN) return null;
-  if (!client) {
-    try {
-      const mod = await import("@slack/web-api");
-      client = new mod.WebClient(process.env.SLACK_BOT_TOKEN);
-    } catch {
-      console.warn("[slack] @slack/web-api is not installed — Slack messages will not be sent");
-      return null;
-    }
-  }
+  if (!client) client = new WebClient(process.env.SLACK_BOT_TOKEN);
   return client;
 }
 
 export async function sendSlackDM(slackUserId: string, text: string): Promise<void> {
-  const slack = await getClient();
+  const slack = getClient();
   if (!slack) {
     console.warn("[slack] SLACK_BOT_TOKEN not set — skipping DM to", slackUserId);
     return;
