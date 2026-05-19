@@ -1458,6 +1458,23 @@ export default function Admin() {
     },
   });
 
+  const refreshAppHomeMutation = useMutation({
+    mutationFn: async (personId: string) => {
+      const res = await apiRequest("POST", `/api/people/${personId}/slack-refresh-home`, {});
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to publish App Home");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "App Home refreshed", description: "Check the Home tab in your Slack app." });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "App Home refresh failed", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
   const handleEditPerson = (person: Person) => {
     setEditingPerson(person);
     personForm.reset({ name: person.name, color: person.color });
@@ -1686,15 +1703,26 @@ export default function Admin() {
                                   {(person as any).slackUserId ? (person as any).slackUserId : <span className="italic">not set</span>}
                                 </button>
                                 {(person as any).slackUserId && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-6 text-xs px-2"
-                                    onClick={() => testSlackDMMutation.mutate(person.id)}
-                                    disabled={testSlackDMMutation.isPending}
-                                  >
-                                    {testSlackDMMutation.isPending ? "Sending…" : "Test"}
-                                  </Button>
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 text-xs px-2"
+                                      onClick={() => testSlackDMMutation.mutate(person.id)}
+                                      disabled={testSlackDMMutation.isPending}
+                                    >
+                                      {testSlackDMMutation.isPending ? "Sending…" : "Test DM"}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 text-xs px-2"
+                                      onClick={() => refreshAppHomeMutation.mutate(person.id)}
+                                      disabled={refreshAppHomeMutation.isPending}
+                                    >
+                                      {refreshAppHomeMutation.isPending ? "Publishing…" : "Refresh Home"}
+                                    </Button>
+                                  </>
                                 )}
                               </div>
                             )}

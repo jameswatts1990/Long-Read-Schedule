@@ -559,6 +559,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/people/:id/slack-refresh-home", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      if (!isSlackEnabled()) {
+        return res.status(400).json({ message: "Slack is not configured on this server" });
+      }
+      const people = await storage.getPeople(req.workspaceId!);
+      const person = people.find((p) => p.id === req.params.id);
+      if (!person) return res.status(404).json({ message: "Person not found" });
+      const slackUserId = (person as any).slackUserId;
+      if (!slackUserId) {
+        return res.status(400).json({ message: "No Slack member ID set for this person" });
+      }
+      const weekStartDate = getMondayUTC();
+      const rows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate);
+      const blocks = buildAppHomeBlocks(rows, weekStartDate, true);
+      await publishAppHome(slackUserId, blocks);
+      res.json({ ok: true, message: "App Home published — check the Home tab in Slack" });
+    } catch (error) {
+      console.error("[slack] Manual App Home refresh failed:", error);
+      res.status(500).json({ message: "Failed to publish App Home — check server logs" });
+    }
+  });
+
   // ── Tasks (workspace-scoped) ────────────────────────────────────────────────
 
   app.get("/api/tasks", isAuthenticated, requireWorkspace, async (req, res) => {
@@ -1216,9 +1239,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!event) return;
 
     // App Home opened — publish the home tab view
-    if (event.type === "app_home_opened" && event.tab === "home") {
+    if (event.type === "app_home_opened" && (event.tab === "home" || !event.tab)) {
       const slackUserId = event.user as string | undefined;
       if (!slackUserId) return;
+      console.log("[slack-events] app_home_opened received for user:", slackUserId, "tab:", event.tab);
       try {
         const isRegistered = await storage.isSlackUserIdRegistered(slackUserId);
         const weekStartDate = getMondayUTC();
@@ -1226,9 +1250,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate)
           : [];
         const blocks = buildAppHomeBlocks(rows, weekStartDate, isRegistered);
-        publishAppHome(slackUserId, blocks).catch((err) =>
-          console.error("[slack] App Home publish error:", err),
-        );
+        await publishAppHome(slackUserId, blocks);
+        console.log("[slack-events] App Home published successfully for user:", slackUserId);
       } catch (err) {
         console.error("[slack-events] Error handling app_home_opened:", err);
       }
