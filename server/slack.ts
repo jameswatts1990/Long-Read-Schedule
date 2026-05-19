@@ -303,6 +303,79 @@ export async function publishAppHome(slackUserId: string, blocks: object[]): Pro
   }
 }
 
+// ─── Notification helpers ──────────────────────────────────────────────────
+
+export function buildSchedulerLink(weekStartDate: string): string {
+  const appUrl = process.env.APP_URL?.replace(/\/$/, "");
+  if (!appUrl) return "";
+  return `\n<${appUrl}/?week=${weekStartDate}|View your schedule →>`;
+}
+
+type AssignmentRow = {
+  taskId: string;
+  customName: string | null;
+  day: string;
+  weekStartDate: string;
+  notes: string | null;
+  batchNumber: string | null;
+  batchSize: number | null;
+};
+
+export function buildChangeSummary(
+  existing: AssignmentRow,
+  updated: AssignmentRow,
+  parsed: Partial<AssignmentRow>,
+  oldTaskName?: string | null,
+  newTaskName?: string | null,
+): string {
+  const bullets: string[] = [];
+
+  if ("day" in parsed && parsed.day !== undefined && existing.day !== updated.day) {
+    bullets.push(`• Day: ${existing.day} → ${updated.day}`);
+  }
+  if ("weekStartDate" in parsed && parsed.weekStartDate !== undefined && existing.weekStartDate !== updated.weekStartDate) {
+    bullets.push(`• Week: ${existing.weekStartDate} → ${updated.weekStartDate}`);
+  }
+  if ("taskId" in parsed && parsed.taskId !== undefined && existing.taskId !== updated.taskId) {
+    const from = oldTaskName ?? existing.taskId;
+    const to = newTaskName ?? updated.taskId;
+    bullets.push(`• Task: ${from} → ${to}`);
+  }
+  if ("customName" in parsed && parsed.customName !== undefined && (existing.customName ?? null) !== (updated.customName ?? null)) {
+    if (!updated.customName) {
+      bullets.push(`• Name: removed`);
+    } else if (!existing.customName) {
+      bullets.push(`• Name: set to "${updated.customName}"`);
+    } else {
+      bullets.push(`• Name: "${existing.customName}" → "${updated.customName}"`);
+    }
+  }
+  if ("notes" in parsed && parsed.notes !== undefined && (existing.notes ?? null) !== (updated.notes ?? null)) {
+    if (!updated.notes) {
+      bullets.push(`• Notes: removed`);
+    } else if (!existing.notes) {
+      bullets.push(`• Notes: added — _${updated.notes}_`);
+    } else {
+      bullets.push(`• Notes: updated — _${updated.notes}_`);
+    }
+  }
+  const batchChanged =
+    ("batchNumber" in parsed && parsed.batchNumber !== undefined && (existing.batchNumber ?? null) !== (updated.batchNumber ?? null)) ||
+    ("batchSize" in parsed && parsed.batchSize !== undefined && (existing.batchSize ?? null) !== (updated.batchSize ?? null));
+  if (batchChanged) {
+    const fromBatch = existing.batchNumber != null
+      ? (existing.batchSize != null ? `${existing.batchNumber} of ${existing.batchSize}` : `${existing.batchNumber}`)
+      : "none";
+    const toBatch = updated.batchNumber != null
+      ? (updated.batchSize != null ? `${updated.batchNumber} of ${updated.batchSize}` : `${updated.batchNumber}`)
+      : "none";
+    bullets.push(`• Batch: ${fromBatch} → ${toBatch}`);
+  }
+
+  if (bullets.length === 0) return "";
+  return `\n*What changed:*\n${bullets.join("\n")}`;
+}
+
 export function formatDayScheduleMessage(
   rows: Array<{
     day: string;

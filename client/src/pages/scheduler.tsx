@@ -72,7 +72,15 @@ function formatMonthDisplay(date: Date): string {
 }
 
 export default function Scheduler() {
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => getMonday(new Date()));
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const week = params.get("week");
+    if (week) {
+      const d = new Date(week + "T00:00:00Z");
+      if (!isNaN(d.getTime())) return d;
+    }
+    return getMonday(new Date());
+  });
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [filterPersonIds, setFilterPersonIds] = useState<Set<string>>(new Set());
   const [filterTaskIds, setFilterTaskIds] = useState<Set<string>>(new Set());

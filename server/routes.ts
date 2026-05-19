@@ -14,7 +14,7 @@ import {
 import { z, ZodError } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { getDiagnosticsSnapshot } from "./diagnostics";
-import { sendSlackDM, isSlackEnabled, verifySlackSignature, getMondayUTC, getOffsetMondayUTC, getTodayInfo, formatWeekScheduleMessage, formatDayScheduleMessage, buildAppHomeBlocks, publishAppHome } from "./slack.js";
+import { sendSlackDM, isSlackEnabled, verifySlackSignature, getMondayUTC, getOffsetMondayUTC, getTodayInfo, formatWeekScheduleMessage, formatDayScheduleMessage, buildAppHomeBlocks, publishAppHome, buildSchedulerLink, buildChangeSummary } from "./slack.js";
 
 // Super-admin email list — loaded from SUPER_ADMIN_EMAILS env var (comma-separated)
 // so access can be changed without a code deployment.
@@ -800,9 +800,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (isSlackEnabled() && assignment.slackChangeNotify === 1 && person?.slackUserId) {
               if (!task) task = await storage.getTask(assignment.taskId);
               const taskLabel = assignment.customName ?? task?.name ?? "a task";
+              const notesLine = assignment.notes ? `\n> _${assignment.notes}_` : "";
+              const link = buildSchedulerLink(assignment.weekStartDate);
               sendSlackDM(
                 person.slackUserId,
-                `:calendar: You've been assigned *${taskLabel}* on *${assignment.day}* (week of ${assignment.weekStartDate}).`,
+                `:calendar: You've been assigned *${taskLabel}* on *${assignment.day}* (week of ${assignment.weekStartDate}).${notesLine}${link}`,
               ).catch((err) => console.error("[slack] Bulk assignment create DM failed:", err));
             }
           })
@@ -923,17 +925,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               storage.getTask(updated.taskId),
             ]);
             const taskLabel = updated.customName ?? task?.name ?? "a task";
+            const oldLink = buildSchedulerLink(existing.weekStartDate);
+            const newLink = buildSchedulerLink(updated.weekStartDate);
             if (oldPerson?.slackUserId) {
+              const toName = newPerson?.name ? ` to *${newPerson.name}*` : "";
               await sendSlackDM(
                 oldPerson.slackUserId,
-                `:x: Your assignment *${taskLabel}* on *${existing.day}* (week of ${existing.weekStartDate}) has been reassigned.`,
+                `:x: Your assignment *${taskLabel}* on *${existing.day}* (week of ${existing.weekStartDate}) has been reassigned${toName}.${oldLink}`,
               );
             }
             if (newPerson?.slackUserId) {
+              const fromName = oldPerson?.name ? ` (previously assigned to *${oldPerson.name}*)` : "";
               const notesLine = updated.notes ? `\n> _${updated.notes}_` : "";
               await sendSlackDM(
                 newPerson.slackUserId,
-                `:calendar: You've been assigned *${taskLabel}* on *${updated.day}* (week of ${updated.weekStartDate}).${notesLine}`,
+                `:calendar: You've been assigned *${taskLabel}* on *${updated.day}* (week of ${updated.weekStartDate})${fromName}.${notesLine}${newLink}`,
               );
             }
           } else {
@@ -943,16 +949,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return v !== undefined && (v ?? null) !== ((existing as any)[f] ?? null);
             });
             if (!hasChange) return;
-            const [person, task] = await Promise.all([
+            const taskChanged = "taskId" in parsed && parsed.taskId !== undefined && existing.taskId !== updated.taskId;
+            const [person, newTask, oldTask] = await Promise.all([
               storage.getPerson(updated.personId),
               storage.getTask(updated.taskId),
+              taskChanged ? storage.getTask(existing.taskId) : Promise.resolve(null),
             ]);
             if (!person?.slackUserId) return;
-            const taskLabel = updated.customName ?? task?.name ?? "a task";
-            const notesLine = updated.notes ? `\n> _${updated.notes}_` : "";
+            const taskLabel = updated.customName ?? newTask?.name ?? "a task";
+            const changeSummary = buildChangeSummary(existing, updated, parsed, oldTask?.name, newTask?.name);
+            const link = buildSchedulerLink(updated.weekStartDate);
             await sendSlackDM(
               person.slackUserId,
-              `:pencil2: Your assignment *${taskLabel}* on *${updated.day}* (week of ${updated.weekStartDate}) has been updated.${notesLine}`,
+              `:pencil2: Your assignment *${taskLabel}* on *${updated.day}* (week of ${updated.weekStartDate}) has been updated.${changeSummary}${link}`,
             );
           }
         })().catch((err) => console.error("[slack] PATCH assignment notification error:", err));
@@ -995,9 +1004,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       if (personForSlack?.slackUserId && existing) {
         const taskLabel = existing.customName ?? taskForSlack?.name ?? "a task";
+        const link = buildSchedulerLink(existing.weekStartDate);
         sendSlackDM(
           personForSlack.slackUserId,
-          `:x: Your assignment *${taskLabel}* on *${existing.day}* (week of ${existing.weekStartDate}) has been removed.`,
+          `:x: Your assignment *${taskLabel}* on *${existing.day}* (week of ${existing.weekStartDate}) has been removed.${link}`,
         ).catch((err) => console.error("[slack] Assignment delete DM failed:", err));
       }
       res.json({ success: true });

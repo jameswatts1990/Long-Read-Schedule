@@ -189,6 +189,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: When extending the App Home, modify `buildAppHomeBlocks` in `server/slack.ts` and re-publish. The home is always fetched fresh on open so no caching concerns.
 - Evidence: `server/slack.ts` (buildAppHomeBlocks, publishAppHome); `server/routes.ts` (app_home_opened handler before message guard).
 
+## Slack enriched notifications — APP_URL env var and deep links
+
+- Date: 2026-05-19
+- Trigger: Added what-changed summary and deep link to Slack DM notifications for assignment changes.
+- Learning: (1) Use `process.env.APP_URL` (set in Replit Secrets, no trailing slash) as the base URL for deep links. If unset, `buildSchedulerLink` returns `""` — notifications send cleanly with no link. (2) Slack mrkdwn link format is `<URL|label>`. (3) `buildChangeSummary` compares `existing` vs `updated` for: day, weekStartDate, taskId (requires fetching old task name separately), customName, notes, batchNumber/batchSize. (4) The scheduler reads `?week=YYYY-MM-DD` URL param on mount to jump to the correct week. (5) Reassignment DMs now include the other person's name for context.
+- Action: When adding more Slack notification types, import `buildSchedulerLink` from `slack.ts` and append its return value to the message. Always guard on `APP_URL` being set so the feature degrades gracefully.
+- Evidence: `server/slack.ts` (buildSchedulerLink, buildChangeSummary); `server/routes.ts` PATCH/POST/DELETE assignment notification blocks; `client/src/pages/scheduler.tsx` currentWeekStart useState.
+
 ## applyRotaTasksForWeek — must isolate per-rota errors to avoid all-or-nothing failures
 
 - Date: 2026-05-18
