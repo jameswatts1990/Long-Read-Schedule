@@ -175,6 +175,11 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true });
 export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id: true }).extend({
   day: z.enum(DAYS),
   weekStartDate: isoDateString,
+  // Explicit overrides — drizzle-zod may omit these integer-with-default columns from
+  // the generated schema, causing .parse() to strip them. Defining them here ensures
+  // the values survive the parse on both client and server.
+  slackNotify: z.number().int().min(0).max(1).optional(),
+  slackChangeNotify: z.number().int().min(0).max(1).optional(),
 });
 export const insertPremadeFilterSchema = createInsertSchema(premadeFilters).omit({ id: true });
 export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: true, createdAt: true, archivedAt: true }).extend({

@@ -165,6 +165,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: When adding more bot commands, extend the if/else chain in the `/slack/events` handler in `routes.ts`. When adding assignment DMs, always fire-and-forget (`.catch(...)`) so a Slack failure doesn't break the HTTP response.
 - Evidence: `server/slack.ts` (getOffsetMondayUTC, getTodayInfo, formatDayScheduleMessage, buildAppHomeBlocks, publishAppHome); `server/cron.ts` (Friday 8 AM cron); `server/storage.ts` (getPeopleWithSlackIdsForWeek); `server/routes.ts` (Events handler, POST/DELETE /api/assignments); `shared/schema.ts` (slackChangeNotify column).
 
+## drizzle-zod omits integer-with-default columns — explicit schema overrides required
+
+- Date: 2026-05-19
+- Trigger: `slackChangeNotify` (and `slackNotify`) checkbox values were not persisted on create. `customColor` had the same issue and was worked around by extracting it from `req.body` before the schema parse.
+- Learning: `createInsertSchema(assignments)` from drizzle-zod silently omits some `integer().notNull().default(n)` columns from the generated Zod schema. Calling `.parse()` strips any field not in the schema, so the DB INSERT falls back to `DEFAULT 0` even when the user explicitly set the value.
+- Action: When adding a new `integer().notNull().default(...)` column that must round-trip through `insertAssignmentSchema.parse()`, add an explicit override in the `.extend()` call in `shared/schema.ts` (e.g. `slackChangeNotify: z.number().int().min(0).max(1).optional()`). This ensures the field survives the parse on both client and server. Do NOT rely solely on drizzle-zod's auto-generation for these columns.
+- Evidence: `shared/schema.ts` `insertAssignmentSchema.extend()`; same pattern already used for `slackNotify` and `slackChangeNotify` after this fix.
+
 ## Slack App Home tab — requires Slack dashboard config + app_home_opened event
 
 - Date: 2026-05-19
