@@ -571,9 +571,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!slackUserId) {
         return res.status(400).json({ message: "No Slack member ID set for this person" });
       }
-      const weekStartDate = getMondayUTC();
-      const rows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate);
-      const blocks = buildAppHomeBlocks(rows, weekStartDate, true);
+      const today = getTodayInfo();
+      const nextWeekStartDate = getOffsetMondayUTC(1);
+      const [rows, nextWeekRows] = await Promise.all([
+        storage.getWeekAssignmentsForSlackUserId(slackUserId, today.weekStartDate),
+        storage.getWeekAssignmentsForSlackUserId(slackUserId, nextWeekStartDate),
+      ]);
+      const blocks = buildAppHomeBlocks(rows, today.weekStartDate, true, today, nextWeekRows, nextWeekStartDate);
       await publishAppHome(slackUserId, blocks);
       res.json({ ok: true, message: "App Home published — check the Home tab in Slack" });
     } catch (error) {
@@ -1245,11 +1249,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[slack-events] app_home_opened received for user:", slackUserId, "tab:", event.tab);
       try {
         const isRegistered = await storage.isSlackUserIdRegistered(slackUserId);
-        const weekStartDate = getMondayUTC();
-        const rows = isRegistered
-          ? await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate)
-          : [];
-        const blocks = buildAppHomeBlocks(rows, weekStartDate, isRegistered);
+        const today = getTodayInfo();
+        const nextWeekStartDate = getOffsetMondayUTC(1);
+        const [rows, nextWeekRows] = isRegistered
+          ? await Promise.all([
+              storage.getWeekAssignmentsForSlackUserId(slackUserId, today.weekStartDate),
+              storage.getWeekAssignmentsForSlackUserId(slackUserId, nextWeekStartDate),
+            ])
+          : [[], []];
+        const blocks = buildAppHomeBlocks(rows, today.weekStartDate, isRegistered, today, nextWeekRows, nextWeekStartDate);
         await publishAppHome(slackUserId, blocks);
         console.log("[slack-events] App Home published successfully for user:", slackUserId);
       } catch (err) {
@@ -1274,7 +1282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const text = ((event.text as string) ?? "").toLowerCase().trim();
+      const text = ((event.text as string) ?? "").replace(/ /g, " ").toLowerCase().trim();
       const today = getTodayInfo();
       // Map UTC day index (0=Sun,1=Mon…6=Sat) to WEEKDAYS array index (0=Mon…4=Fri)
       const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];

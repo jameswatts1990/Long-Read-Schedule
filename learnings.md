@@ -197,6 +197,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: When adding more Slack notification types, import `buildSchedulerLink` from `slack.ts` and append its return value to the message. Always guard on `APP_URL` being set so the feature degrades gracefully.
 - Evidence: `server/slack.ts` (buildSchedulerLink, buildChangeSummary); `server/routes.ts` PATCH/POST/DELETE assignment notification blocks; `client/src/pages/scheduler.tsx` currentWeekStart useState.
 
+## Slack App Home — shows full week but users expect day/next-week scoping
+
+- Date: 2026-05-19
+- Trigger: User reported "next week" command showed current week; "today" and "tomorrow" showed the whole week. Root cause: App Home always shows the full current week regardless of DM commands, so users looking at the App Home see the wrong scope. Additionally, Slack can send "next week" with a non-breaking space ( ) instead of a regular space, causing `text.includes("next week")` to fail and fall through to the "week" branch (showing current week).
+- Learning: (1) Normalize non-breaking spaces before command matching: `((event.text as string) ?? "").replace(/ /g, " ").toLowerCase().trim()`. (2) The App Home must show today/tomorrow highlighted and next week's schedule to match user expectations. Use `renderWeekRows(rows, weekStartDate, todayDayName, tomorrowDayName)` with 📍/🔜 markers for today/tomorrow. Fetch next week rows in `app_home_opened` handler via `getOffsetMondayUTC(1)`. (3) tomorrowName is `WEEKDAYS[utcDayIndex]` for Mon–Thu (utcDayIndex 1–4); `undefined` on Fri/weekend.
+- Action: When extending Slack bot commands, always test with both regular spaces and non-breaking spaces. When adding new App Home sections, refactor the week-render logic into `renderWeekRows` helper to avoid code duplication.
+- Evidence: `server/slack.ts` (renderWeekRows, buildAppHomeBlocks); `server/routes.ts` (text normalization line, app_home_opened handler, slack-refresh-home endpoint).
+
 ## applyRotaTasksForWeek — must isolate per-rota errors to avoid all-or-nothing failures
 
 - Date: 2026-05-18

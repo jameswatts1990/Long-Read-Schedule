@@ -185,51 +185,37 @@ export function formatWeekScheduleMessage(
 
 // ─── App Home Tab ──────────────────────────────────────────────────────────
 
-export function buildAppHomeBlocks(
-  rows: Array<{
-    day: string;
-    taskName: string;
-    taskColor: string;
-    customName: string | null;
-    batchNumber: string | null;
-    batchSize: number | null;
-    notes: string | null;
-    workspaceName: string;
-  }>,
+type WeekRow = {
+  day: string;
+  taskName: string;
+  taskColor: string;
+  customName: string | null;
+  batchNumber: string | null;
+  batchSize: number | null;
+  notes: string | null;
+  workspaceName: string;
+};
+
+function renderWeekRows(
+  rows: WeekRow[],
   weekStartDate: string,
-  isRegistered: boolean,
+  todayDayName?: string,
+  tomorrowDayName?: string,
 ): object[] {
-  const blocks: object[] = [];
-
-  blocks.push({
-    type: "header",
-    text: { type: "plain_text", text: "📋 Lab Scheduler", emoji: true },
-  });
-
-  if (!isRegistered) {
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "👋 Your Slack account isn't linked to anyone in the Lab Scheduler.\n\nAsk an admin to add your *Slack Member ID* in the People settings.",
-      },
-    });
-    return blocks;
-  }
-
   const monday = new Date(weekStartDate + "T00:00:00Z");
   const friday = new Date(monday);
   friday.setUTCDate(monday.getUTCDate() + 4);
   const fmt = (d: Date) =>
     d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
+  const blocks: object[] = [];
   blocks.push({
     type: "section",
-    text: { type: "mrkdwn", text: `*Your schedule for ${fmt(monday)} – ${fmt(friday)}*` },
+    text: { type: "mrkdwn", text: `*📅 ${fmt(monday)} – ${fmt(friday)}*` },
   });
   blocks.push({ type: "divider" });
 
-  const byWorkspace = new Map<string, typeof rows>();
+  const byWorkspace = new Map<string, WeekRow[]>();
   for (const row of rows) {
     const bucket = byWorkspace.get(row.workspaceName) ?? [];
     bucket.push(row);
@@ -241,50 +227,171 @@ export function buildAppHomeBlocks(
       type: "section",
       text: { type: "mrkdwn", text: "_Nothing scheduled for you this week._ ✅" },
     });
-  } else {
-    const multiWorkspace = byWorkspace.size > 1;
+    return blocks;
+  }
 
-    for (const [wsName, wsRows] of byWorkspace) {
-      if (multiWorkspace) {
-        blocks.push({ type: "section", text: { type: "mrkdwn", text: `*${wsName}*` } });
-      }
-      for (const day of WEEKDAYS) {
-        const dayRows = wsRows.filter((r) => r.day === day);
-        let text: string;
-        if (dayRows.length === 0) {
-          text = `*${day}* — _nothing scheduled_ ✅`;
-        } else {
-          const lines = [`*${day}*`];
-          for (const r of dayRows) {
-            const label = r.customName ?? r.taskName;
-            let line = `${colorToEmoji(r.taskColor)} ${label}`;
-            if (r.batchNumber != null && r.batchSize != null) {
-              line += ` _(batch ${r.batchNumber} of ${r.batchSize})_`;
-            } else if (r.batchNumber != null) {
-              line += ` _(batch ${r.batchNumber})_`;
-            }
-            if (r.notes) line += ` — ${r.notes}`;
-            lines.push(line);
+  const multiWorkspace = byWorkspace.size > 1;
+  for (const [wsName, wsRows] of byWorkspace) {
+    if (multiWorkspace) {
+      blocks.push({ type: "section", text: { type: "mrkdwn", text: `*${wsName}*` } });
+    }
+    for (const day of WEEKDAYS) {
+      const dayRows = wsRows.filter((r) => r.day === day);
+      const isToday = day === todayDayName;
+      const isTomorrow = day === tomorrowDayName;
+      const dayLabel = isToday ? `📍 *${day}* _(today)_` : isTomorrow ? `🔜 *${day}* _(tomorrow)_` : `*${day}*`;
+
+      let text: string;
+      if (dayRows.length === 0) {
+        text = `${dayLabel} — _nothing scheduled_ ✅`;
+      } else {
+        const lines = [dayLabel];
+        for (const r of dayRows) {
+          const label = r.customName ?? r.taskName;
+          let line = `${colorToEmoji(r.taskColor)} ${label}`;
+          if (r.batchNumber != null && r.batchSize != null) {
+            line += ` _(batch ${r.batchNumber} of ${r.batchSize})_`;
+          } else if (r.batchNumber != null) {
+            line += ` _(batch ${r.batchNumber})_`;
           }
-          text = lines.join("\n");
+          if (r.notes) line += ` — ${r.notes}`;
+          lines.push(line);
         }
-        blocks.push({ type: "section", text: { type: "mrkdwn", text } });
+        text = lines.join("\n");
       }
-      if (multiWorkspace) blocks.push({ type: "divider" });
+      blocks.push({ type: "section", text: { type: "mrkdwn", text } });
+    }
+    if (multiWorkspace) blocks.push({ type: "divider" });
+  }
+  return blocks;
+}
+
+export function buildAppHomeBlocks(
+  rows: WeekRow[],
+  weekStartDate: string,
+  isRegistered: boolean,
+  todayInfo?: { dayName: string; utcDayIndex: number },
+  nextWeekRows?: WeekRow[],
+  nextWeekStartDate?: string,
+): object[] {
+  const blocks: object[] = [];
+  const appUrl = process.env.APP_URL?.replace(/\/$/, "");
+
+  blocks.push({
+    type: "header",
+    text: { type: "plain_text", text: "📋 Lab Scheduler", emoji: true },
+  });
+
+  const descText = appUrl
+    ? `Schedule and track your team's weekly lab work. <${appUrl}|Open the web app →>`
+    : "Schedule and track your team's weekly lab work.";
+  blocks.push({
+    type: "context",
+    elements: [{ type: "mrkdwn", text: descText }],
+  });
+
+  if (!isRegistered) {
+    blocks.push({ type: "divider" });
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*👋 Your account isn't linked yet*\n\nLab Scheduler helps your team plan who's doing what each day of the week.\n\n*To get set up:*\n*1.* Ask a workspace admin to add your *Slack Member ID* to your person record in the People settings.\n*2.* Once linked, your weekly schedule will appear here each time you open this tab.\n*3.* You can also message me directly — try *today* or *this week* once you're linked.",
+      },
+    });
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: "💡 Your Slack Member ID: open your Slack profile → *⋮ More* → *Copy member ID*." }],
+    });
+    return blocks;
+  }
+
+  // ── Today card (weekdays only) ─────────────────────────────────────────────
+  const isWeekday = todayInfo && todayInfo.utcDayIndex >= 1 && todayInfo.utcDayIndex <= 5;
+  if (isWeekday && todayInfo) {
+    blocks.push({ type: "divider" });
+    const todayDate = new Date(weekStartDate + "T00:00:00Z");
+    todayDate.setUTCDate(todayDate.getUTCDate() + (todayInfo.utcDayIndex - 1));
+    const todayLabel = todayDate.toLocaleDateString("en-GB", {
+      weekday: "long", day: "numeric", month: "long", timeZone: "UTC",
+    });
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*📍 Today — ${todayLabel}*` },
+    });
+    const todayRows = rows.filter((r) => r.day === todayInfo.dayName);
+    if (todayRows.length === 0) {
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: "_Nothing scheduled for you today_ ✅" },
+      });
+    } else {
+      const byWs = new Map<string, WeekRow[]>();
+      for (const row of todayRows) {
+        const bucket = byWs.get(row.workspaceName) ?? [];
+        bucket.push(row);
+        byWs.set(row.workspaceName, bucket);
+      }
+      const multiWs = byWs.size > 1;
+      for (const [wsName, wsRows] of byWs) {
+        const lines: string[] = [];
+        if (multiWs) lines.push(`*${wsName}*`);
+        for (const r of wsRows) {
+          const label = r.customName ?? r.taskName;
+          let line = `${colorToEmoji(r.taskColor)} ${label}`;
+          if (r.batchNumber != null && r.batchSize != null) line += ` _(batch ${r.batchNumber} of ${r.batchSize})_`;
+          else if (r.batchNumber != null) line += ` _(batch ${r.batchNumber})_`;
+          if (r.notes) line += ` — ${r.notes}`;
+          lines.push(line);
+        }
+        blocks.push({ type: "section", text: { type: "mrkdwn", text: lines.join("\n") } });
+      }
     }
   }
 
+  // ── Week schedule ──────────────────────────────────────────────────────────
+  blocks.push({ type: "divider" });
+
+  const tomorrowName: string | undefined =
+    todayInfo && todayInfo.utcDayIndex >= 1 && todayInfo.utcDayIndex <= 4
+      ? WEEKDAYS[todayInfo.utcDayIndex]
+      : undefined;
+
+  blocks.push(...renderWeekRows(rows, weekStartDate, todayInfo?.dayName, tomorrowName));
+
+  if (nextWeekRows && nextWeekStartDate) {
+    blocks.push({ type: "divider" });
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: "*🗓️ Next Week*" } });
+    blocks.push(...renderWeekRows(nextWeekRows, nextWeekStartDate));
+  }
+
+  // ── About & commands ───────────────────────────────────────────────────────
   blocks.push({ type: "divider" });
   blocks.push({
     type: "section",
     text: {
       type: "mrkdwn",
-      text: "💬 *Bot Commands*\nMessage me directly:\n• *today* — your assignments for today\n• *tomorrow* — your assignments for tomorrow\n• *this week* — your full schedule for this week\n• *next week* — your full schedule for next week",
+      text: "*💡 About Lab Scheduler*\nLab Scheduler helps your team plan and track week-by-week lab work — tasks, batches, and notes all in one place. Use the web app for full scheduling, filters, reporting, and admin tools.\n\n*💬 Bot Commands*\nMessage me directly:\n• *today* — your assignments for today\n• *tomorrow* — your assignments for tomorrow\n• *this week* — your full schedule for this week\n• *next week* — your full schedule for next week",
     },
   });
+
+  if (appUrl) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Open Scheduler →", emoji: true },
+          url: appUrl,
+          action_id: "open_scheduler",
+        },
+      ],
+    });
+  }
+
   blocks.push({
     type: "context",
-    elements: [{ type: "mrkdwn", text: "Home tab refreshes each time you open it." }],
+    elements: [{ type: "mrkdwn", text: "🔄 This view refreshes each time you open the Home tab." }],
   });
 
   return blocks;
