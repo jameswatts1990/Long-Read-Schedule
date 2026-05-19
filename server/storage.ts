@@ -33,7 +33,7 @@ import {
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq, and, gte, lte, inArray, isNull, sql } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
@@ -114,6 +114,7 @@ export interface IStorage {
   getTodaysSlackAssignments(): Promise<Array<{ taskName: string; personName: string; slackUserId: string }>>;
   isSlackUserIdRegistered(slackUserId: string): Promise<boolean>;
   getWeekAssignmentsForSlackUserId(slackUserId: string, weekStartDate: string): Promise<Array<{ day: string; taskName: string; taskColor: string; customName: string | null; batchNumber: string | null; batchSize: number | null; notes: string | null; workspaceName: string }>>;
+  getPeopleWithSlackIdsForWeek(weekStartDate: string): Promise<string[]>;
 
   // Premade Filters (scoped to workspace)
   getPremadeFilters(workspaceId: string): Promise<PremadeFilter[]>;
@@ -615,6 +616,20 @@ export class PostgresStorage implements IStorage {
           eq(assignments.weekStartDate, weekStartDate),
         ),
       );
+  }
+
+  async getPeopleWithSlackIdsForWeek(weekStartDate: string): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ slackUserId: people.slackUserId })
+      .from(assignments)
+      .innerJoin(people, eq(assignments.personId, people.id))
+      .where(
+        and(
+          eq(assignments.weekStartDate, weekStartDate),
+          isNotNull(people.slackUserId),
+        ),
+      );
+    return rows.map((r) => r.slackUserId).filter((id): id is string => id !== null);
   }
 
   // ─── Premade Filters ───────────────────────────────────────────────────────

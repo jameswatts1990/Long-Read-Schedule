@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { storage } from "./storage.js";
-import { sendSlackDM, isSlackEnabled } from "./slack.js";
+import { sendSlackDM, isSlackEnabled, getOffsetMondayUTC, formatWeekScheduleMessage } from "./slack.js";
 
 export function startCron(): void {
   if (!isSlackEnabled()) {
@@ -8,8 +8,8 @@ export function startCron(): void {
     return;
   }
 
-  // 9 AM Mon–Fri
-  cron.schedule("0 9 * * 1-5", async () => {
+  // 8 AM Mon–Fri
+  cron.schedule("0 8 * * 1-5", async () => {
     console.log("[cron] Running daily Slack reminders");
     try {
       const rows = await storage.getTodaysSlackAssignments();
@@ -36,5 +36,35 @@ export function startCron(): void {
     }
   });
 
-  console.log("[cron] Daily Slack reminder cron scheduled at 09:00 Mon–Fri");
+  console.log("[cron] Daily Slack reminder cron scheduled at 08:00 Mon–Fri");
+
+  // Friday 8 AM UTC — preview of next week's schedule for all Slack-linked users
+  cron.schedule("0 8 * * 5", async () => {
+    console.log("[cron] Running Friday next-week preview DMs");
+    try {
+      const nextMonday = getOffsetMondayUTC(1);
+      const slackIds = await storage.getPeopleWithSlackIdsForWeek(nextMonday);
+      if (slackIds.length === 0) return;
+
+      const results = await Promise.allSettled(
+        slackIds.map(async (slackUserId) => {
+          const rows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, nextMonday);
+          const msg = formatWeekScheduleMessage(rows, nextMonday);
+          return sendSlackDM(slackUserId, `📋 *Preview for next week:*\n\n${msg}`);
+        }),
+      );
+
+      const sent = results.filter((r) => r.status === "fulfilled" && (r as any).value === true).length;
+      const failed = results.length - sent;
+      if (failed > 0) {
+        console.warn(`[cron] Friday preview: ${sent} sent, ${failed} failed`);
+      } else {
+        console.log(`[cron] Friday preview: sent ${sent} DM(s)`);
+      }
+    } catch (err) {
+      console.error("[cron] Error running Friday preview:", err);
+    }
+  });
+
+  console.log("[cron] Friday next-week preview cron scheduled at 08:00 on Fridays");
 }

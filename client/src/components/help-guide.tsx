@@ -114,8 +114,11 @@ export function HelpGuide() {
               <Item label="Custom colour" description="Overrides the task colour for this assignment only." />
               <Item label="Batch number & size" description="Optional identifiers used in reporting. Batch size requires a batch number. Click 'Auto' (shows a spinner while loading) to generate the next ID in sequence." />
               <Item label="Notes" description="Free text attached to an assignment. Shown as an info icon (ℹ) in the grid." />
-              <Item label="Slack reminder" description="When Slack integration is active, tick 'Send Slack reminder on the day of this task' to receive a direct message at 09:00 UTC (10:00 BST in summer) on the day of the assignment. The checkbox appears both when creating and when editing an assignment." />
-              <Item label="Weekly schedule via Slack bot" description="Message the Lab Scheduler bot directly in Slack (send any message) to receive your full week's schedule as a DM — with colour-coded emoji per task and a day-by-day breakdown. Requires your Slack User ID to be linked in People settings." />
+              <Item label="Slack day reminder" description="When Slack integration is active, tick 'Send Slack reminder on the day of this task' to receive a direct message at 08:00 UTC (09:00 BST in summer) on the day of the assignment. The checkbox appears both when creating and when editing an assignment." />
+              <Item label="Slack change updates" description="Tick 'Get Slack updates when this task is assigned or removed' to receive a DM whenever this specific assignment is created or deleted. Useful for staying informed about schedule changes without checking the app." />
+              <Item label="Slack App Home" description="Open the Lab Scheduler bot in Slack and click the 'Home' tab to see your current week's schedule at a glance. The view refreshes every time you open it. Requires your Slack User ID to be linked in People settings." />
+              <Item label="Slack bot commands" description="Message the Lab Scheduler bot directly in Slack. Commands: 'today' — your assignments for today; 'tomorrow' — your assignments for tomorrow (shows Monday if sent on a Friday); 'this week' — your full schedule for this week; 'next week' — your full schedule for next week; anything else — shows help then this week's schedule." />
+              <Item label="Friday schedule preview" description="Every Friday at 08:00 UTC, the bot automatically sends each linked person their full schedule for the coming week." />
             </Section>
 
             <Section title="Moving & copying">
@@ -265,7 +268,7 @@ export function HelpGuide() {
               <Item label="Sitewide bar" description="Set a notification bar that appears at the top of the app for all users. Navigate to Admin → Announcements to manage them." />
               <Item label="Types" description="Choose Info (blue), Warning (amber), or Success (green) to match the urgency of the message." />
               <Item label="Activate / Deactivate" description="Only one announcement is shown at a time. Use Activate to make one live and Deactivate to hide it without deleting it." />
-              <Item label="Persistent" description="The bar cannot be dismissed by users — it stays visible until deactivated or deleted by an admin." />
+              <Item label="Dismissable" description="Users can dismiss the bar by clicking ×. It reappears after 24 hours, or immediately if a new announcement is activated." />
             </Section>
 
             <Section title="Capacity Report">

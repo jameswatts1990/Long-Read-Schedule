@@ -96,6 +96,8 @@ export const assignments = pgTable("assignments", {
   seriesId: varchar("series_id"),
   // When 1, a Slack DM is sent to the assigned person at 9 AM on the day.
   slackNotify: integer("slack_notify").notNull().default(0),
+  // When 1, Slack DMs are sent when this assignment is created or deleted.
+  slackChangeNotify: integer("slack_change_notify").notNull().default(0),
 }, (t) => [
   // Unique index on the rota slot triple so concurrent apply calls can use
   // ON CONFLICT DO NOTHING instead of a racy read-then-insert.

@@ -83,7 +83,7 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 
 - Date: 2026-05-15
 - Trigger: Added sitewide notification bar feature (Admin → Announcements section).
-- Learning: The `site_announcements` table is new and requires a raw SQL migration. Only one announcement can be active (`is_active=1`) at a time; `activateSiteAnnouncement` deactivates all rows before setting the target. The bar is not dismissible — it stays visible until an admin deactivates it. All authenticated users (not just super-admins) can manage announcements via the Admin page.
+- Learning: The `site_announcements` table is new and requires a raw SQL migration. Only one announcement can be active (`is_active=1`) at a time; `activateSiteAnnouncement` deactivates all rows before setting the target. The bar is dismissable — clicking × stores the dismissal in `localStorage` (keyed `dismissed_announcement`, with `announcementId` + `dismissedAt`). It reappears after 24 hours or if the active announcement changes to a different ID. All authenticated users (not just super-admins) can manage announcements via the Admin page.
 - Action: Always provide the raw SQL for the user to run directly in Replit's database shell. Do NOT instruct `npm run db:push` — npm commands cannot be run on the Replit hosted app. See Evidence for the exact SQL.
 - Evidence: `shared/schema.ts` siteAnnouncements table; SQL: `CREATE TABLE IF NOT EXISTS site_announcements (id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(), message TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'info', is_active INTEGER NOT NULL DEFAULT 0, created_by_id VARCHAR, created_at TIMESTAMP DEFAULT NOW());`
 
@@ -156,6 +156,22 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Learning: (1) Requires `SLACK_SIGNING_SECRET` env var (from Slack app Basic Information page) and Event Subscriptions enabled in the Slack app with `message.im` bot event subscribed. (2) The `/slack/events` route is unauthenticated — it validates Slack's HMAC-SHA256 request signature instead. (3) Always respond with 200 immediately (before async work) so Slack doesn't retry within its 3-second window. (4) Filter out `event.bot_id` and `event.subtype` to avoid infinite loops from the bot's own messages.
 - Action: If extending Slack bot interactions, add the new event type subscription in the Slack app dashboard and re-verify the URL. The `im:history` bot scope must be present for `message.im` events to fire.
 - Evidence: `server/slack.ts` (verifySlackSignature, formatWeekScheduleMessage); `server/routes.ts` POST /slack/events; `server/storage.ts` getWeekAssignmentsForSlackUserId, isSlackUserIdRegistered.
+
+## Slack expanded — command parsing, change notifications, Friday preview cron
+
+- Date: 2026-05-19
+- Trigger: Extended Slack integration with three new features.
+- Learning: (1) `getOffsetMondayUTC(n)` generalises `getMondayUTC()` — pass +1 for next week. Keep `getMondayUTC()` as a thin wrapper so existing callers don't break. (2) Assignment change DMs are gated by a new `slackChangeNotify` DB column (INTEGER NOT NULL DEFAULT 0) — requires migration: `ALTER TABLE assignments ADD COLUMN slack_change_notify INTEGER NOT NULL DEFAULT 0;`. (3) The Friday 8 AM preview cron uses `getPeopleWithSlackIdsForWeek` which queries `assignments JOIN people WHERE weekStartDate = nextMonday AND slack_user_id IS NOT NULL` — returns distinct Slack IDs. (4) DM sends after delete must happen after `deleteAssignment()` returns, never before. (5) Command parsing uses `event.text.toLowerCase().includes(...)` — simple and reliable; check "next week" before "this week"/"week" so the longer string matches first. (6) All Slack cron jobs fire at 08:00 UTC.
+- Action: When adding more bot commands, extend the if/else chain in the `/slack/events` handler in `routes.ts`. When adding assignment DMs, always fire-and-forget (`.catch(...)`) so a Slack failure doesn't break the HTTP response.
+- Evidence: `server/slack.ts` (getOffsetMondayUTC, getTodayInfo, formatDayScheduleMessage, buildAppHomeBlocks, publishAppHome); `server/cron.ts` (Friday 8 AM cron); `server/storage.ts` (getPeopleWithSlackIdsForWeek); `server/routes.ts` (Events handler, POST/DELETE /api/assignments); `shared/schema.ts` (slackChangeNotify column).
+
+## Slack App Home tab — requires Slack dashboard config + app_home_opened event
+
+- Date: 2026-05-19
+- Trigger: Added Slack App Home tab showing the user's current week schedule.
+- Learning: (1) App Home requires two Slack dashboard changes: enable "Home Tab" under App Home, and subscribe to `app_home_opened` in Event Subscriptions. (2) The event fires with `event.type === "app_home_opened"` and `event.tab === "home"` — must be handled before the `event.type !== "message"` guard in the events handler. (3) `views.publish({ user_id, view: { type: "home", blocks } })` is the API call. (4) If the user is not registered (no person row with their slack_user_id), render a "not linked" home view rather than failing. (5) No DB migration required — reuses existing storage methods.
+- Action: When extending the App Home, modify `buildAppHomeBlocks` in `server/slack.ts` and re-publish. The home is always fetched fresh on open so no caching concerns.
+- Evidence: `server/slack.ts` (buildAppHomeBlocks, publishAppHome); `server/routes.ts` (app_home_opened handler before message guard).
 
 ## applyRotaTasksForWeek — must isolate per-rota errors to avoid all-or-nothing failures
 

@@ -14,7 +14,7 @@ import {
 import { z, ZodError } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { getDiagnosticsSnapshot } from "./diagnostics";
-import { sendSlackDM, isSlackEnabled, verifySlackSignature, getMondayUTC, formatWeekScheduleMessage } from "./slack.js";
+import { sendSlackDM, isSlackEnabled, verifySlackSignature, getMondayUTC, getOffsetMondayUTC, getTodayInfo, formatWeekScheduleMessage, formatDayScheduleMessage, buildAppHomeBlocks, publishAppHome } from "./slack.js";
 
 // Super-admin email list — loaded from SUPER_ADMIN_EMAILS env var (comma-separated)
 // so access can be changed without a code deployment.
@@ -784,8 +784,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await Promise.all(
           created.map(async (assignment) => {
             const person = await storage.getPerson(assignment.personId);
+            let task;
             if (person?.userId && person.userId !== userId) {
-              const task = await storage.getTask(assignment.taskId);
+              task = await storage.getTask(assignment.taskId);
               await storage.createNotification({
                 userId: person.userId,
                 workspaceId: req.workspaceId,
@@ -795,6 +796,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 relatedEntityType: "assignment",
                 relatedEntityId: assignment.id,
               });
+            }
+            if (isSlackEnabled() && assignment.slackChangeNotify === 1 && person?.slackUserId) {
+              if (!task) task = await storage.getTask(assignment.taskId);
+              const taskLabel = assignment.customName ?? task?.name ?? "a task";
+              sendSlackDM(
+                person.slackUserId,
+                `:calendar: You've been assigned *${taskLabel}* on *${assignment.day}* (week of ${assignment.weekStartDate}).`,
+              ).catch((err) => console.error("[slack] Bulk assignment create DM failed:", err));
             }
           })
         );
@@ -824,8 +833,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Notify the assignee if they are a different user than the creator
       try {
         const person = await storage.getPerson(assignment.personId);
+        let task;
         if (person?.userId && person.userId !== userId) {
-          const task = await storage.getTask(assignment.taskId);
+          task = await storage.getTask(assignment.taskId);
           const creator = await storage.getUser(userId);
           const creatorName = creator?.firstName
             ? `${creator.firstName}${creator.lastName ? " " + creator.lastName : ""}`
@@ -841,6 +851,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             relatedEntityType: "assignment",
             relatedEntityId: assignment.id,
           });
+        }
+        if (isSlackEnabled() && assignment.slackChangeNotify === 1 && person?.slackUserId) {
+          if (!task) task = await storage.getTask(assignment.taskId);
+          const taskLabel = assignment.customName ?? task?.name ?? "a task";
+          sendSlackDM(
+            person.slackUserId,
+            `:calendar: You've been assigned *${taskLabel}* on *${assignment.day}* (week of ${assignment.weekStartDate}).`,
+          ).catch((err) => console.error("[slack] Assignment create DM failed:", err));
         }
       } catch (notifErr) {
         console.error("Notification creation error:", notifErr);
@@ -865,6 +883,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     day: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]).optional(),
     weekStartDate: isoDateString.optional(),
     slackNotify: z.number().int().min(0).max(1).optional(),
+    slackChangeNotify: z.number().int().min(0).max(1).optional(),
   });
 
   app.get("/api/assignments/trained-persons", isAuthenticated, requireWorkspace, async (req, res) => {
@@ -916,12 +935,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Fetch before deleting so we can tell clients which record was removed
       const existing = await storage.getAssignment(req.params.id);
+      const personForSlack = (isSlackEnabled() && existing?.slackChangeNotify === 1)
+        ? await storage.getPerson(existing.personId)
+        : null;
+      const taskForSlack = personForSlack?.slackUserId
+        ? await storage.getTask(existing!.taskId)
+        : null;
       await storage.deleteAssignment(req.params.id);
       // Fix Issue 1: send id + weekStartDate so clients can remove from cache without refetching
       broadcastUpdate("assignments", req.workspaceId, {
         action: "delete",
         record: { id: req.params.id, weekStartDate: existing?.weekStartDate },
       });
+      if (personForSlack?.slackUserId && existing) {
+        const taskLabel = existing.customName ?? taskForSlack?.name ?? "a task";
+        sendSlackDM(
+          personForSlack.slackUserId,
+          `:x: Your assignment *${taskLabel}* on *${existing.day}* (week of ${existing.weekStartDate}) has been removed.`,
+        ).catch((err) => console.error("[slack] Assignment delete DM failed:", err));
+      }
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting assignment:", error);
@@ -1125,8 +1157,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (body.type !== "event_callback") return;
     const event = body.event;
+    if (!event) return;
+
+    // App Home opened — publish the home tab view
+    if (event.type === "app_home_opened" && event.tab === "home") {
+      const slackUserId = event.user as string | undefined;
+      if (!slackUserId) return;
+      try {
+        const isRegistered = await storage.isSlackUserIdRegistered(slackUserId);
+        const weekStartDate = getMondayUTC();
+        const rows = isRegistered
+          ? await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate)
+          : [];
+        const blocks = buildAppHomeBlocks(rows, weekStartDate, isRegistered);
+        publishAppHome(slackUserId, blocks).catch((err) =>
+          console.error("[slack] App Home publish error:", err),
+        );
+      } catch (err) {
+        console.error("[slack-events] Error handling app_home_opened:", err);
+      }
+      return;
+    }
+
     // Ignore bot messages, edits, deletions, and non-message events
-    if (!event || event.type !== "message" || event.bot_id || event.subtype) return;
+    if (event.type !== "message" || event.bot_id || event.subtype) return;
 
     const slackUserId = event.user as string | undefined;
     if (!slackUserId) return;
@@ -1141,10 +1195,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const weekStartDate = getMondayUTC();
-      const rows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate);
-      const reply = formatWeekScheduleMessage(rows, weekStartDate);
-      await sendSlackDM(slackUserId, reply);
+      const text = ((event.text as string) ?? "").toLowerCase().trim();
+      const today = getTodayInfo();
+      // Map UTC day index (0=Sun,1=Mon…6=Sat) to WEEKDAYS array index (0=Mon…4=Fri)
+      const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
+      if (text.includes("today")) {
+        const weekRows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, today.weekStartDate);
+        if (WEEKDAYS.includes(today.dayName)) {
+          const dayOffset = WEEKDAYS.indexOf(today.dayName);
+          const targetDate = new Date(today.weekStartDate + "T00:00:00Z");
+          targetDate.setUTCDate(targetDate.getUTCDate() + dayOffset);
+          await sendSlackDM(slackUserId, formatDayScheduleMessage(weekRows, today.dayName, targetDate));
+        } else {
+          await sendSlackDM(slackUserId, "📅 Today is a weekend — no lab assignments scheduled. Try *next week* to see what's coming up.");
+        }
+      } else if (text.includes("tomorrow")) {
+        if (today.utcDayIndex >= 1 && today.utcDayIndex <= 4) {
+          // Mon–Thu: tomorrow is a weekday in the same week
+          const tomorrowWeekdayIdx = today.utcDayIndex; // utcDayIndex 1=Mon → WEEKDAYS[1]=Tuesday ✓
+          const tomorrowName = WEEKDAYS[tomorrowWeekdayIdx];
+          const targetDate = new Date(today.weekStartDate + "T00:00:00Z");
+          targetDate.setUTCDate(targetDate.getUTCDate() + tomorrowWeekdayIdx);
+          const weekRows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, today.weekStartDate);
+          await sendSlackDM(slackUserId, formatDayScheduleMessage(weekRows, tomorrowName, targetDate));
+        } else if (today.utcDayIndex === 5) {
+          // Friday: next working day is Monday next week
+          const nextMonday = getOffsetMondayUTC(1);
+          const targetDate = new Date(nextMonday + "T00:00:00Z");
+          const weekRows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, nextMonday);
+          const dayMsg = formatDayScheduleMessage(weekRows, "Monday", targetDate);
+          await sendSlackDM(slackUserId, `📅 Tomorrow is Saturday — your next working day is Monday.\n\n${dayMsg}`);
+        } else {
+          // Weekend
+          await sendSlackDM(slackUserId, "📅 It's the weekend — no assignments tomorrow. Try *next week* to see what's coming up.");
+        }
+      } else if (text.includes("next week")) {
+        const nextMonday = getOffsetMondayUTC(1);
+        const rows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, nextMonday);
+        await sendSlackDM(slackUserId, formatWeekScheduleMessage(rows, nextMonday));
+      } else if (text.includes("this week") || text.includes("week")) {
+        const weekStartDate = getMondayUTC();
+        const rows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate);
+        await sendSlackDM(slackUserId, formatWeekScheduleMessage(rows, weekStartDate));
+      } else {
+        // Unrecognised command: show help then this week's schedule
+        const helpText = [
+          "👋 *Lab Scheduler Bot*",
+          "",
+          "You can send me these commands:",
+          "• *today* — your assignments for today",
+          "• *tomorrow* — your assignments for tomorrow",
+          "• *this week* — your full schedule for this week",
+          "• *next week* — your full schedule for next week",
+          "• anything else — your full schedule for this week",
+          "",
+        ].join("\n");
+        const weekStartDate = getMondayUTC();
+        const rows = await storage.getWeekAssignmentsForSlackUserId(slackUserId, weekStartDate);
+        await sendSlackDM(slackUserId, helpText + formatWeekScheduleMessage(rows, weekStartDate));
+      }
     } catch (err) {
       console.error("[slack-events] Error handling message event:", err);
     }

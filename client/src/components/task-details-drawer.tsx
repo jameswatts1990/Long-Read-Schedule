@@ -44,6 +44,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
   const [customName, setCustomName] = useState("");
   const [customColor, setCustomColor] = useState("");
   const [slackNotify, setSlackNotify] = useState(0);
+  const [slackChangeNotify, setSlackChangeNotify] = useState(0);
   const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -62,6 +63,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       setCustomName(assignment.customName || "");
       setCustomColor((assignment as any).customColor || "");
       setSlackNotify((assignment as any).slackNotify ?? 0);
+      setSlackChangeNotify((assignment as any).slackChangeNotify ?? 0);
     }
   }, [assignment]);
 
@@ -169,7 +171,8 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       customColor: customColor || undefined,
       weekStartDate: assignment.weekStartDate,
       slackNotify,
-    });
+      slackChangeNotify,
+    } as any);
   };
 
   const handleDelete = () => {
@@ -411,15 +414,27 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
           </div>
 
           {slackEnabled && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="drawer-slack-notify"
-                checked={slackNotify === 1}
-                onCheckedChange={(checked) => setSlackNotify(checked ? 1 : 0)}
-              />
-              <Label htmlFor="drawer-slack-notify" className="cursor-pointer font-normal text-sm">
-                Send Slack reminder on the day of this task
-              </Label>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="drawer-slack-notify"
+                  checked={slackNotify === 1}
+                  onCheckedChange={(checked) => setSlackNotify(checked ? 1 : 0)}
+                />
+                <Label htmlFor="drawer-slack-notify" className="cursor-pointer font-normal text-sm">
+                  Send Slack reminder on the day of this task
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="drawer-slack-change-notify"
+                  checked={slackChangeNotify === 1}
+                  onCheckedChange={(checked) => setSlackChangeNotify(checked ? 1 : 0)}
+                />
+                <Label htmlFor="drawer-slack-change-notify" className="cursor-pointer font-normal text-sm">
+                  Get Slack updates when this task is assigned or removed
+                </Label>
+              </div>
             </div>
           )}
 

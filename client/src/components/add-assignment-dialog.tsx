@@ -113,6 +113,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       customName: "",
       customColor: undefined,
       slackNotify: 0,
+      slackChangeNotify: 0,
     },
   });
 
@@ -222,6 +223,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         customName: "",
         customColor: undefined,
         slackNotify: 0,
+        slackChangeNotify: 0,
       });
       setSelectedTaskId("");
       setConflictData(null);
@@ -255,6 +257,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         customName: "",
         customColor: undefined,
         slackNotify: 0,
+        slackChangeNotify: 0,
       });
       setSelectedTaskId("");
       setSelectedDays(new Set([day]));
@@ -716,24 +719,44 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
               />
 
               {slackEnabled && (
-                <FormField
-                  control={form.control}
-                  name="slackNotify"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center gap-2 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value === 1}
-                          onCheckedChange={(checked) => field.onChange(checked ? 1 : 0)}
-                          id="slack-notify"
-                        />
-                      </FormControl>
-                      <FormLabel htmlFor="slack-notify" className="cursor-pointer font-normal">
-                        Send Slack reminder on the day of this task
-                      </FormLabel>
-                    </FormItem>
-                  )}
-                />
+                <div className="space-y-2">
+                  <FormField
+                    control={form.control}
+                    name="slackNotify"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value === 1}
+                            onCheckedChange={(checked) => field.onChange(checked ? 1 : 0)}
+                            id="slack-notify"
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="slack-notify" className="cursor-pointer font-normal">
+                          Send Slack reminder on the day of this task
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="slackChangeNotify"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value === 1}
+                            onCheckedChange={(checked) => field.onChange(checked ? 1 : 0)}
+                            id="slack-change-notify"
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="slack-change-notify" className="cursor-pointer font-normal">
+                          Get Slack updates when this task is assigned or removed
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                </div>
               )}
 
               {!isMonthMode && (
