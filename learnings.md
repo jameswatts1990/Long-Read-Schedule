@@ -165,6 +165,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: When adding more bot commands, extend the if/else chain in the `/slack/events` handler in `routes.ts`. When adding assignment DMs, always fire-and-forget (`.catch(...)`) so a Slack failure doesn't break the HTTP response.
 - Evidence: `server/slack.ts` (getOffsetMondayUTC, getTodayInfo, formatDayScheduleMessage, buildAppHomeBlocks, publishAppHome); `server/cron.ts` (Friday 8 AM cron); `server/storage.ts` (getPeopleWithSlackIdsForWeek); `server/routes.ts` (Events handler, POST/DELETE /api/assignments); `shared/schema.ts` (slackChangeNotify column).
 
+## Slack PATCH notifications — update DMs cover reassignment, date, notes, and detail changes
+
+- Date: 2026-05-19
+- Trigger: PATCH /api/assignments/:id had no Slack notification; only POST (create) and DELETE triggered DMs.
+- Learning: The PATCH route must compare `existing` vs `parsed` to detect meaningful changes. Two distinct cases: (1) person changed — notify old person with `:x: reassigned` and new person with `:calendar: assigned` (including notes if present); (2) same person, other fields changed (taskId, customName, day, weekStartDate, notes, batchNumber, batchSize) — notify with `:pencil2: updated` + notes if present. Use an async IIFE with `.catch()` after `res.json()` so Slack failures never affect the HTTP response.
+- Action: When adding more PATCH-triggered DMs, use the same async IIFE pattern. Check `f in parsed && parsedVal !== undefined && (parsedVal ?? null) !== (existingVal ?? null)` to distinguish "field not sent" from "field sent but unchanged".
+- Evidence: `server/routes.ts` PATCH /api/assignments/:id — Slack IIFE block after `res.json(updated)`.
+
 ## drizzle-zod omits integer-with-default columns — explicit schema overrides required
 
 - Date: 2026-05-19

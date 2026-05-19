@@ -911,6 +911,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fix Issue 1: send the actual record so clients can update cache without refetching
       broadcastUpdate("assignments", req.workspaceId, { action: "update", record: updated });
       res.json(updated);
+
+      // Slack change notifications (fire-and-forget after response)
+      if (isSlackEnabled() && updated.slackChangeNotify === 1) {
+        const personChanged = !!parsed.personId && parsed.personId !== existing.personId;
+        (async () => {
+          if (personChanged) {
+            const [oldPerson, newPerson, task] = await Promise.all([
+              storage.getPerson(existing.personId),
+              storage.getPerson(updated.personId),
+              storage.getTask(updated.taskId),
+            ]);
+            const taskLabel = updated.customName ?? task?.name ?? "a task";
+            if (oldPerson?.slackUserId) {
+              await sendSlackDM(
+                oldPerson.slackUserId,
+                `:x: Your assignment *${taskLabel}* on *${existing.day}* (week of ${existing.weekStartDate}) has been reassigned.`,
+              );
+            }
+            if (newPerson?.slackUserId) {
+              const notesLine = updated.notes ? `\n> _${updated.notes}_` : "";
+              await sendSlackDM(
+                newPerson.slackUserId,
+                `:calendar: You've been assigned *${taskLabel}* on *${updated.day}* (week of ${updated.weekStartDate}).${notesLine}`,
+              );
+            }
+          } else {
+            const meaningfulFields = ["taskId", "customName", "day", "weekStartDate", "notes", "batchNumber", "batchSize"] as const;
+            const hasChange = meaningfulFields.some((f) => {
+              const v = (parsed as any)[f];
+              return v !== undefined && (v ?? null) !== ((existing as any)[f] ?? null);
+            });
+            if (!hasChange) return;
+            const [person, task] = await Promise.all([
+              storage.getPerson(updated.personId),
+              storage.getTask(updated.taskId),
+            ]);
+            if (!person?.slackUserId) return;
+            const taskLabel = updated.customName ?? task?.name ?? "a task";
+            const notesLine = updated.notes ? `\n> _${updated.notes}_` : "";
+            await sendSlackDM(
+              person.slackUserId,
+              `:pencil2: Your assignment *${taskLabel}* on *${updated.day}* (week of ${updated.weekStartDate}) has been updated.${notesLine}`,
+            );
+          }
+        })().catch((err) => console.error("[slack] PATCH assignment notification error:", err));
+      }
     } catch (error) {
       console.error("PATCH assignment error:", error);
       res.status(400).json({ message: "Invalid update data" });
