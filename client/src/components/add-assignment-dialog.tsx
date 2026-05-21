@@ -474,7 +474,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         <DialogHeader>
           <DialogTitle>Add Task Assignment</DialogTitle>
           <DialogDescription>
-            {isMonthMode ? "Assign tasks across the month" : `Assign a task for ${day}`}
+            {isMonthMode ? "Assign tasks across the month" : `Assign a task for ${day} ${format(addDays(parse(weekStartDate, "yyyy-MM-dd", new Date()), ["Monday","Tuesday","Wednesday","Thursday","Friday"].indexOf(day)), "dd/MM")}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -785,7 +785,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                           }}
                           data-testid={`checkbox-day-${d.toLowerCase()}`}
                         />
-                        <label htmlFor={`day-${d}`} className="text-sm cursor-pointer">{d}</label>
+                        <label htmlFor={`day-${d}`} className="text-sm cursor-pointer">{d} {format(addDays(parse(weekStartDate, "yyyy-MM-dd", new Date()), ["Monday","Tuesday","Wednesday","Thursday","Friday"].indexOf(d)), "dd/MM")}</label>
                       </div>
                     ))}
                   </div>
