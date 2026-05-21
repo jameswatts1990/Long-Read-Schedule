@@ -29,11 +29,13 @@ import {
   workspaceUsers,
   notifications,
   siteAnnouncements,
+  userNotificationSettings,
+  type UserNotificationSettings,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq, and, gte, lte, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, isNull, isNotNull, sql, or } from "drizzle-orm";
 import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
@@ -572,12 +574,18 @@ export class PostgresStorage implements IStorage {
       .from(assignments)
       .innerJoin(tasks, eq(assignments.taskId, tasks.id))
       .innerJoin(people, eq(assignments.personId, people.id))
+      .leftJoin(userNotificationSettings, eq(people.userId, userNotificationSettings.userId))
       .where(
         and(
           eq(assignments.slackNotify, 1),
           eq(assignments.weekStartDate, weekStartDate),
           eq(assignments.day, todayName),
-          sql`${people.slackUserId} IS NOT NULL`,
+          isNotNull(people.slackUserId),
+          or(
+            isNull(people.userId),
+            isNull(userNotificationSettings.userId),
+            eq(userNotificationSettings.dailyReminder, 1),
+          ),
         ),
       );
 
@@ -623,13 +631,39 @@ export class PostgresStorage implements IStorage {
       .selectDistinct({ slackUserId: people.slackUserId })
       .from(assignments)
       .innerJoin(people, eq(assignments.personId, people.id))
+      .leftJoin(userNotificationSettings, eq(people.userId, userNotificationSettings.userId))
       .where(
         and(
           eq(assignments.weekStartDate, weekStartDate),
           isNotNull(people.slackUserId),
+          or(
+            isNull(people.userId),
+            isNull(userNotificationSettings.userId),
+            eq(userNotificationSettings.weeklyPreview, 1),
+          ),
         ),
       );
     return rows.map((r) => r.slackUserId).filter((id): id is string => id !== null);
+  }
+
+  // ─── User Notification Settings ───────────────────────────────────────────
+
+  async getNotificationSettings(userId: string): Promise<{ dailyReminder: number; weeklyPreview: number }> {
+    const rows = await this.db
+      .select({ dailyReminder: userNotificationSettings.dailyReminder, weeklyPreview: userNotificationSettings.weeklyPreview })
+      .from(userNotificationSettings)
+      .where(eq(userNotificationSettings.userId, userId));
+    return rows[0] ?? { dailyReminder: 1, weeklyPreview: 1 };
+  }
+
+  async upsertNotificationSettings(userId: string, settings: { dailyReminder: number; weeklyPreview: number }): Promise<void> {
+    await this.db
+      .insert(userNotificationSettings)
+      .values({ userId, ...settings })
+      .onConflictDoUpdate({
+        target: userNotificationSettings.userId,
+        set: { ...settings, updatedAt: new Date() },
+      });
   }
 
   // ─── Premade Filters ───────────────────────────────────────────────────────

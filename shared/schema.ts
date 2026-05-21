@@ -164,6 +164,20 @@ export const notifications = pgTable("notifications", {
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
 
+export const userNotificationSettings = pgTable("user_notification_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  dailyReminder: integer("daily_reminder").notNull().default(1),
+  weeklyPreview: integer("weekly_preview").notNull().default(1),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type UserNotificationSettings = typeof userNotificationSettings.$inferSelect;
+export const insertUserNotificationSettingsSchema = createInsertSchema(userNotificationSettings).omit({ id: true, updatedAt: true }).extend({
+  dailyReminder: z.number().int().min(0).max(1).optional(),
+  weeklyPreview: z.number().int().min(0).max(1).optional(),
+});
+
 export const isoDateString = z.string()
   .trim()
   .refine((val) => val.length > 0, { message: "Required" })

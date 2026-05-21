@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, Search, Settings, Calendar as CalendarIcon, Layers } from "lucide-react";
+import { ChevronLeft, Search, Bell, Calendar as CalendarIcon, Layers } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -200,9 +200,11 @@ export default function MyDay() {
         <Button variant="ghost" size="icon" data-testid="button-search">
           <Search className="w-5 h-5" />
         </Button>
-        <Button variant="ghost" size="icon" data-testid="button-settings">
-          <Settings className="w-5 h-5" />
-        </Button>
+        <Link href="/settings">
+          <Button variant="ghost" size="icon" data-testid="button-settings" aria-label="Notification settings">
+            <Bell className="w-5 h-5" />
+          </Button>
+        </Link>
       </header>
       <div className="px-4 py-3 border-b bg-muted/30">
         <div className="flex items-center justify-between gap-1">

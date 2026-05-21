@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock, UserX, Megaphone, Building2 } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock, UserX, Megaphone, Building2, Bell } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -677,41 +677,41 @@ export default function Scheduler() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>Admin</DropdownMenuLabel>
-              <Link href="/admin?section=people">
-                <DropdownMenuItem data-testid="menu-item-admin-people">
-                  <Users className="mr-2 h-4 w-4" />
-                  <span>People</span>
-                </DropdownMenuItem>
-              </Link>
-              <Link href="/admin?section=tasks">
-                <DropdownMenuItem data-testid="menu-item-admin-tasks">
-                  <LayoutList className="mr-2 h-4 w-4" />
-                  <span>Tasks</span>
-                </DropdownMenuItem>
-              </Link>
-              <Link href="/admin?section=rota">
-                <DropdownMenuItem data-testid="menu-item-admin-rota">
-                  <CalendarClock className="mr-2 h-4 w-4" />
-                  <span>Rota</span>
-                </DropdownMenuItem>
-              </Link>
-              <Link href="/admin?section=announcements">
-                <DropdownMenuItem data-testid="menu-item-admin-announcements">
-                  <Megaphone className="mr-2 h-4 w-4" />
-                  <span>Announcements</span>
-                </DropdownMenuItem>
-              </Link>
-              {(user as any)?.role === 'super_admin' || (user as any)?.isSuperAdmin === true ? (
-                <Link href="/admin?section=workspaces">
-                  <DropdownMenuItem data-testid="menu-item-admin-workspaces">
-                    <Building2 className="mr-2 h-4 w-4" />
-                    <span>Workspaces</span>
-                  </DropdownMenuItem>
-                </Link>
-              ) : null}
               {isAdmin && (
                 <>
+                  <DropdownMenuLabel>Admin</DropdownMenuLabel>
+                  <Link href="/admin?section=people">
+                    <DropdownMenuItem data-testid="menu-item-admin-people">
+                      <Users className="mr-2 h-4 w-4" />
+                      <span>People</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/admin?section=tasks">
+                    <DropdownMenuItem data-testid="menu-item-admin-tasks">
+                      <LayoutList className="mr-2 h-4 w-4" />
+                      <span>Tasks</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/admin?section=rota">
+                    <DropdownMenuItem data-testid="menu-item-admin-rota">
+                      <CalendarClock className="mr-2 h-4 w-4" />
+                      <span>Rota</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/admin?section=announcements">
+                    <DropdownMenuItem data-testid="menu-item-admin-announcements">
+                      <Megaphone className="mr-2 h-4 w-4" />
+                      <span>Announcements</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  {((user as any)?.role === 'super_admin' || (user as any)?.isSuperAdmin === true) && (
+                    <Link href="/admin?section=workspaces">
+                      <DropdownMenuItem data-testid="menu-item-admin-workspaces">
+                        <Building2 className="mr-2 h-4 w-4" />
+                        <span>Workspaces</span>
+                      </DropdownMenuItem>
+                    </Link>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel>Reporting</DropdownMenuLabel>
                   <Link href="/reporting">
@@ -743,6 +743,13 @@ export default function Scheduler() {
                 <Upload className="mr-2 h-4 w-4" />
                 <span>Import</span>
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <Link href="/settings">
+                <DropdownMenuItem data-testid="menu-item-notification-settings">
+                  <Bell className="mr-2 h-4 w-4" />
+                  <span>Notification Settings</span>
+                </DropdownMenuItem>
+              </Link>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => window.location.href = "/api/logout"}

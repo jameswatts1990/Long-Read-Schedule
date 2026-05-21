@@ -87,6 +87,13 @@ export function HelpGuide() {
               <Item label="Notifications" description="Assignment changes appear here. Click a notification to jump to that week. Hover a notification and click × to dismiss it." />
             </Section>
 
+            <Section title="Notification settings">
+              <Item label="Access" description="Open the cog menu and choose 'Notification Settings'. On the My Day page, tap the bell icon in the header." />
+              <Item label="Daily task reminder" description="When enabled, you receive a Slack DM at 08:00 UTC on days you are scheduled. Only sent for assignments with 'Send Slack reminder' ticked." />
+              <Item label="Friday weekly preview" description="When enabled, you receive a Slack DM every Friday at 08:00 UTC with your full schedule for the following week." />
+              <Item label="Requires Slack" description="Notifications only send if your account is linked to a person record with a Slack User ID configured. Settings are saved regardless." />
+            </Section>
+
             <Section title="Your schedule">
               <Item label="Show only my tasks" description="Toggle in the grid header to filter the view to your own assignments only. When active, a blue banner appears in the toolbar — press Escape to cancel. Requires your account to be linked to a person record in Admin." />
               <Item label="Person dot colour" description="Each person has an assigned colour shown next to their name and used for notification initials." />

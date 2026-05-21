@@ -18,6 +18,7 @@ import Landing from "@/pages/landing";
 import WorkspacePicker from "@/pages/workspace-picker";
 import FirstLoginOnboarding from "@/pages/first-login-onboarding";
 import NotFound from "@/pages/not-found";
+import Settings from "@/pages/settings";
 import { SiteAnnouncementBar } from "@/components/site-announcement-bar";
 
 // Predicate that matches any cached query whose key starts with "/api/assignments"
@@ -194,7 +195,8 @@ function Router() {
       <Switch>
         <Route path="/" component={Scheduler} />
         <Route path="/my-day" component={MyDay} />
-        <Route path="/admin" component={Admin} />
+        <Route path="/settings" component={Settings} />
+        <Route path="/admin" component={isAdminUser ? Admin : NotFound} />
         <Route path="/reporting" component={isAdminUser ? Reporting : NotFound} />
         <Route path="/al-reporting" component={isAdminUser ? ALReporting : NotFound} />
         <Route path="/absence-reporting" component={isAdminUser ? AbsenceReporting : NotFound} />

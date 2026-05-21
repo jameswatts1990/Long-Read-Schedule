@@ -131,6 +131,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/user/notification-settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const settings = await storage.getNotificationSettings(userId);
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching notification settings:", error);
+      res.status(500).json({ message: "Failed to fetch notification settings" });
+    }
+  });
+
+  app.patch("/api/user/notification-settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { dailyReminder, weeklyPreview } = req.body;
+      await storage.upsertNotificationSettings(userId, {
+        dailyReminder: dailyReminder ? 1 : 0,
+        weeklyPreview: weeklyPreview ? 1 : 0,
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error saving notification settings:", error);
+      res.status(500).json({ message: "Failed to save notification settings" });
+    }
+  });
+
   app.get("/api/auth/onboarding-status", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

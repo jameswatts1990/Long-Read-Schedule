@@ -205,6 +205,22 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: When extending Slack bot commands, always test with both regular spaces and non-breaking spaces. When adding new App Home sections, refactor the week-render logic into `renderWeekRows` helper to avoid code duplication.
 - Evidence: `server/slack.ts` (renderWeekRows, buildAppHomeBlocks); `server/routes.ts` (text normalization line, app_home_opened handler, slack-refresh-home endpoint).
 
+## Menu items must be gated by the same role required to access the page
+
+- Date: 2026-05-21
+- Trigger: Announcements (and all other Admin section links) were visible in the cog menu to all authenticated users, even though the pages are admin-only. The `/admin` route itself was also unprotected in App.tsx.
+- Learning: Every menu item in the cog dropdown must be wrapped in the same role guard as the page it links to. Showing a link to a page the user cannot access is confusing and a leakage risk. The `isAdmin` check already used for Reporting must also wrap the Admin section (People, Tasks, Rota, Announcements). Workspaces stays gated on `super_admin` inside that block. The `/admin` route in `App.tsx` must use `isAdminUser ? Admin : NotFound` just like the reporting routes.
+- Action: When adding any new page or admin section, immediately add the same role gate to both the cog menu `DropdownMenuItem` in `scheduler.tsx` AND the `<Route>` in `App.tsx`. Never add a menu link without checking what role the destination requires.
+- Evidence: `client/src/pages/scheduler.tsx` cog dropdown; `client/src/App.tsx` route definitions.
+
+## Per-user notification settings — new table + LEFT JOIN cron filter pattern
+
+- Date: 2026-05-21
+- Trigger: Added user-level opt-out toggles for the two Slack cron DMs (daily reminder, Friday preview).
+- Learning: (1) New `user_notification_settings` table keyed on `user_id` (UNIQUE). Both flags default to 1 (enabled) so existing users keep receiving notifications until they opt out. (2) Cron storage functions filter via LEFT JOIN on this table through `people.userId → user_notification_settings.userId`. The WHERE clause uses `OR(isNull(people.userId), isNull(userNotificationSettings.userId), eq(..., 1))` to treat people without a user account and users without a settings row as opted-in. (3) The settings page lives at `/settings` (no admin guard) — all authenticated users can access it. (4) `or` must be explicitly imported from drizzle-orm; it was missing from the existing imports. (5) Use the explicit drizzle-zod `.extend()` override for integer-with-default columns to avoid the strip-on-parse issue.
+- Action: When adding more per-user cron opt-outs, extend `user_notification_settings` with a new integer column and add the LEFT JOIN OR filter to the relevant storage function. Always provide the SQL migration for Replit.
+- Evidence: `shared/schema.ts` userNotificationSettings table; `server/storage.ts` getTodaysSlackAssignments, getPeopleWithSlackIdsForWeek, getNotificationSettings, upsertNotificationSettings; `server/routes.ts` GET/PATCH /api/user/notification-settings; `client/src/pages/settings.tsx`; SQL: `CREATE TABLE IF NOT EXISTS user_notification_settings (id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(), user_id VARCHAR NOT NULL UNIQUE, daily_reminder INTEGER NOT NULL DEFAULT 1, weekly_preview INTEGER NOT NULL DEFAULT 1, updated_at TIMESTAMP DEFAULT NOW());`
+
 ## applyRotaTasksForWeek — must isolate per-rota errors to avoid all-or-nothing failures
 
 - Date: 2026-05-18
