@@ -1,4 +1,4 @@
-import { Bell, CalendarPlus, CalendarCheck, X } from "lucide-react";
+import { User, CalendarPlus, CalendarCheck, X } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
@@ -169,7 +169,7 @@ export function NotificationBell({ onNavigateToWeek }: NotificationBellProps) {
           data-testid="button-notifications"
           className="relative"
         >
-          <Bell className="w-4 h-4" />
+          <User className="w-4 h-4" />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] text-white flex items-center justify-center font-medium leading-none">
               {unreadCount > 9 ? "9+" : unreadCount}

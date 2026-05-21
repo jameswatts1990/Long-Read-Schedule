@@ -735,6 +735,7 @@ export default function Scheduler() {
                 </>
               )}
               <DropdownMenuSeparator />
+              <DropdownMenuLabel>Data</DropdownMenuLabel>
               <DropdownMenuItem onClick={handleExport} data-testid="menu-item-export">
                 <Download className="mr-2 h-4 w-4" />
                 <span>Export</span>
@@ -744,6 +745,7 @@ export default function Scheduler() {
                 <span>Import</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuLabel>Settings</DropdownMenuLabel>
               <Link href="/settings">
                 <DropdownMenuItem data-testid="menu-item-notification-settings">
                   <Bell className="mr-2 h-4 w-4" />
