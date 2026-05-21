@@ -768,7 +768,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
               {!isMonthMode && (
                 <div className="space-y-2">
                   <FormLabel>Days to Assign</FormLabel>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex gap-3">
                     {DAYS.map((d) => (
                       <div key={d} className="flex items-center gap-2">
                         <Checkbox
@@ -785,7 +785,10 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                           }}
                           data-testid={`checkbox-day-${d.toLowerCase()}`}
                         />
-                        <label htmlFor={`day-${d}`} className="text-sm cursor-pointer">{d} {format(addDays(parse(weekStartDate, "yyyy-MM-dd", new Date()), ["Monday","Tuesday","Wednesday","Thursday","Friday"].indexOf(d)), "dd/MM")}</label>
+                        <label htmlFor={`day-${d}`} className="cursor-pointer flex flex-col leading-tight">
+                          <span className="text-sm">{d}</span>
+                          <span className="text-xs text-muted-foreground">{format(addDays(parse(weekStartDate, "yyyy-MM-dd", new Date()), ["Monday","Tuesday","Wednesday","Thursday","Friday"].indexOf(d)), "dd/MM")}</span>
+                        </label>
                       </div>
                     ))}
                   </div>
