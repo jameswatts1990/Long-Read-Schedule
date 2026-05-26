@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, UserCheck, UserX, Layers, Users, X, Loader2, CalendarClock, Megaphone, CheckCircle, Info, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Pencil, GripVertical, Eye, EyeOff, UserCheck, UserX, Layers, Users, X, Loader2, CalendarClock, Megaphone, CheckCircle, Info, AlertTriangle, Bell, Wrench, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -951,15 +951,19 @@ const ANNOUNCEMENT_TYPE_OPTIONS = [
   { value: "info", label: "Info", icon: <Info className="h-4 w-4 text-blue-500" /> },
   { value: "warning", label: "Warning", icon: <AlertTriangle className="h-4 w-4 text-amber-500" /> },
   { value: "success", label: "Success", icon: <CheckCircle className="h-4 w-4 text-green-500" /> },
+  { value: "error", label: "Alarm", icon: <Bell className="h-4 w-4 text-red-500" /> },
+  { value: "announcement", label: "Announcement", icon: <Megaphone className="h-4 w-4 text-purple-500" /> },
+  { value: "maintenance", label: "Maintenance", icon: <Wrench className="h-4 w-4 text-orange-500" /> },
+  { value: "update", label: "Update", icon: <Sparkles className="h-4 w-4 text-teal-500" /> },
 ];
 
 function AnnouncementsSection() {
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
-  const [newType, setNewType] = useState<"info" | "warning" | "success">("info");
+  const [newType, setNewType] = useState<"info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update">("info");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editMessage, setEditMessage] = useState("");
-  const [editType, setEditType] = useState<"info" | "warning" | "success">("info");
+  const [editType, setEditType] = useState<"info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update">("info");
 
   const { data: announcements = [], isLoading } = useQuery<SiteAnnouncement[]>({
     queryKey: ["/api/site-announcements"],
@@ -1056,7 +1060,7 @@ function AnnouncementsSection() {
       <div className="space-y-3 mb-8 p-4 border rounded-lg bg-muted/30">
         <h3 className="text-sm font-semibold">New announcement</h3>
         <div className="flex gap-2">
-          <Select value={newType} onValueChange={(v) => setNewType(v as "info" | "warning" | "success")}>
+          <Select value={newType} onValueChange={(v) => setNewType(v as "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update")}>
             <SelectTrigger className="w-36">
               <SelectValue />
             </SelectTrigger>
@@ -1104,7 +1108,7 @@ function AnnouncementsSection() {
               >
                 {isEditing ? (
                   <div className="flex gap-2 items-center">
-                    <Select value={editType} onValueChange={(v) => setEditType(v as "info" | "warning" | "success")}>
+                    <Select value={editType} onValueChange={(v) => setEditType(v as "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update")}>
                       <SelectTrigger className="w-36">
                         <SelectValue />
                       </SelectTrigger>
@@ -1145,7 +1149,7 @@ function AnnouncementsSection() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => { setEditingId(ann.id); setEditMessage(ann.message); setEditType(ann.type as "info" | "warning" | "success"); }}
+                        onClick={() => { setEditingId(ann.id); setEditMessage(ann.message); setEditType(ann.type as "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update"); }}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>

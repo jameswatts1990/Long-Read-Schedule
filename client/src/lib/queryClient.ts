@@ -33,7 +33,8 @@ async function maybeRedirectToLogin() {
   if (!expired) return;
   if (hasTriggeredSessionRedirect) return;
   hasTriggeredSessionRedirect = true;
-  window.location.assign("/api/login");
+  const returnTo = window.location.pathname + window.location.search + window.location.hash;
+  window.location.assign(`/api/login?returnTo=${encodeURIComponent(returnTo)}`);
 }
 
 async function getErrorDetails(res: Response): Promise<{ rawText: string; message: string }> {

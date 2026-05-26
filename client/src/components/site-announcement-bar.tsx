@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Info, AlertTriangle, CheckCircle, X } from "lucide-react";
+import { Info, AlertTriangle, CheckCircle, Bell, Megaphone, Wrench, Sparkles, X } from "lucide-react";
 import type { SiteAnnouncement } from "@shared/schema";
 
 const TYPE_STYLES: Record<string, { bar: string; icon: React.ReactNode }> = {
@@ -15,6 +15,22 @@ const TYPE_STYLES: Record<string, { bar: string; icon: React.ReactNode }> = {
   success: {
     bar: "bg-green-600 text-white",
     icon: <CheckCircle className="h-4 w-4 shrink-0" />,
+  },
+  error: {
+    bar: "bg-red-600 text-white",
+    icon: <Bell className="h-4 w-4 shrink-0" />,
+  },
+  announcement: {
+    bar: "bg-purple-600 text-white",
+    icon: <Megaphone className="h-4 w-4 shrink-0" />,
+  },
+  maintenance: {
+    bar: "bg-orange-500 text-white",
+    icon: <Wrench className="h-4 w-4 shrink-0" />,
+  },
+  update: {
+    bar: "bg-teal-600 text-white",
+    icon: <Sparkles className="h-4 w-4 shrink-0" />,
   },
 };
 

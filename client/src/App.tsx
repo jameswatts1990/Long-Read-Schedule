@@ -104,6 +104,9 @@ function useRealTimeUpdates(workspaceId: string | null) {
         disconnect();
       } else {
         connect();
+        // Check auth first so an expired session surfaces immediately on tab
+        // focus rather than mid-interaction after a long absence.
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         // Refresh everything that may have changed while the tab was away
         queryClient.invalidateQueries({ predicate: isAssignmentQuery });
         queryClient.invalidateQueries({ queryKey: ["/api/people"] });

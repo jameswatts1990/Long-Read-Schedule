@@ -188,6 +188,19 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/login", (req, res, next) => {
     ensureStrategy(req.hostname);
+    // Preserve the user's current page through OIDC re-auth so they land back
+    // where they were rather than at root. Passport reads session.returnTo
+    // inside successReturnToOrRedirect and clears it after use.
+    // Only accept same-origin relative paths to prevent open-redirect attacks.
+    const rt = req.query.returnTo;
+    if (
+      typeof rt === "string" &&
+      rt.startsWith("/") &&
+      !rt.startsWith("//") &&
+      !/^\/[^/]*:/.test(rt)
+    ) {
+      (req.session as any).returnTo = rt;
+    }
     // No `prompt` override — lets Replit use SSO if the user already has
     // an active session there, so re-authentication after token expiry is
     // seamless (invisible redirect) rather than forcing a login/consent screen.
@@ -226,7 +239,7 @@ const sessionRefreshPromises = new Map<string, Promise<void>>();
 // attempt for a given session, NOT from token expiry — so a session that can
 // never refresh again (e.g. invalid_grant from Replit) starts returning 401
 // promptly and the client can fall through to the silent SSO login path.
-const TRANSIENT_REFRESH_GRACE_MS = 10 * 60 * 1000; // 10 minutes
+const TRANSIENT_REFRESH_GRACE_MS = 30 * 60 * 1000; // 30 minutes
 
 // sessionId -> timestamp (ms) of the first refresh failure since the last
 // successful refresh. Cleared on any successful refresh. In-memory only —

@@ -38,8 +38,8 @@ export function startCron(): void {
 
   console.log("[cron] Daily Slack reminder cron scheduled at 08:00 Mon–Fri");
 
-  // Friday 8 AM UTC — preview of next week's schedule for all Slack-linked users
-  cron.schedule("0 8 * * 5", async () => {
+  // Friday 2:30 PM UTC — preview of next week's schedule for all Slack-linked users
+  cron.schedule("30 14 * * 5", async () => {
     console.log("[cron] Running Friday next-week preview DMs");
     try {
       const nextMonday = getOffsetMondayUTC(1);
@@ -66,5 +66,5 @@ export function startCron(): void {
     }
   });
 
-  console.log("[cron] Friday next-week preview cron scheduled at 08:00 on Fridays");
+  console.log("[cron] Friday next-week preview cron scheduled at 14:30 UTC on Fridays");
 }

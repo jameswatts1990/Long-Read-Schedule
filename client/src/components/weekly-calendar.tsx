@@ -245,6 +245,7 @@ export function WeeklyCalendar({
       batchSize: a.batchSize,
       notes: a.notes,
       customName: a.customName,
+      customColor: (a as any).customColor ?? null,
       date: targetDate,
     }));
     try {
@@ -681,10 +682,10 @@ export function WeeklyCalendar({
                                     }}
                                     data-testid={`assignment-${assignment.id}`}
                                   >
-                                    <div className={cn("flex items-center", isCompactView ? "gap-0.5" : "gap-1")}>
-                                      {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50" />}
+                                    <div className={cn("flex items-start", isCompactView ? "gap-0.5" : "gap-1")}>
+                                      {!isCompactView && <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-50 mt-0.5" />}
                                       <div className="flex-1 min-w-0">
-                                        <div className={cn("text-xs font-medium flex items-start justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
+                                        <div className={cn("text-xs font-medium flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                           <span className="min-w-0 flex-1 truncate leading-tight">{assignment.customName || task.name}</span>
                                           {!isCompactView && (
                                             <div className="flex items-center gap-0.5 shrink-0">
@@ -694,7 +695,7 @@ export function WeeklyCalendar({
                                                     <button
                                                       type="button"
                                                       className={cn(
-                                                        "relative z-20 mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
+                                                        "relative z-20 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
                                                         "hover:-translate-y-px hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
                                                         isTaskDark
                                                           ? "border-white/45 bg-black/25 text-white/95 hover:border-white/70 hover:bg-black/45 focus-visible:ring-white/80 focus-visible:ring-offset-transparent"
@@ -724,7 +725,7 @@ export function WeeklyCalendar({
                                                   <button
                                                     type="button"
                                                     className={cn(
-                                                      "relative z-20 mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
+                                                      "relative z-20 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px] transition-all duration-150",
                                                       "opacity-0 group-hover:opacity-100 hover:-translate-y-px hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
                                                       isTaskDark
                                                         ? "border-white/45 bg-black/25 text-white/95 hover:border-white/70 hover:bg-black/45 focus-visible:ring-white/80 focus-visible:ring-offset-transparent"
@@ -788,7 +789,7 @@ export function WeeklyCalendar({
                                           )}
                                         </div>
                                         {!isCompactView && (assignment.batchNumber || assignment.batchSize) && (
-                                          <div className={cn("text-xs font-mono mt-0.5 flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
+                                          <div className={cn("text-xs font-mono mt-px flex gap-1", isTaskDark ? "text-white/80" : "text-foreground/70")}>
                                             {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
                                             {assignment.batchSize && <span>({assignment.batchSize})</span>}
                                           </div>

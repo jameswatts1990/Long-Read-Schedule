@@ -470,17 +470,17 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className={cn("max-w-xl", isMonthMode && "max-w-3xl")} data-testid="dialog-add-assignment">
-        <DialogHeader>
+      <DialogContent className={cn("max-w-xl flex flex-col max-h-[90vh]", isMonthMode && "max-w-3xl")} data-testid="dialog-add-assignment">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Add Task Assignment</DialogTitle>
           <DialogDescription>
             {isMonthMode ? "Assign tasks across the month" : `Assign a task for ${day} ${format(addDays(parse(weekStartDate, "yyyy-MM-dd", new Date()), ["Monday","Tuesday","Wednesday","Thursday","Friday"].indexOf(day)), "dd/MM")}`}
           </DialogDescription>
         </DialogHeader>
 
-        <div className={cn("grid gap-6", isMonthMode && "grid-cols-[1fr_300px]")}>
+        <div className={cn("grid gap-6 flex-1 min-h-0 overflow-y-auto", isMonthMode && "grid-cols-[1fr_300px]")}>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form id="add-assignment-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
                 name="taskId"
@@ -942,53 +942,6 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                 </Collapsible>
               )}
 
-              <div className="flex justify-between gap-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onClose}
-                  data-testid="button-close"
-                >
-                  Close
-                </Button>
-                <div className="flex gap-2">
-                  {!isMonthMode && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={createMutation.isPending || !form.getValues("taskId")}
-                      data-testid="button-all-week"
-                      onClick={() => {
-                        const data = form.getValues();
-                        handleCreateAllWeek(data);
-                      }}
-                    >
-                      All Week
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={createMutation.isPending || (repeatEnabled && endType === "date" && !endDate)}
-                    data-testid="button-submit-and-add-another"
-                    onClick={() => {
-                      form.handleSubmit(onSubmit)();
-                    }}
-                  >
-                    {createMutation.isPending ? "Creating..." : "Create & Add Another"}
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={createMutation.isPending || (repeatEnabled && endType === "date" && !endDate)}
-                    data-testid="button-submit-and-close"
-                    onClick={() => {
-                      setShouldCloseAfter(true);
-                    }}
-                  >
-                    {createMutation.isPending ? "Creating..." : "Create & Close"}
-                  </Button>
-                </div>
-              </div>
             </form>
           </Form>
 
@@ -1033,6 +986,56 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
               </div>
             </div>
           )}
+        </div>
+
+        <div className="flex justify-between gap-2 pt-4 border-t shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            data-testid="button-close"
+          >
+            Close
+          </Button>
+          <div className="flex gap-2">
+            {!isMonthMode && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={createMutation.isPending || !form.getValues("taskId")}
+                data-testid="button-all-week"
+                onClick={() => {
+                  const data = form.getValues();
+                  handleCreateAllWeek(data);
+                }}
+              >
+                All Week
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              form="add-assignment-form"
+              disabled={createMutation.isPending || (repeatEnabled && endType === "date" && !endDate)}
+              data-testid="button-submit-and-add-another"
+              onClick={() => {
+                form.handleSubmit(onSubmit)();
+              }}
+            >
+              {createMutation.isPending ? "Creating..." : "Create & Add Another"}
+            </Button>
+            <Button
+              type="submit"
+              form="add-assignment-form"
+              disabled={createMutation.isPending || (repeatEnabled && endType === "date" && !endDate)}
+              data-testid="button-submit-and-close"
+              onClick={() => {
+                setShouldCloseAfter(true);
+              }}
+            >
+              {createMutation.isPending ? "Creating..." : "Create & Close"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
 
