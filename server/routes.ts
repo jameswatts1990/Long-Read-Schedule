@@ -1182,7 +1182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!message || typeof message !== "string" || message.trim().length === 0) {
         return res.status(400).json({ message: "Message is required" });
       }
-      const validTypes = ["info", "warning", "success"];
+      const validTypes = ["info", "warning", "success", "error", "announcement", "maintenance", "update"];
       const announcementType = validTypes.includes(type) ? type : "info";
       const createdById = req.user.claims.sub;
       const announcement = await storage.createSiteAnnouncement({ message: message.trim(), type: announcementType, createdById });
@@ -1198,7 +1198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!message || typeof message !== "string" || message.trim().length === 0) {
         return res.status(400).json({ message: "Message is required" });
       }
-      const validTypes = ["info", "warning", "success"];
+      const validTypes = ["info", "warning", "success", "error", "announcement", "maintenance", "update"];
       const announcementType = validTypes.includes(type) ? type : "info";
       const announcement = await storage.updateSiteAnnouncement(req.params.id, { message: message.trim(), type: announcementType });
       res.json(announcement);
