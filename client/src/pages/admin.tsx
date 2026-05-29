@@ -957,21 +957,46 @@ const ANNOUNCEMENT_TYPE_OPTIONS = [
   { value: "update", label: "Update", icon: <Sparkles className="h-4 w-4 text-teal-500" /> },
 ];
 
+type AnnouncementType = "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update";
+
+function toDatetimeLocal(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(dt.getTime())) return "";
+  const Y = dt.getFullYear();
+  const M = String(dt.getMonth() + 1).padStart(2, "0");
+  const D = String(dt.getDate()).padStart(2, "0");
+  const h = String(dt.getHours()).padStart(2, "0");
+  const m = String(dt.getMinutes()).padStart(2, "0");
+  return `${Y}-${M}-${D}T${h}:${m}`;
+}
+
+function formatDateShort(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(dt.getTime())) return "";
+  return dt.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+}
+
 function AnnouncementsSection() {
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
-  const [newType, setNewType] = useState<"info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update">("info");
+  const [newType, setNewType] = useState<AnnouncementType>("info");
+  const [newStartsAt, setNewStartsAt] = useState("");
+  const [newExpiresAt, setNewExpiresAt] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editMessage, setEditMessage] = useState("");
-  const [editType, setEditType] = useState<"info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update">("info");
+  const [editType, setEditType] = useState<AnnouncementType>("info");
+  const [editStartsAt, setEditStartsAt] = useState("");
+  const [editExpiresAt, setEditExpiresAt] = useState("");
 
   const { data: announcements = [], isLoading } = useQuery<SiteAnnouncement[]>({
     queryKey: ["/api/site-announcements"],
   });
 
   const createMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/site-announcements", { message: newMessage, type: newType });
+    mutationFn: async (params: { message: string; type: string; startsAt: string | null; expiresAt: string | null }) => {
+      const res = await apiRequest("POST", "/api/site-announcements", params);
       return res.json();
     },
     onSuccess: () => {
@@ -979,6 +1004,8 @@ function AnnouncementsSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/site-announcement/active"] });
       toast({ title: "Announcement created", variant: "success" });
       setNewMessage("");
+      setNewStartsAt("");
+      setNewExpiresAt("");
     },
     onError: (error: unknown) => {
       toast({ title: "Failed to create announcement", description: extractErrorMessage(error), variant: "destructive" });
@@ -1031,8 +1058,9 @@ function AnnouncementsSection() {
   });
 
   const editMutation = useMutation({
-    mutationFn: async ({ id, message, type }: { id: string; message: string; type: string }) => {
-      const res = await apiRequest("PATCH", `/api/site-announcements/${id}`, { message, type });
+    mutationFn: async (params: { id: string; message: string; type: string; startsAt: string | null; expiresAt: string | null }) => {
+      const { id, ...body } = params;
+      const res = await apiRequest("PATCH", `/api/site-announcements/${id}`, body);
       return res.json();
     },
     onSuccess: () => {
@@ -1046,6 +1074,18 @@ function AnnouncementsSection() {
     },
   });
 
+  const handleCreate = () => {
+    if (!newMessage.trim()) return;
+    createMutation.mutate({ message: newMessage, type: newType, startsAt: newStartsAt || null, expiresAt: newExpiresAt || null });
+  };
+
+  const handleSaveEdit = (id: string) => {
+    if (!editMessage.trim()) return;
+    editMutation.mutate({ id, message: editMessage, type: editType, startsAt: editStartsAt || null, expiresAt: editExpiresAt || null });
+  };
+
+  const datetimeInputClass = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+
   return (
     <Card className="p-6">
       <div className="flex items-center gap-2 mb-6">
@@ -1053,14 +1093,14 @@ function AnnouncementsSection() {
         <h2 className="text-2xl font-bold">Announcements</h2>
       </div>
       <p className="text-sm text-muted-foreground mb-6">
-        Display a sitewide notification bar for all users. Only one announcement can be active at a time.
+        Display a sitewide notification bar for all users. Only one announcement can be active at a time. Set start/expiry dates to schedule announcements automatically.
       </p>
 
       {/* Create form */}
       <div className="space-y-3 mb-8 p-4 border rounded-lg bg-muted/30">
         <h3 className="text-sm font-semibold">New announcement</h3>
         <div className="flex gap-2">
-          <Select value={newType} onValueChange={(v) => setNewType(v as "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update")}>
+          <Select value={newType} onValueChange={(v) => setNewType(v as AnnouncementType)}>
             <SelectTrigger className="w-36">
               <SelectValue />
             </SelectTrigger>
@@ -1077,17 +1117,23 @@ function AnnouncementsSection() {
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Enter announcement message..."
             className="flex-1"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newMessage.trim()) createMutation.mutate();
-            }}
+            onKeyDown={(e) => { if (e.key === "Enter" && newMessage.trim()) handleCreate(); }}
           />
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={!newMessage.trim() || createMutation.isPending}
-          >
+          <Button onClick={handleCreate} disabled={!newMessage.trim() || createMutation.isPending}>
             {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Add
           </Button>
+        </div>
+        <div className="flex gap-3 items-end">
+          <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0 mb-2" />
+          <div className="flex flex-col gap-1 flex-1">
+            <label className="text-xs text-muted-foreground">Starts at (optional)</label>
+            <input type="datetime-local" value={newStartsAt} onChange={(e) => setNewStartsAt(e.target.value)} className={datetimeInputClass} />
+          </div>
+          <div className="flex flex-col gap-1 flex-1">
+            <label className="text-xs text-muted-foreground">Expires at (optional)</label>
+            <input type="datetime-local" value={newExpiresAt} onChange={(e) => setNewExpiresAt(e.target.value)} className={datetimeInputClass} />
+          </div>
         </div>
       </div>
 
@@ -1107,83 +1153,98 @@ function AnnouncementsSection() {
                 className={`flex flex-col gap-2 p-3 rounded-lg border ${ann.isActive ? "border-primary bg-primary/5" : ""}`}
               >
                 {isEditing ? (
-                  <div className="flex gap-2 items-center">
-                    <Select value={editType} onValueChange={(v) => setEditType(v as "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update")}>
-                      <SelectTrigger className="w-36">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ANNOUNCEMENT_TYPE_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            <span className="flex items-center gap-2">{opt.icon}{opt.label}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      value={editMessage}
-                      onChange={(e) => setEditMessage(e.target.value)}
-                      className="flex-1"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && editMessage.trim()) editMutation.mutate({ id: ann.id, message: editMessage, type: editType });
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => editMutation.mutate({ id: ann.id, message: editMessage, type: editType })}
-                      disabled={!editMessage.trim() || editMutation.isPending}
-                    >
-                      {editMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <Select value={editType} onValueChange={(v) => setEditType(v as AnnouncementType)}>
+                        <SelectTrigger className="w-36">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ANNOUNCEMENT_TYPE_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              <span className="flex items-center gap-2">{opt.icon}{opt.label}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={editMessage}
+                        onChange={(e) => setEditMessage(e.target.value)}
+                        className="flex-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && editMessage.trim()) handleSaveEdit(ann.id);
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                      />
+                      <Button size="sm" onClick={() => handleSaveEdit(ann.id)} disabled={!editMessage.trim() || editMutation.isPending}>
+                        {editMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                    </div>
+                    <div className="flex gap-3 items-end pl-1">
+                      <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0 mb-2" />
+                      <div className="flex flex-col gap-1 flex-1">
+                        <label className="text-xs text-muted-foreground">Starts at</label>
+                        <input type="datetime-local" value={editStartsAt} onChange={(e) => setEditStartsAt(e.target.value)} className={datetimeInputClass} />
+                      </div>
+                      <div className="flex flex-col gap-1 flex-1">
+                        <label className="text-xs text-muted-foreground">Expires at</label>
+                        <input type="datetime-local" value={editExpiresAt} onChange={(e) => setEditExpiresAt(e.target.value)} className={datetimeInputClass} />
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    {typeOpt.icon}
-                    <span className="flex-1 text-sm">{ann.message}</span>
-                    {ann.isActive && (
-                      <Badge variant="default" className="text-xs">Active</Badge>
-                    )}
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => { setEditingId(ann.id); setEditMessage(ann.message); setEditType(ann.type as "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update"); }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      {ann.isActive ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => deactivateMutation.mutate(ann.id)}
-                          disabled={deactivateMutation.isPending}
-                        >
-                          <EyeOff className="h-3.5 w-3.5 mr-1" />
-                          Deactivate
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => activateMutation.mutate(ann.id)}
-                          disabled={activateMutation.isPending}
-                        >
-                          <Eye className="h-3.5 w-3.5 mr-1" />
-                          Activate
-                        </Button>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-3">
+                      {typeOpt.icon}
+                      <span className="flex-1 text-sm">{ann.message}</span>
+                      {ann.isActive && (
+                        <Badge variant="default" className="text-xs">Active</Badge>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => deleteMutation.mutate(ann.id)}
-                        disabled={deleteMutation.isPending}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingId(ann.id);
+                            setEditMessage(ann.message);
+                            setEditType(ann.type as AnnouncementType);
+                            setEditStartsAt(toDatetimeLocal(ann.startsAt));
+                            setEditExpiresAt(toDatetimeLocal(ann.expiresAt));
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        {ann.isActive ? (
+                          <Button size="sm" variant="outline" onClick={() => deactivateMutation.mutate(ann.id)} disabled={deactivateMutation.isPending}>
+                            <EyeOff className="h-3.5 w-3.5 mr-1" />
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => activateMutation.mutate(ann.id)} disabled={activateMutation.isPending}>
+                            <Eye className="h-3.5 w-3.5 mr-1" />
+                            Activate
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => deleteMutation.mutate(ann.id)}
+                          disabled={deleteMutation.isPending}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
+                    {(ann.startsAt || ann.expiresAt) && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground pl-7">
+                        <CalendarClock className="h-3 w-3 shrink-0" />
+                        {ann.startsAt && <span>From {formatDateShort(ann.startsAt)}</span>}
+                        {ann.startsAt && ann.expiresAt && <span>·</span>}
+                        {ann.expiresAt && <span>Until {formatDateShort(ann.expiresAt)}</span>}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

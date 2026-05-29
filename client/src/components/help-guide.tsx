@@ -275,6 +275,7 @@ export function HelpGuide() {
               <Item label="Sitewide bar" description="Set a notification bar that appears at the top of the app for all users. Navigate to Admin → Announcements to manage them." />
               <Item label="Types" description="Choose from Info (blue), Warning (amber), Success (green), Alarm (red), Announcement (purple), Maintenance (orange), or Update (teal) to match the urgency of the message." />
               <Item label="Activate / Deactivate" description="Only one announcement is shown at a time. Use Activate to make one live and Deactivate to hide it without deleting it." />
+              <Item label="Start & expiry dates" description="Optionally set a 'Starts at' and/or 'Expires at' datetime. The bar only appears within that window, useful for scheduling planned maintenance or time-limited notices without manual intervention." />
               <Item label="Dismissable" description="Users can dismiss the bar by clicking ×. It reappears after 24 hours, or immediately if a new announcement is activated." />
             </Section>
 

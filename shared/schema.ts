@@ -242,10 +242,12 @@ export type InsertWorkspaceUser = z.infer<typeof insertWorkspaceUserSchema>;
 export const siteAnnouncements = pgTable("site_announcements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   message: text("message").notNull(),
-  type: text("type").notNull().default("info"), // "info" | "warning" | "success"
+  type: text("type").notNull().default("info"), // "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update"
   isActive: integer("is_active").notNull().default(0),
   createdById: varchar("created_by_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  startsAt: timestamp("starts_at"),
+  expiresAt: timestamp("expires_at"),
 });
 
 export type SiteAnnouncement = typeof siteAnnouncements.$inferSelect;

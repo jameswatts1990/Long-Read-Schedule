@@ -35,7 +35,7 @@ import {
 import { randomUUID } from "crypto";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq, and, gte, lte, inArray, isNull, isNotNull, sql, or } from "drizzle-orm";
+import { eq, and, gte, lte, gt, inArray, isNull, isNotNull, sql, or } from "drizzle-orm";
 import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
@@ -142,8 +142,8 @@ export interface IStorage {
   // Site announcement operations
   getActiveSiteAnnouncement(): Promise<SiteAnnouncement | undefined>;
   getAllSiteAnnouncements(): Promise<SiteAnnouncement[]>;
-  createSiteAnnouncement(data: { message: string; type: string; createdById: string }): Promise<SiteAnnouncement>;
-  updateSiteAnnouncement(id: string, data: { message: string; type: string }): Promise<SiteAnnouncement>;
+  createSiteAnnouncement(data: { message: string; type: string; createdById: string; startsAt?: Date | null; expiresAt?: Date | null }): Promise<SiteAnnouncement>;
+  updateSiteAnnouncement(id: string, data: { message: string; type: string; startsAt?: Date | null; expiresAt?: Date | null }): Promise<SiteAnnouncement>;
   activateSiteAnnouncement(id: string): Promise<SiteAnnouncement>;
   deactivateSiteAnnouncement(id: string): Promise<SiteAnnouncement>;
   deleteSiteAnnouncement(id: string): Promise<void>;
@@ -899,10 +899,17 @@ export class PostgresStorage implements IStorage {
   }
 
   async getActiveSiteAnnouncement(): Promise<SiteAnnouncement | undefined> {
+    const now = new Date();
     const [row] = await this.db
       .select()
       .from(siteAnnouncements)
-      .where(eq(siteAnnouncements.isActive, 1))
+      .where(
+        and(
+          eq(siteAnnouncements.isActive, 1),
+          or(isNull(siteAnnouncements.startsAt), lte(siteAnnouncements.startsAt, now)),
+          or(isNull(siteAnnouncements.expiresAt), gt(siteAnnouncements.expiresAt, now)),
+        )
+      )
       .limit(1);
     return row;
   }
@@ -914,20 +921,22 @@ export class PostgresStorage implements IStorage {
       .orderBy(siteAnnouncements.createdAt);
   }
 
-  async createSiteAnnouncement(data: { message: string; type: string; createdById: string }): Promise<SiteAnnouncement> {
+  async createSiteAnnouncement(data: { message: string; type: string; createdById: string; startsAt?: Date | null; expiresAt?: Date | null }): Promise<SiteAnnouncement> {
     // Deactivate all existing announcements before inserting the new active one
     await this.db.update(siteAnnouncements).set({ isActive: 0 });
+    const { message, type, createdById, startsAt = null, expiresAt = null } = data;
     const [row] = await this.db
       .insert(siteAnnouncements)
-      .values({ id: randomUUID(), ...data, isActive: 1 })
+      .values({ id: randomUUID(), message, type, createdById, isActive: 1, startsAt, expiresAt })
       .returning();
     return row;
   }
 
-  async updateSiteAnnouncement(id: string, data: { message: string; type: string }): Promise<SiteAnnouncement> {
+  async updateSiteAnnouncement(id: string, data: { message: string; type: string; startsAt?: Date | null; expiresAt?: Date | null }): Promise<SiteAnnouncement> {
+    const { message, type, startsAt = null, expiresAt = null } = data;
     const [row] = await this.db
       .update(siteAnnouncements)
-      .set(data)
+      .set({ message, type, startsAt, expiresAt })
       .where(eq(siteAnnouncements.id, id))
       .returning();
     return row;

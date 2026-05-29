@@ -1178,31 +1178,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/site-announcements", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
-      const { message, type } = req.body;
+      const { message, type, startsAt, expiresAt } = req.body;
       if (!message || typeof message !== "string" || message.trim().length === 0) {
         return res.status(400).json({ message: "Message is required" });
       }
       const validTypes = ["info", "warning", "success", "error", "announcement", "maintenance", "update"];
-      const announcementType = validTypes.includes(type) ? type : "info";
+      const announcementType = validTypes.includes(type) ? (type as string) : "info";
       const createdById = req.user.claims.sub;
-      const announcement = await storage.createSiteAnnouncement({ message: message.trim(), type: announcementType, createdById });
+      const parsedStartsAt = startsAt ? new Date(startsAt) : null;
+      const parsedExpiresAt = expiresAt ? new Date(expiresAt) : null;
+      if (parsedStartsAt && isNaN(parsedStartsAt.getTime())) return res.status(400).json({ message: "Invalid starts at date" });
+      if (parsedExpiresAt && isNaN(parsedExpiresAt.getTime())) return res.status(400).json({ message: "Invalid expires at date" });
+      const announcement = await storage.createSiteAnnouncement({ message: message.trim(), type: announcementType, createdById, startsAt: parsedStartsAt, expiresAt: parsedExpiresAt });
       res.json(announcement);
     } catch (error) {
+      console.error("Failed to create site announcement:", error);
       res.status(500).json({ message: "Failed to create site announcement" });
     }
   });
 
   app.patch("/api/site-announcements/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      const { message, type } = req.body;
+      const { message, type, startsAt, expiresAt } = req.body;
       if (!message || typeof message !== "string" || message.trim().length === 0) {
         return res.status(400).json({ message: "Message is required" });
       }
       const validTypes = ["info", "warning", "success", "error", "announcement", "maintenance", "update"];
-      const announcementType = validTypes.includes(type) ? type : "info";
-      const announcement = await storage.updateSiteAnnouncement(req.params.id, { message: message.trim(), type: announcementType });
+      const announcementType = validTypes.includes(type) ? (type as string) : "info";
+      const parsedStartsAt = startsAt ? new Date(startsAt) : null;
+      const parsedExpiresAt = expiresAt ? new Date(expiresAt) : null;
+      if (parsedStartsAt && isNaN(parsedStartsAt.getTime())) return res.status(400).json({ message: "Invalid starts at date" });
+      if (parsedExpiresAt && isNaN(parsedExpiresAt.getTime())) return res.status(400).json({ message: "Invalid expires at date" });
+      const announcement = await storage.updateSiteAnnouncement(req.params.id, { message: message.trim(), type: announcementType, startsAt: parsedStartsAt, expiresAt: parsedExpiresAt });
       res.json(announcement);
     } catch (error) {
+      console.error("Failed to update site announcement:", error);
       res.status(500).json({ message: "Failed to update site announcement" });
     }
   });

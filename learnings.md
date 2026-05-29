@@ -81,11 +81,16 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 
 ## Sitewide announcement bar — new DB table requires migration
 
-- Date: 2026-05-15
+- Date: 2026-05-15 (updated 2026-05-29)
 - Trigger: Added sitewide notification bar feature (Admin → Announcements section).
-- Learning: The `site_announcements` table is new and requires a raw SQL migration. Only one announcement can be active (`is_active=1`) at a time; `activateSiteAnnouncement` deactivates all rows before setting the target. The bar is dismissable — clicking × stores the dismissal in `localStorage` (keyed `dismissed_announcement`, with `announcementId` + `dismissedAt`). It reappears after 24 hours or if the active announcement changes to a different ID. All authenticated users (not just super-admins) can manage announcements via the Admin page.
-- Action: Always provide the raw SQL for the user to run directly in Replit's database shell. Do NOT instruct `npm run db:push` — npm commands cannot be run on the Replit hosted app. See Evidence for the exact SQL.
-- Evidence: `shared/schema.ts` siteAnnouncements table; SQL: `CREATE TABLE IF NOT EXISTS site_announcements (id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(), message TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'info', is_active INTEGER NOT NULL DEFAULT 0, created_by_id VARCHAR, created_at TIMESTAMP DEFAULT NOW());`
+- Learning: The `site_announcements` table requires a raw SQL migration. Only one announcement can be active (`is_active=1`) at a time; `activateSiteAnnouncement` deactivates all rows before setting the target. The bar is dismissable — clicking × stores the dismissal in `localStorage` (keyed `dismissed_announcement`, with `announcementId` + `dismissedAt`). It reappears after 24 hours or if the active announcement changes to a different ID. All authenticated users (not just super-admins) can manage announcements via the Admin page. Valid types: "info" | "warning" | "success" | "error" | "announcement" | "maintenance" | "update". `starts_at` and `expires_at` columns were added to enable scheduled/expiring announcements — `getActiveSiteAnnouncement` filters by these in addition to `is_active`. The announcement bar respects both the active flag AND the date window.
+- Action: Always provide the raw SQL for the user to run directly in Replit's database shell. Mutation functions for announcements must pass type/dates as explicit parameters (not closures) to avoid stale-value bugs. See Evidence for the exact SQL.
+- Evidence: `shared/schema.ts` siteAnnouncements table; `server/storage.ts` getActiveSiteAnnouncement; SQL migrations:
+  ```sql
+  CREATE TABLE IF NOT EXISTS site_announcements (id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(), message TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'info', is_active INTEGER NOT NULL DEFAULT 0, created_by_id VARCHAR, created_at TIMESTAMP DEFAULT NOW());
+  ALTER TABLE site_announcements ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP;
+  ALTER TABLE site_announcements ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+  ```
 
 ## User role field — added to users table for in-app role management
 
