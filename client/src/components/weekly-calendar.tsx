@@ -55,6 +55,55 @@ const isDarkColor = (hexColor: string): boolean => {
   return getLuminance(hexColor) < 0.5;
 };
 
+// Day column color configuration (Mon=0 through Fri=4)
+const DAY_HEADER_COLORS = [
+  "bg-red-200 dark:bg-red-900",
+  "bg-gradient-to-b from-yellow-200 to-orange-200 dark:from-yellow-900 dark:to-orange-900",
+  "bg-green-200 dark:bg-green-900",
+  "bg-blue-200 dark:bg-blue-900",
+  "bg-gradient-to-b from-purple-200 to-pink-200 dark:from-purple-900 dark:to-pink-900",
+];
+
+const DAY_HEADER_TODAY_COLORS = [
+  "bg-red-300 dark:bg-red-800",
+  "bg-gradient-to-b from-yellow-300 to-orange-300 dark:from-yellow-800 dark:to-orange-800",
+  "bg-green-300 dark:bg-green-800",
+  "bg-blue-300 dark:bg-blue-800",
+  "bg-gradient-to-b from-purple-300 to-pink-300 dark:from-purple-800 dark:to-pink-800",
+];
+
+const DAY_HEADER_TEXT_COLORS = [
+  "text-red-900 dark:text-red-100",
+  "text-amber-900 dark:text-amber-100",
+  "text-green-900 dark:text-green-100",
+  "text-blue-900 dark:text-blue-100",
+  "text-purple-900 dark:text-purple-100",
+];
+
+const DAY_HEADER_DATE_COLORS = [
+  "text-red-800 dark:text-red-200",
+  "text-amber-800 dark:text-amber-200",
+  "text-green-800 dark:text-green-200",
+  "text-blue-800 dark:text-blue-200",
+  "text-purple-800 dark:text-purple-200",
+];
+
+const DAY_CELL_COLORS = [
+  "bg-red-50/60 dark:bg-red-950/20",
+  "bg-gradient-to-b from-yellow-50/60 to-orange-50/60 dark:from-yellow-950/20 dark:to-orange-950/20",
+  "bg-green-50/60 dark:bg-green-950/20",
+  "bg-blue-50/60 dark:bg-blue-950/20",
+  "bg-gradient-to-b from-purple-50/60 to-pink-50/60 dark:from-purple-950/20 dark:to-pink-950/20",
+];
+
+const DAY_CELL_TODAY_COLORS = [
+  "bg-red-100/70 dark:bg-red-900/30",
+  "bg-gradient-to-b from-yellow-100/70 to-orange-100/70 dark:from-yellow-900/30 dark:to-orange-900/30",
+  "bg-green-100/70 dark:bg-green-900/30",
+  "bg-blue-100/70 dark:bg-blue-900/30",
+  "bg-gradient-to-b from-purple-100/70 to-pink-100/70 dark:from-purple-900/30 dark:to-pink-900/30",
+];
+
 interface WeeklyCalendarProps {
   weekStartDate: string;
   assignments: Assignment[];
@@ -429,18 +478,18 @@ export function WeeklyCalendar({
                     const isTodayDay = isCurrentDay(dayIndex);
                     const missingRequired = getMissingRequiredTasks(day);
                     return (
-                      <th 
-                        key={day} 
+                      <th
+                        key={day}
                         className={cn(
                           "sticky top-0 z-40 border-b text-center p-2",
-                          isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted"
+                          isTodayDay ? DAY_HEADER_TODAY_COLORS[dayIndex] : DAY_HEADER_COLORS[dayIndex]
                         )}
                         data-testid={`header-day-${day.toLowerCase()}`}
                       >
                         <div className="flex items-center justify-center gap-1">
                           <div className={cn(
                             "font-semibold text-sm",
-                            isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground"
+                            DAY_HEADER_TEXT_COLORS[dayIndex]
                           )}>
                             {day.slice(0, 3)}
                           </div>
@@ -469,7 +518,7 @@ export function WeeklyCalendar({
                         </div>
                         <div className={cn(
                           "text-xs mt-0.5",
-                          isTodayDay ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"
+                          DAY_HEADER_DATE_COLORS[dayIndex]
                         )}>
                           {getDateForDay(dayIndex)}
                         </div>
@@ -549,7 +598,6 @@ export function WeeklyCalendar({
                     const currentCell = { personId: person.id, day };
                     const isDropTarget = dropTargetCell?.personId === person.id && dropTargetCell?.day === day;
                     const isTodayDay = isCurrentDay(dayIndex);
-                    const isCurrentWeekDisplay = isCurrentWeek();
                     const hasLeave = hasAnnualLeave(person.id, day);
 
                     return (
@@ -559,10 +607,8 @@ export function WeeklyCalendar({
                           "border-b border-l hover-elevate relative align-top",
                           isCompactView ? "p-0" : "p-1.5",
                           hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
-                          isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
-                          (isCurrentWeekDisplay && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20" :
-                          (isCurrentWeekDisplay && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10" :
-                          personIndex % 2 === 0 && "bg-muted/20",
+                          isTodayDay ? DAY_CELL_TODAY_COLORS[dayIndex] :
+                          DAY_CELL_COLORS[dayIndex],
                           isDropTarget && "bg-primary/10 border-2 border-primary",
                           cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
                         )}

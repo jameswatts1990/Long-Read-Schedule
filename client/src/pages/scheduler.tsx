@@ -483,7 +483,12 @@ export default function Scheduler() {
   return (
     <div className="flex flex-col h-screen w-full bg-background">
       <LoadingOverlay />
-      <header className="h-16 border-b flex items-center px-6 bg-background shrink-0 gap-3">
+      <header className="h-16 border-b flex items-center px-6 bg-background shrink-0 gap-3 relative overflow-hidden">
+        {/* Pride rainbow stripe */}
+        <div
+          className="absolute top-0 left-0 right-0 h-1 z-50"
+          style={{ background: 'linear-gradient(to right, #E40303, #FF8C00, #FFED00, #008026, #004DFF, #750787)' }}
+        />
         <div className="flex items-center gap-3 shrink-0">
           <CalendarIcon className="w-6 h-6 text-primary" data-testid="icon-logo" />
           <h1 className="text-2xl font-semibold" data-testid="text-app-title">Lab Scheduler</h1>
