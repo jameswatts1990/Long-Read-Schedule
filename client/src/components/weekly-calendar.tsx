@@ -118,6 +118,7 @@ interface WeeklyCalendarProps {
   onToggleCurrentPerson?: () => void;
   onTrainedFilterChange?: (taskName: string | null) => void;
   slackEnabled?: boolean;
+  rainbowMode?: boolean;
 }
 
 export function WeeklyCalendar({
@@ -134,6 +135,7 @@ export function WeeklyCalendar({
   onToggleCurrentPerson,
   onTrainedFilterChange,
   slackEnabled = false,
+  rainbowMode = true,
 }: WeeklyCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
@@ -482,14 +484,18 @@ export function WeeklyCalendar({
                         key={day}
                         className={cn(
                           "sticky top-0 z-40 border-b text-center p-2",
-                          isTodayDay ? DAY_HEADER_TODAY_COLORS[dayIndex] : DAY_HEADER_COLORS[dayIndex]
+                          rainbowMode
+                            ? (isTodayDay ? DAY_HEADER_TODAY_COLORS[dayIndex] : DAY_HEADER_COLORS[dayIndex])
+                            : (isTodayDay ? "bg-blue-100 dark:bg-blue-950" : "bg-muted")
                         )}
                         data-testid={`header-day-${day.toLowerCase()}`}
                       >
                         <div className="flex items-center justify-center gap-1">
                           <div className={cn(
                             "font-semibold text-sm",
-                            DAY_HEADER_TEXT_COLORS[dayIndex]
+                            rainbowMode
+                              ? DAY_HEADER_TEXT_COLORS[dayIndex]
+                              : (isTodayDay ? "text-blue-900 dark:text-blue-100" : "text-foreground")
                           )}>
                             {day.slice(0, 3)}
                           </div>
@@ -518,7 +524,9 @@ export function WeeklyCalendar({
                         </div>
                         <div className={cn(
                           "text-xs mt-0.5",
-                          DAY_HEADER_DATE_COLORS[dayIndex]
+                          rainbowMode
+                            ? DAY_HEADER_DATE_COLORS[dayIndex]
+                            : (isTodayDay ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground")
                         )}>
                           {getDateForDay(dayIndex)}
                         </div>
@@ -607,8 +615,12 @@ export function WeeklyCalendar({
                           "border-b border-l hover-elevate relative align-top",
                           isCompactView ? "p-0" : "p-1.5",
                           hasLeave ? "bg-red-200/80 dark:bg-red-900/50" :
-                          isTodayDay ? DAY_CELL_TODAY_COLORS[dayIndex] :
-                          DAY_CELL_COLORS[dayIndex],
+                          rainbowMode
+                            ? (isTodayDay ? DAY_CELL_TODAY_COLORS[dayIndex] : DAY_CELL_COLORS[dayIndex])
+                            : isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30"
+                            : (isCurrentWeek() && personIndex % 2 === 0) ? "bg-green-100/20 dark:bg-green-950/20"
+                            : (isCurrentWeek() && personIndex % 2 !== 0) ? "bg-green-50/20 dark:bg-green-950/10"
+                            : personIndex % 2 === 0 ? "bg-muted/20" : undefined,
                           isDropTarget && "bg-primary/10 border-2 border-primary",
                           cellAssignments.length === 0 && !hasLeave && "empty-cell-pattern"
                         )}

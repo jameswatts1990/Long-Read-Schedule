@@ -824,6 +824,7 @@ export default function Scheduler() {
             onToggleCurrentPerson={toggleMyAssignmentsView}
             onTrainedFilterChange={handleTrainedFilterChange}
             slackEnabled={!!(user as any)?.slackEnabled}
+            rainbowMode={activeWorkspace?.rainbowMode !== 0}
           />
         )}
         {!isInitialLoading && viewMode === "month" && people.length > 0 && (

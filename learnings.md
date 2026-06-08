@@ -234,10 +234,18 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: In any loop that processes independent records (rota tasks, bulk assignments), always wrap each iteration in try/catch so one failure doesn't abort the rest.
 - Evidence: `server/storage.ts` `applyRotaTasksForWeek` — fixed 2026-05-18.
 
-## Day column colour coding — Tailwind static arrays pattern
+## Rainbow Mode — day column colour coding via Tailwind static arrays
 
 - Date: 2026-06-08
 - Trigger: Added per-day colour coding to the weekly calendar (Mon=red, Tue=yellow/orange gradient, Wed=green, Thu=blue, Fri=purple/pink gradient).
 - Learning: Use static string arrays indexed by `dayIndex` (0=Mon … 4=Fri) for day-specific Tailwind classes. Tailwind's JIT scanner finds class names in string literals inside arrays. `bg-gradient-to-b from-yellow-200 to-orange-200` and similar gradient combos work as single string entries. Annual leave (`bg-red-200/80`) still overrides the day base colour at highest precedence. The `isCurrentWeekDisplay` variable was removed because day-colour cells replace the previous green alternating-row logic.
 - Action: When extending day colours, edit the six `DAY_*_COLORS` arrays at the top of `weekly-calendar.tsx`. Keep annual leave override first in the ternary chain.
 - Evidence: `client/src/components/weekly-calendar.tsx` `DAY_HEADER_COLORS`, `DAY_CELL_COLORS`, etc.
+
+## Workspace-level display toggles — rainbowMode pattern
+
+- Date: 2026-06-08
+- Trigger: Added admin toggle ("Rainbow Mode") to enable/disable day column colour coding per workspace.
+- Learning: Workspace display preferences are stored as integer columns on the `workspaces` table (1=enabled, 0=disabled). The TypeScript property is `rainbowMode`; the DB column is `color_coded_days`. The `insertWorkspaceSchema` auto-includes new columns, and the PUT /api/workspaces/:id route uses `insertWorkspaceSchema.partial()` so no route changes are needed. Convert boolean→integer in the mutation before sending, and integer→boolean when populating the edit form. Invalidate `/api/my-workspace` AND `/api/my-workspaces` on update so the scheduler picks up the new value when the user navigates back.
+- Action: When adding future workspace display preferences, follow this pattern: add integer column to workspaces table (default 1), add Switch in the workspaces edit dialog in admin.tsx, pass through useWorkspace → scheduler → component.
+- Evidence: `shared/schema.ts` workspaces table (`rainbowMode` prop → `color_coded_days` column); `client/src/pages/admin.tsx` WorkspaceManagementSection; `client/src/pages/scheduler.tsx` WeeklyCalendar props; `client/src/components/weekly-calendar.tsx` rainbowMode prop. SQL: `ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS color_coded_days INTEGER NOT NULL DEFAULT 1;`

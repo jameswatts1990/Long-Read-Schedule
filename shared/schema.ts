@@ -35,6 +35,7 @@ export const workspaces = pgTable("workspaces", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   description: text("description"),
+  rainbowMode: integer("color_coded_days").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

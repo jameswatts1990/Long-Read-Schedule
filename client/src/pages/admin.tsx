@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -109,45 +110,55 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
     enabled: !!managingWorkspace,
   });
 
-  const wsForm = useForm<{ name: string; description: string }>({
-    defaultValues: { name: "", description: "" },
+  const wsForm = useForm<{ name: string; description: string; rainbowMode: boolean }>({
+    defaultValues: { name: "", description: "", rainbowMode: true },
   });
 
   const createWsMutation = useMutation({
-    mutationFn: async (data: { name: string; description: string }) => {
-      const res = await apiRequest("POST", "/api/workspaces", data);
+    mutationFn: async (data: { name: string; description: string; rainbowMode: boolean }) => {
+      const res = await apiRequest("POST", "/api/workspaces", {
+        ...data,
+        rainbowMode: data.rainbowMode ? 1 : 0,
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-workspaces"] });
       toast({ title: "Workspace created" });
-      wsForm.reset();
+      wsForm.reset({ name: "", description: "", rainbowMode: true });
       setShowCreateWorkspace(false);
     },
     onError: (error: any) => {
-      toast({ 
-        title: "Failed to create workspace", 
-        description: error.message || "Unknown error", 
-        variant: "destructive" 
+      toast({
+        title: "Failed to create workspace",
+        description: error.message || "Unknown error",
+        variant: "destructive"
       });
     },
   });
 
   const updateWsMutation = useMutation({
-    mutationFn: async (data: { name: string; description: string }) => {
-      const res = await apiRequest("PUT", `/api/workspaces/${editingWorkspace!.id}`, data);
+    mutationFn: async (data: { name: string; description: string; rainbowMode: boolean }) => {
+      const res = await apiRequest("PUT", `/api/workspaces/${editingWorkspace!.id}`, {
+        ...data,
+        rainbowMode: data.rainbowMode ? 1 : 0,
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-workspaces"] });
       toast({ title: "Workspace updated" });
       setEditingWorkspace(null);
     },
     onError: (error: any) => {
-      toast({ 
-        title: "Failed to update workspace", 
-        description: error.message || "Unknown error", 
-        variant: "destructive" 
+      toast({
+        title: "Failed to update workspace",
+        description: error.message || "Unknown error",
+        variant: "destructive"
       });
     },
   });
@@ -198,7 +209,7 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
 
   const handleEditWorkspace = (ws: Workspace) => {
     setEditingWorkspace(ws);
-    wsForm.reset({ name: ws.name, description: ws.description || "" });
+    wsForm.reset({ name: ws.name, description: ws.description || "", rainbowMode: ws.rainbowMode !== 0 });
   };
 
   const nonMembers = allUsers.filter(u => !workspaceMembers.find(m => m.id === u.id));
@@ -293,6 +304,17 @@ function WorkspaceManagementSection({ currentUser }: { currentUser: User | null 
             <div className="space-y-2">
               <label className="text-sm font-medium">Description (optional)</label>
               <Textarea {...wsForm.register("description")} placeholder="Brief description of this workspace..." rows={2} data-testid="input-workspace-description" />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium">Rainbow Mode</label>
+                <p className="text-xs text-muted-foreground">Show each weekday column in a distinct colour (Mon=red, Tue=amber, Wed=green, Thu=blue, Fri=purple)</p>
+              </div>
+              <Switch
+                checked={wsForm.watch("rainbowMode")}
+                onCheckedChange={(checked) => wsForm.setValue("rainbowMode", checked)}
+                data-testid="switch-rainbow-mode"
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => { setShowCreateWorkspace(false); setEditingWorkspace(null); }}>Cancel</Button>
