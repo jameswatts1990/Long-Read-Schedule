@@ -20,6 +20,7 @@ import FirstLoginOnboarding from "@/pages/first-login-onboarding";
 import NotFound from "@/pages/not-found";
 import Settings from "@/pages/settings";
 import { SiteAnnouncementBar } from "@/components/site-announcement-bar";
+import { SessionExpiredBanner } from "@/components/session-expired-banner";
 
 // Predicate that matches any cached query whose key starts with "/api/assignments"
 const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
@@ -150,7 +151,7 @@ function useIsMobile() {
 }
 
 function Router() {
-  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user, sessionExpired } = useAuth();
   const isAdminUser = (user as any)?.role === 'admin' || (user as any)?.role === 'super_admin' || (user as any)?.isSuperAdmin === true;
   const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const { data: onboardingStatus, isLoading: onboardingLoading } = useQuery<{ needsOnboarding: boolean }>({
@@ -171,7 +172,9 @@ function Router() {
     }
   }, [authLoading, workspaceLoading, isAuthenticated, activeWorkspace, isMobile, location, hasRedirected, setLocation]);
 
-  if (authLoading || (isAuthenticated && (workspaceLoading || onboardingLoading))) {
+  // Show spinner only while genuinely loading (not when session has just expired —
+  // in that case we want to keep the last rendered content visible).
+  if (!sessionExpired && (authLoading || (isAuthenticated && (workspaceLoading || onboardingLoading)))) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
@@ -179,8 +182,30 @@ function Router() {
     );
   }
 
-  if (!isAuthenticated) {
+  // User has never authenticated in this session → show landing page
+  if (!isAuthenticated && !sessionExpired) {
     return <Landing />;
+  }
+
+  // Session expired mid-use: keep last-known state visible and show banner.
+  // Skip onboarding/workspace checks — the user already passed those.
+  if (sessionExpired) {
+    return (
+      <>
+        <SessionExpiredBanner sessionExpired={sessionExpired} />
+        <SiteAnnouncementBar />
+        <Switch>
+          <Route path="/" component={Scheduler} />
+          <Route path="/my-day" component={MyDay} />
+          <Route path="/settings" component={Settings} />
+          <Route path="/admin" component={isAdminUser ? Admin : NotFound} />
+          <Route path="/reporting" component={isAdminUser ? Reporting : NotFound} />
+          <Route path="/al-reporting" component={isAdminUser ? ALReporting : NotFound} />
+          <Route path="/absence-reporting" component={isAdminUser ? AbsenceReporting : NotFound} />
+          <Route component={NotFound} />
+        </Switch>
+      </>
+    );
   }
 
   if (onboardingStatus?.needsOnboarding) {

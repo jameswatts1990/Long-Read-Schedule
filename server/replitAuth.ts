@@ -294,9 +294,10 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const now = Math.floor(Date.now() / 1000);
   const tokenExpired = now >= user.expires_at;
 
-  // 60-second buffer: proactively refresh before the token actually expires,
-  // shrinking the window in which concurrent requests all see an expired token.
-  if (now < user.expires_at - 60) {
+  // 5-minute buffer: proactively refresh before the token actually expires.
+  // Larger than 60 s so that a Replit server waking from sleep has enough time
+  // to complete OIDC discovery and the refresh grant before the token hard-expires.
+  if (now < user.expires_at - 300) {
     return next();
   }
 

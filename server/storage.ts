@@ -922,13 +922,16 @@ export class PostgresStorage implements IStorage {
   }
 
   async createSiteAnnouncement(data: { message: string; type: string; createdById: string; startsAt?: Date | null; expiresAt?: Date | null }): Promise<SiteAnnouncement> {
-    // Deactivate all existing announcements before inserting the new active one
-    await this.db.update(siteAnnouncements).set({ isActive: 0 });
     const { message, type, createdById, startsAt = null, expiresAt = null } = data;
-    const [row] = await this.db
-      .insert(siteAnnouncements)
-      .values({ id: randomUUID(), message, type, createdById, isActive: 1, startsAt, expiresAt })
-      .returning();
+    // Deactivate-all and insert are wrapped in a transaction so a failed INSERT
+    // doesn't leave the user with no active announcement.
+    const [row] = await this.db.transaction(async (tx) => {
+      await tx.update(siteAnnouncements).set({ isActive: 0 });
+      return tx
+        .insert(siteAnnouncements)
+        .values({ id: randomUUID(), message, type, createdById, isActive: 1, startsAt, expiresAt })
+        .returning();
+    });
     return row;
   }
 

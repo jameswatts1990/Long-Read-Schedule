@@ -104,6 +104,12 @@ export function HelpGuide() {
               <Item label="Switching workspaces" description="If you belong to multiple workspaces, use the workspace badge in the top-left to switch between them." />
               <Item label="New users" description="First-time users are shown all available workspaces and can self-join one." />
             </Section>
+
+            <Section title="Session">
+              <Item label="Session timeout" description="If your session expires while you are using the app, a small banner appears in the bottom-right corner: 'Session timed out'. Your schedule data stays visible exactly as it was — nothing disappears." />
+              <Item label="Sign back in" description="Click 'Sign back in' in the banner to re-authenticate. You are returned to the same page you were on. Because Replit SSO is used, this is usually instant with no password prompt." />
+              <Item label="Session length" description="Active sessions last 180 days with a rolling cookie. You should rarely need to re-authenticate." />
+            </Section>
           </TabsContent>
 
           {/* ── Assignments ── */}

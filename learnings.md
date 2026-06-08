@@ -242,10 +242,29 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: When extending day colours, edit the six `DAY_*_COLORS` arrays at the top of `weekly-calendar.tsx`. Keep annual leave override first in the ternary chain.
 - Evidence: `client/src/components/weekly-calendar.tsx` `DAY_HEADER_COLORS`, `DAY_CELL_COLORS`, etc.
 
-## Workspace-level display toggles — rainbowMode pattern
+## Session timeout UX — hard redirect hid toast and showed Landing page as crash
 
 - Date: 2026-06-08
-- Trigger: Added admin toggle ("Rainbow Mode") to enable/disable day column colour coding per workspace.
-- Learning: Workspace display preferences are stored as integer columns on the `workspaces` table (1=enabled, 0=disabled). The TypeScript property is `rainbowMode`; the DB column is `color_coded_days`. The `insertWorkspaceSchema` auto-includes new columns, and the PUT /api/workspaces/:id route uses `insertWorkspaceSchema.partial()` so no route changes are needed. Convert boolean→integer in the mutation before sending, and integer→boolean when populating the edit form. Invalidate `/api/my-workspace` AND `/api/my-workspaces` on update so the scheduler picks up the new value when the user navigates back.
+- Trigger: User reported frequent jarring logouts where the app appeared to crash (showed Landing page) rather than a clear timeout message.
+- Learning: (1) `window.location.assign` in `queryClient.ts` fired before React could re-render, so the destructive toast in `useAuth.ts` never appeared. (2) `App.tsx` rendered `<Landing />` when `!isAuthenticated`, which looked like a crash not a logout. (3) The automatic redirect removed user agency. (4) The 60-second proactive OIDC token refresh buffer was too small for a Replit server waking from sleep, causing spurious 401s. Fix: removed `maybeRedirectToLogin` entirely; added `sessionExpired` state in `useAuth`; `App.tsx` now renders routes (showing cached data) + a persistent amber corner banner ("Session timed out — click to sign back in") when `sessionExpired`; refresh buffer increased to 5 minutes.
+- Action: Never auto-redirect on 401. Signal session expiry via React state, keep routes rendered so React Query cache stays visible. The `SessionExpiredBanner` component handles the re-auth call-to-action. When the user clicks "Sign back in", `returnTo` param brings them back to the same page.
+- Evidence: `client/src/hooks/useAuth.ts` (sessionExpired state); `client/src/lib/queryClient.ts` (removed maybeRedirectToLogin); `client/src/components/session-expired-banner.tsx` (new); `client/src/App.tsx` (sessionExpired gate); `server/replitAuth.ts` (300s refresh buffer).
+
+## Workspace-level display toggles — rainbowMode pattern
+
+- Date: 2026-06-08 (corrected 2026-06-08)
+- Trigger: Added admin toggle ("Rainbow Mode") to enable/disable day column colour coding per workspace. Commit `8333329` later renamed the DB column from `color_coded_days` → `rainbow_mode` for consistency, which broke production until the correct migration was run.
+- Learning: Workspace display preferences are stored as integer columns on the `workspaces` table (1=enabled, 0=disabled). The TypeScript property is `rainbowMode`; the DB column is **`rainbow_mode`** (NOT `color_coded_days` — that was the old name). If the ORM column name ever changes in `schema.ts`, the SQL migration and this entry must be updated in the same commit. The `insertWorkspaceSchema` auto-includes new columns, and the PUT /api/workspaces/:id route uses `insertWorkspaceSchema.partial()` so no route changes are needed. Convert boolean→integer in the mutation before sending, and integer→boolean when populating the edit form. Invalidate `/api/my-workspace` AND `/api/my-workspaces` on update so the scheduler picks up the new value when the user navigates back.
 - Action: When adding future workspace display preferences, follow this pattern: add integer column to workspaces table (default 1), add Switch in the workspaces edit dialog in admin.tsx, pass through useWorkspace → scheduler → component.
-- Evidence: `shared/schema.ts` workspaces table (`rainbowMode` prop → `color_coded_days` column); `client/src/pages/admin.tsx` WorkspaceManagementSection; `client/src/pages/scheduler.tsx` WeeklyCalendar props; `client/src/components/weekly-calendar.tsx` rainbowMode prop. SQL: `ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS color_coded_days INTEGER NOT NULL DEFAULT 1;`
+- Evidence: `shared/schema.ts` workspaces table (`rainbowMode` prop → `rainbow_mode` column); `client/src/pages/admin.tsx` WorkspaceManagementSection; `client/src/pages/scheduler.tsx` WeeklyCalendar props; `client/src/components/weekly-calendar.tsx` rainbowMode prop.
+  SQL (safe for both fresh-add and rename-from-old-name):
+  ```sql
+  DO $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workspaces' AND column_name='color_coded_days') THEN
+      ALTER TABLE workspaces RENAME COLUMN color_coded_days TO rainbow_mode;
+    ELSIF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workspaces' AND column_name='rainbow_mode') THEN
+      ALTER TABLE workspaces ADD COLUMN rainbow_mode INTEGER NOT NULL DEFAULT 1;
+    END IF;
+  END $$;
+  ```
