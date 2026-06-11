@@ -250,6 +250,22 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: Never auto-redirect on 401. Signal session expiry via React state, keep routes rendered so React Query cache stays visible. The `SessionExpiredBanner` component handles the re-auth call-to-action. When the user clicks "Sign back in", `returnTo` param brings them back to the same page.
 - Evidence: `client/src/hooks/useAuth.ts` (sessionExpired state); `client/src/lib/queryClient.ts` (removed maybeRedirectToLogin); `client/src/components/session-expired-banner.tsx` (new); `client/src/App.tsx` (sessionExpired gate); `server/replitAuth.ts` (300s refresh buffer).
 
+## React Query v5 — `data` is preserved on error; use `returnNull` not `throw` for auth detection
+
+- Date: 2026-06-08
+- Trigger: The session-expired banner was wired up correctly in `App.tsx` and `useAuth.ts`, but never appeared during testing. Root cause: React Query v5 preserves the last successful `data` value when a query enters an error state. The `/api/auth/user` query used the default `on401: "throw"` queryFn, so a 401 caused it to throw; React Query set `status: "error"` but kept `data = <previous user object>`. `isAuthenticated = !!user` stayed `true`, so `sessionExpired` was never set.
+- Learning: For any query where you need `data` to become `null`/`undefined` on a 401 (e.g., auth checks), use `queryFn: getQueryFn({ on401: "returnNull" })`. This returns `null` as a resolved value, making `data = null` explicitly. For queries where you want to show cached data through errors (all other app queries), the default `on401: "throw"` is correct — the preserved data enables the "last known state" UX.
+- Action: The `/api/auth/user` query in `useAuth.ts` must always use `on401: "returnNull"`. All other workspace-scoped queries should keep `on401: "throw"`.
+- Evidence: `client/src/hooks/useAuth.ts` line 10-14; `client/src/lib/queryClient.ts` `getQueryFn` options.
+
+## Workspace session loss — concurrent request race overwrites activeWorkspaceId
+
+- Date: 2026-06-09
+- Trigger: Users saw "Your workspace session has ended. Please choose a workspace again." on rota task operations, far more often than expected.
+- Learning: When the page loads, multiple requests fire concurrently (assignments, workspace, auth, etc.). Each request independently loads the session from the DB. If `GET /api/my-workspace` and a token-refresh from `isAuthenticated` run concurrently: (1) both load the session without `activeWorkspaceId` (first load after server wake); (2) workspace route sets `activeWorkspaceId` in its in-memory copy; (3) token refresh calls `req.login()` + `req.session.save()` from its copy (still without `activeWorkspaceId`); (4) if the token-refresh save lands last it overwrites the workspace write, leaving `activeWorkspaceId` absent from the DB. Next request's `requireWorkspace` gets no workspace → 400.
+- Action: (1) `requireWorkspace` now auto-recovers by looking up the user's first workspace from DB when the session is missing it — this eliminates the visible error even when the race occurs. (2) `GET /api/my-workspace` (auto-select path) and `POST /api/my-workspace` now call `await session.save()` before sending the response, so the workspace is in the DB before the client fires any follow-up requests.
+- Evidence: `server/routes.ts` `requireWorkspace` middleware; `/api/my-workspace` GET and POST handlers.
+
 ## Workspace-level display toggles — rainbowMode pattern
 
 - Date: 2026-06-08 (corrected 2026-06-08)

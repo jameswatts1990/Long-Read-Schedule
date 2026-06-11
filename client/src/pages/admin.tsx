@@ -1012,7 +1012,7 @@ function AnnouncementsSection() {
   const [editStartsAt, setEditStartsAt] = useState("");
   const [editExpiresAt, setEditExpiresAt] = useState("");
 
-  const { data: announcements = [], isLoading } = useQuery<SiteAnnouncement[]>({
+  const { data: announcements = [], isLoading, isError: announcementsError } = useQuery<SiteAnnouncement[]>({
     queryKey: ["/api/site-announcements"],
   });
 
@@ -1162,6 +1162,8 @@ function AnnouncementsSection() {
       {/* List */}
       {isLoading ? (
         <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+      ) : announcementsError ? (
+        <p className="text-sm text-destructive text-center py-8">Failed to load announcements. A database migration may be required — run the SQL from learnings.md for site_announcements.</p>
       ) : announcements.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">No announcements yet</p>
       ) : (

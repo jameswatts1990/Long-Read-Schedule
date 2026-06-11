@@ -43,9 +43,31 @@ declare module "express-session" {
   }
 }
 
-// Middleware: require an active workspace in session
+// Middleware: require an active workspace in session.
+// Auto-recovers from DB when the session is missing the workspace — this can happen due to
+// a race condition on page load where a concurrent token-refresh session.save() runs after
+// the workspace auto-select but overwrites it (each request loads the session independently).
 const requireWorkspace = async (req: Request, res: Response, next: NextFunction) => {
-  const workspaceId = (req.session as any).activeWorkspaceId;
+  let workspaceId = (req.session as any).activeWorkspaceId;
+
+  if (!workspaceId) {
+    const userId = (req as any).user?.claims?.sub;
+    const userEmail = (req as any).user?.claims?.email;
+    if (userId) {
+      try {
+        const userWorkspaces = isSuperAdmin(userEmail)
+          ? await storage.getWorkspaces()
+          : await storage.getUserWorkspaces(userId);
+        if (userWorkspaces.length > 0) {
+          workspaceId = userWorkspaces[0].id;
+          (req.session as any).activeWorkspaceId = workspaceId;
+        }
+      } catch {
+        // DB lookup failed — fall through to 400
+      }
+    }
+  }
+
   if (!workspaceId) {
     return res.status(400).json({ message: "No active workspace selected" });
   }
@@ -256,7 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     role: z.enum(["member", "admin", "super_admin"]),
   });
 
-  app.patch("/api/admin/users/:userId/role", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/admin/users/:userId/role", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const { role } = userRoleSchema.parse(req.body);
       const updated = await storage.updateUserRole(req.params.userId, role);
@@ -309,6 +331,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (userWorkspaces.length > 0) {
           workspaceId = userWorkspaces[0].id;
           (req.session as any).activeWorkspaceId = workspaceId;
+          // Save synchronously before responding so the workspace is in DB before
+          // the client fires subsequent requests (avoids the concurrent-request race).
+          await new Promise<void>((resolve, reject) =>
+            req.session.save((err) => (err ? reject(err) : resolve()))
+          );
         }
       }
 
@@ -334,6 +361,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       (req.session as any).activeWorkspaceId = workspaceId;
+      // Save before responding so the workspace is in DB before the client fires
+      // subsequent workspace-scoped requests.
+      await new Promise<void>((resolve, reject) =>
+        req.session.save((err) => (err ? reject(err) : resolve()))
+      );
       const workspace = await storage.getWorkspace(workspaceId);
       res.json(workspace);
     } catch (error) {
@@ -1147,7 +1179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/notifications/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/notifications/:id", isAuthenticated, requireWorkspace, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       await storage.deleteNotification(req.params.id, userId);
