@@ -883,6 +883,7 @@ export default function Scheduler() {
             isCompactView={isCompactView}
             hideEmptyPipelines={hideEmptyPipelines}
             onToggleHideEmptyPipelines={() => setHideEmptyPipelines((prev) => !prev)}
+            slackEnabled={!!(user as any)?.slackEnabled}
           />
         )}
         {!isInitialLoading && viewMode === "instrument" && (
@@ -895,6 +896,7 @@ export default function Scheduler() {
             isCompactView={isCompactView}
             hideEmptyInstruments={hideEmptyInstruments}
             onToggleHideEmptyInstruments={() => setHideEmptyInstruments((prev) => !prev)}
+            slackEnabled={!!(user as any)?.slackEnabled}
           />
         )}
       </div>

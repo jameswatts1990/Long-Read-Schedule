@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CheckCircle, AlertCircle, ChevronDown, ChevronRight, Loader2, Link2 } from "lucide-react";
-import { insertAssignmentSchema, type Task, type Assignment, type Instrument, DAYS } from "@shared/schema";
+import { insertAssignmentSchema, type Task, type Assignment, type Instrument, type Person, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -49,9 +49,12 @@ interface AddAssignmentDialogProps {
   open: boolean;
   onClose: () => void;
   weekStartDate: string;
-  personId: string;
+  personId?: string;
+  people?: Person[];
   day: string;
   tasks: Task[];
+  initialTaskId?: string;
+  initialInstrumentId?: string;
   isMonthMode?: boolean;
   slackEnabled?: boolean;
 }
@@ -76,12 +79,13 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
 
 type FormData = z.infer<typeof formSchema>;
 
-export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, day, tasks, isMonthMode = false, slackEnabled = false }: AddAssignmentDialogProps) {
+export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "", people, day, tasks, initialTaskId, initialInstrumentId, isMonthMode = false, slackEnabled = false }: AddAssignmentDialogProps) {
   const { toast } = useToast();
   const [conflictData, setConflictData] = useState<{ conflicts: any[], conflictCount: number } | null>(null);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
   const [shouldCloseAfter, setShouldCloseAfter] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState(initialTaskId || "");
+  const [selectedPersonId, setSelectedPersonId] = useState(personId);
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set([day]));
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   // When true, all cards created in the same calendar week share a linkedGroupId
@@ -98,7 +102,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const [endOccurrences, setEndOccurrences] = useState(4);
   
   const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
-  
+
+  const effectivePersonId = personId || selectedPersonId;
+
   const currentMonth = useMemo(() => {
     try {
       return parse(weekStartDate, "yyyy-MM-dd", new Date());
@@ -110,13 +116,13 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      taskId: "",
+      taskId: initialTaskId || "",
       batchNumber: "",
       batchSize: undefined,
       notes: "",
       customName: "",
       customColor: undefined,
-      instrumentId: null,
+      instrumentId: initialInstrumentId || null,
       slackNotify: 0,
       slackChangeNotify: 0,
     },
@@ -183,7 +189,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       if (isMonthMode && selectedDates.length > 0) {
         const items = selectedDates.map(date => ({
           ...data,
-          personId,
+          personId: effectivePersonId,
           day: format(date, "EEEE"),
           weekStartDate: format(startOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd"),
           date: format(date, "yyyy-MM-dd"),
@@ -200,7 +206,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
       const res = await apiRequest("POST", "/api/assignments", {
         ...data,
-        personId,
+        personId: effectivePersonId,
         day,
         weekStartDate,
         batchNumber: data.batchNumber || undefined,
@@ -239,6 +245,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         slackChangeNotify: 0,
       });
       setSelectedTaskId("");
+      setSelectedPersonId(personId);
       setConflictData(null);
       setPendingFormData(null);
       setSelectedDates([]);
@@ -263,17 +270,18 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   useEffect(() => {
     if (open) {
       form.reset({
-        taskId: "",
+        taskId: initialTaskId || "",
         batchNumber: "",
         batchSize: undefined,
         notes: "",
         customName: "",
         customColor: undefined,
-        instrumentId: null,
+        instrumentId: initialInstrumentId || null,
         slackNotify: 0,
         slackChangeNotify: 0,
       });
-      setSelectedTaskId("");
+      setSelectedTaskId(initialTaskId || "");
+      setSelectedPersonId(personId || "");
       setSelectedDays(new Set([day]));
       setLinkDays(false);
       // Reset repeat state
@@ -297,9 +305,13 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         }
       }
     }
-  }, [open, form, day, isMonthMode, weekStartDate]);
+  }, [open, form, day, isMonthMode, weekStartDate, personId, initialTaskId, initialInstrumentId]);
 
   const onSubmit = async (data: FormData) => {
+    if (!effectivePersonId) {
+      toast({ title: "Please select a person", variant: "destructive" });
+      return;
+    }
     setPendingFormData(data);
     
     // Handle repeat assignments
@@ -357,7 +369,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
 
           return apiRequest("POST", "/api/assignments", {
             ...data,
-            personId,
+            personId: effectivePersonId,
             day: dayName,
             weekStartDate: weekStartStr,
             date: dateStr,
@@ -420,7 +432,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       const promises = daysArray.map((d) =>
         apiRequest("POST", "/api/assignments", {
           ...data,
-          personId,
+          personId: effectivePersonId,
           day: d,
           weekStartDate,
           linkedGroupId,
@@ -468,11 +480,15 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   };
 
   const handleCreateAllWeek = async (data: FormData) => {
+    if (!effectivePersonId) {
+      toast({ title: "Please select a person", variant: "destructive" });
+      return;
+    }
     const linkedGroupId = linkDays ? crypto.randomUUID() : undefined;
     const promises = DAYS.map((d) =>
       apiRequest("POST", "/api/assignments", {
         ...data,
-        personId,
+        personId: effectivePersonId,
         day: d,
         weekStartDate,
         linkedGroupId,
@@ -516,6 +532,28 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         <div className={cn("grid gap-6 flex-1 min-h-0 overflow-y-auto", isMonthMode && "grid-cols-[1fr_300px]")}>
           <Form {...form}>
             <form id="add-assignment-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {!personId && people && people.length > 0 && (
+                <FormItem>
+                  <FormLabel>Person</FormLabel>
+                  <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-person">
+                        <SelectValue placeholder="Select a person" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {people.filter(p => !p.excluded).map((person) => (
+                        <SelectItem key={person.id} value={person.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: person.color }} />
+                            {person.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
               <FormField
                 control={form.control}
                 name="taskId"

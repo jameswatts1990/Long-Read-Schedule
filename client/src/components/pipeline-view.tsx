@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { addDays } from "date-fns";
-import { Eye, EyeOff, Link2 } from "lucide-react";
+import { Eye, EyeOff, Link2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 
 interface PipelineViewProps {
   weekStartDate: string;
@@ -12,6 +14,7 @@ interface PipelineViewProps {
   isCompactView: boolean;
   hideEmptyPipelines?: boolean;
   onToggleHideEmptyPipelines?: () => void;
+  slackEnabled?: boolean;
 }
 
 function formatDate(date: Date): string {
@@ -39,7 +42,9 @@ export function PipelineView({
   isCompactView,
   hideEmptyPipelines = false,
   onToggleHideEmptyPipelines,
+  slackEnabled = false,
 }: PipelineViewProps) {
+  const [selectedCell, setSelectedCell] = useState<{ taskId: string; day: string } | null>(null);
   const pipelineTasks = tasks.filter((t) => t.showInPipelineView);
   const visiblePipelineTasks = hideEmptyPipelines
     ? pipelineTasks.filter((task) => assignments.some((a) => a.taskId === task.id))
@@ -72,6 +77,7 @@ export function PipelineView({
   }
 
   return (
+    <>
     <div className="overflow-auto">
       <div
         style={{
@@ -135,7 +141,7 @@ export function PipelineView({
               return (
                 <div
                   key={`${task.id}-${day}`}
-                  className={`border-b border-r px-2 py-1.5 flex flex-col gap-1 ${cellHeight}`}
+                  className={`group border-b border-r px-2 py-1.5 flex flex-col gap-1 ${cellHeight}`}
                   style={{ backgroundColor: `${task.color}18` }}
                   data-testid={`pipeline-cell-${task.id}-${day}`}
                 >
@@ -166,6 +172,14 @@ export function PipelineView({
                       </button>
                     );
                   })}
+                  <button
+                    onClick={() => setSelectedCell({ taskId: task.id, day })}
+                    className="opacity-0 group-hover:opacity-100 mt-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-opacity px-1 py-0.5 rounded hover:bg-black/5"
+                    data-testid={`pipeline-cell-add-${task.id}-${day}`}
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add</span>
+                  </button>
                 </div>
               );
             })}
@@ -173,5 +187,16 @@ export function PipelineView({
         ))}
       </div>
     </div>
+      <AddAssignmentDialog
+        open={!!selectedCell}
+        onClose={() => setSelectedCell(null)}
+        weekStartDate={weekStartDate}
+        day={selectedCell?.day || "Monday"}
+        tasks={tasks}
+        people={people}
+        initialTaskId={selectedCell?.taskId}
+        slackEnabled={slackEnabled}
+      />
+    </>
   );
 }

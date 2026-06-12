@@ -2,11 +2,12 @@ import { Fragment, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, type Instrument, DAYS } from "@shared/schema";
 import { addDays } from "date-fns";
-import { Eye, EyeOff, Link2 } from "lucide-react";
+import { Eye, EyeOff, Link2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 
 interface InstrumentViewProps {
   weekStartDate: string;
@@ -17,6 +18,7 @@ interface InstrumentViewProps {
   isCompactView: boolean;
   hideEmptyInstruments?: boolean;
   onToggleHideEmptyInstruments?: () => void;
+  slackEnabled?: boolean;
 }
 
 function getDayLabel(weekStart: Date, dayIndex: number): string {
@@ -44,12 +46,14 @@ export function InstrumentView({
   isCompactView,
   hideEmptyInstruments = false,
   onToggleHideEmptyInstruments,
+  slackEnabled = false,
 }: InstrumentViewProps) {
   const { data: instruments = [] } = useQuery<Instrument[]>({ queryKey: ["/api/instruments"] });
   const { toast } = useToast();
 
   const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
   const [dropTarget, setDropTarget] = useState<{ instrumentId: string; day: string } | null>(null);
+  const [selectedCell, setSelectedCell] = useState<{ instrumentId: string; day: string } | null>(null);
 
   const moveAssignmentMutation = useMutation({
     mutationFn: async (data: { assignmentId: string; instrumentId: string; day: string }) => {
@@ -119,6 +123,7 @@ export function InstrumentView({
   }
 
   return (
+    <>
     <div className="overflow-auto">
       <div
         style={{
@@ -191,7 +196,7 @@ export function InstrumentView({
                 <div
                   key={`${instrument.id}-${day}`}
                   className={cn(
-                    "border-b border-r px-2 py-1.5 flex flex-col gap-1",
+                    "group border-b border-r px-2 py-1.5 flex flex-col gap-1",
                     cellHeight,
                     isDropTarget && "bg-primary/10 ring-2 ring-inset ring-primary"
                   )}
@@ -296,6 +301,14 @@ export function InstrumentView({
                       </button>
                     );
                   })}
+                  <button
+                    onClick={() => setSelectedCell({ instrumentId: instrument.id, day })}
+                    className="opacity-0 group-hover:opacity-100 mt-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-opacity px-1 py-0.5 rounded hover:bg-black/5"
+                    data-testid={`instrument-cell-add-${instrument.id}-${day}`}
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add</span>
+                  </button>
                 </div>
               );
             })}
@@ -303,5 +316,16 @@ export function InstrumentView({
         ))}
       </div>
     </div>
+      <AddAssignmentDialog
+        open={!!selectedCell}
+        onClose={() => setSelectedCell(null)}
+        weekStartDate={weekStartDate}
+        day={selectedCell?.day || "Monday"}
+        tasks={tasks}
+        people={people}
+        initialInstrumentId={selectedCell?.instrumentId}
+        slackEnabled={slackEnabled}
+      />
+    </>
   );
 }

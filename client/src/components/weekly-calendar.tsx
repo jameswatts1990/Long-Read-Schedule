@@ -58,6 +58,7 @@ interface GroupConnector {
   y1: number;
   x2: number;
   y2: number;
+  crossesRow: boolean;
 }
 
 // Calculate luminance of a color to determine if text should be white or dark
@@ -551,6 +552,7 @@ export function WeeklyCalendar({
               y1: a.bottom - wrapRect.top,
               x2: b.left + b.width / 2 - wrapRect.left,
               y2: b.top - wrapRect.top,
+              crossesRow: false,
             });
           } else {
             // Adjacent columns — connect right edge to left edge at mid-height
@@ -560,6 +562,7 @@ export function WeeklyCalendar({
               y1: a.top + a.height / 2 - wrapRect.top,
               x2: b.left - wrapRect.left,
               y2: b.top + b.height / 2 - wrapRect.top,
+              crossesRow: Math.abs(a.top - b.top) > 20,
             });
           }
         }
@@ -903,7 +906,7 @@ export function WeeklyCalendar({
                                       }
                                     }}
                                     className={cn(
-                                      "cursor-grab active:cursor-grabbing group relative transition-opacity duration-150",
+                                      "cursor-grab active:cursor-grabbing group relative z-[2] transition-opacity duration-150",
                                       isCompactView
                                         ? "px-1 py-px"
                                         : "rounded-md border hover-elevate active-elevate-2 p-1 min-h-6",
@@ -1259,12 +1262,12 @@ export function WeeklyCalendar({
             </tbody>
           </table>
 
-          {/* Physical connector lines between linked cards. z-10 paints above
-              card bodies but below their badges (z-20), the sticky person
-              column (z-30) and headers (z-40+). */}
+          {/* Physical connector lines between linked cards. z-[1] keeps them
+              behind card bodies and all other overlays. */}
           {groupConnectors.length > 0 && (
             <svg
-              className="pointer-events-none absolute inset-0 z-10 h-full w-full text-amber-500 dark:text-amber-400"
+              className="pointer-events-none absolute inset-0 h-full w-full text-amber-500 dark:text-amber-400"
+              style={{ zIndex: 1 }}
               aria-hidden="true"
               data-testid="group-connector-overlay"
             >
@@ -1279,6 +1282,7 @@ export function WeeklyCalendar({
                   strokeWidth={hoveredGroupId === c.groupId ? 3.5 : 2}
                   strokeOpacity={hoveredGroupId === c.groupId ? 1 : 0.75}
                   strokeLinecap="round"
+                  strokeDasharray={c.crossesRow ? "6 4" : undefined}
                 />
               ))}
             </svg>
