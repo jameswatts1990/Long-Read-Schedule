@@ -1,28 +1,19 @@
-import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
+import { Fragment } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type Person, type Task, type Assignment, type Instrument, DAYS } from "@shared/schema";
 import { addDays } from "date-fns";
 import { Eye, EyeOff, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-interface PipelineViewProps {
+interface InstrumentViewProps {
   weekStartDate: string;
   assignments: Assignment[];
   people: Person[];
   tasks: Task[];
   onAssignmentClick: (assignment: Assignment) => void;
   isCompactView: boolean;
-  hideEmptyPipelines?: boolean;
-  onToggleHideEmptyPipelines?: () => void;
-}
-
-function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getDayDate(weekStart: Date, dayIndex: number): string {
-  return formatDate(addDays(weekStart, dayIndex));
+  hideEmptyInstruments?: boolean;
+  onToggleHideEmptyInstruments?: () => void;
 }
 
 function getDayLabel(weekStart: Date, dayIndex: number): string {
@@ -30,20 +21,21 @@ function getDayLabel(weekStart: Date, dayIndex: number): string {
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
-export function PipelineView({
+export function InstrumentView({
   weekStartDate,
   assignments,
   people,
   tasks,
   onAssignmentClick,
   isCompactView,
-  hideEmptyPipelines = false,
-  onToggleHideEmptyPipelines,
-}: PipelineViewProps) {
-  const pipelineTasks = tasks.filter((t) => t.showInPipelineView);
-  const visiblePipelineTasks = hideEmptyPipelines
-    ? pipelineTasks.filter((task) => assignments.some((a) => a.taskId === task.id))
-    : pipelineTasks;
+  hideEmptyInstruments = false,
+  onToggleHideEmptyInstruments,
+}: InstrumentViewProps) {
+  const { data: instruments = [] } = useQuery<Instrument[]>({ queryKey: ["/api/instruments"] });
+
+  const visibleInstruments = hideEmptyInstruments
+    ? instruments.filter((instrument) => assignments.some((a) => a.instrumentId === instrument.id))
+    : instruments;
 
   const weekStart = new Date(weekStartDate + "T00:00:00");
 
@@ -53,20 +45,20 @@ export function PipelineView({
   const cellHeight = isCompactView ? "min-h-[56px]" : "min-h-[80px]";
   const nameColWidth = isCompactView ? "140px" : "200px";
 
-  if (pipelineTasks.length === 0) {
+  if (instruments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-24">
-        <p className="text-base">No tasks are configured for the pipeline view.</p>
-        <p className="text-sm">Go to Admin and enable "Show in pipeline view" on the tasks you want to see here.</p>
+        <p className="text-base">No instruments are configured for this workspace.</p>
+        <p className="text-sm">Go to Admin → Instruments to add equipment that assignments can be booked onto.</p>
       </div>
     );
   }
 
-  if (hideEmptyPipelines && visiblePipelineTasks.length === 0) {
+  if (hideEmptyInstruments && visibleInstruments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-24">
-        <p className="text-base">No pipeline rows have assignments this week.</p>
-        <p className="text-sm">Turn off the visibility filter to show all configured pipeline rows.</p>
+        <p className="text-base">No instruments have bookings this week.</p>
+        <p className="text-sm">Turn off the visibility filter to show all instruments.</p>
       </div>
     );
   }
@@ -82,24 +74,24 @@ export function PipelineView({
       >
         {/* Header row */}
         <div className="sticky left-0 z-20 bg-background border-b border-r flex items-center px-3 py-2">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pipeline</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Instrument</span>
           <Button
             variant="ghost"
             size="icon"
             className="ml-1 h-6 w-6"
-            onClick={onToggleHideEmptyPipelines}
-            aria-label={hideEmptyPipelines ? "Show all pipeline rows" : "Hide empty pipeline rows"}
-            title={hideEmptyPipelines ? "Show all pipeline rows" : "Hide empty pipeline rows"}
-            data-testid="button-pipeline-hide-empty"
+            onClick={onToggleHideEmptyInstruments}
+            aria-label={hideEmptyInstruments ? "Show all instruments" : "Hide empty instruments"}
+            title={hideEmptyInstruments ? "Show all instruments" : "Hide empty instruments"}
+            data-testid="button-instrument-hide-empty"
           >
-            {hideEmptyPipelines ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            {hideEmptyInstruments ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
           </Button>
         </div>
         {DAYS.map((day, idx) => (
           <div
             key={day}
             className="border-b border-r bg-background px-3 py-2"
-            data-testid={`pipeline-header-${day}`}
+            data-testid={`instrument-header-${day}`}
           >
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               {getDayLabel(weekStart, idx)}
@@ -107,58 +99,60 @@ export function PipelineView({
           </div>
         ))}
 
-        {/* Task rows */}
-        {visiblePipelineTasks.map((task) => (
-          <>
-            {/* Task name cell */}
+        {/* Instrument rows */}
+        {visibleInstruments.map((instrument) => (
+          <Fragment key={instrument.id}>
+            {/* Instrument name cell */}
             <div
-              key={`task-${task.id}`}
-              className={`sticky left-0 z-10 border-b border-r flex items-start gap-2 px-3 py-2 ${cellHeight}`}
+              className={`sticky left-0 z-10 border-b border-r flex flex-col px-3 py-2 ${cellHeight}`}
               style={{ backgroundColor: "hsl(var(--background))" }}
-              data-testid={`pipeline-task-label-${task.id}`}
+              title={[instrument.name, instrument.type, instrument.location].filter(Boolean).join(" · ")}
+              data-testid={`instrument-label-${instrument.id}`}
             >
-              <span
-                className="mt-1 flex-shrink-0 w-2.5 h-2.5 rounded-sm"
-                style={{ backgroundColor: task.color }}
-              />
               <span className={`font-medium leading-tight ${isCompactView ? "text-xs" : "text-sm"}`}>
-                {task.name}
+                {instrument.name}
               </span>
+              {(instrument.type || instrument.location) && (
+                <span className="text-[11px] text-muted-foreground leading-tight truncate">
+                  {[instrument.type, instrument.location].filter(Boolean).join(" · ")}
+                </span>
+              )}
             </div>
 
-            {/* Day cells for this task */}
-            {DAYS.map((day, idx) => {
+            {/* Day cells for this instrument */}
+            {DAYS.map((day) => {
               const dayAssignments = assignments.filter(
-                (a) => a.taskId === task.id && a.day === day
+                (a) => a.instrumentId === instrument.id && a.day === day
               );
 
               return (
                 <div
-                  key={`${task.id}-${day}`}
+                  key={`${instrument.id}-${day}`}
                   className={`border-b border-r px-2 py-1.5 flex flex-col gap-1 ${cellHeight}`}
-                  style={{ backgroundColor: `${task.color}18` }}
-                  data-testid={`pipeline-cell-${task.id}-${day}`}
+                  data-testid={`instrument-cell-${instrument.id}-${day}`}
                 >
                   {dayAssignments.map((assignment) => {
                     const person = personMap.get(assignment.personId);
-                    if (!person) return null;
+                    const task = taskMap.get(assignment.taskId);
+                    if (!person || !task) return null;
                     return (
                       <button
                         key={assignment.id}
                         onClick={() => onAssignmentClick(assignment)}
                         className="w-full text-left rounded px-2 py-1 flex items-center gap-1.5 hover-elevate active-elevate-2 transition-colors"
                         style={{
-                          backgroundColor: task.color,
+                          backgroundColor: (assignment as any).customColor ?? task.color,
                           border: `1.5px solid ${person.color}`,
                         }}
-                        data-testid={`pipeline-assignment-${assignment.id}`}
+                        title={`${person.name} — ${assignment.customName || task.name}`}
+                        data-testid={`instrument-assignment-${assignment.id}`}
                       >
                         <span
                           className="flex-shrink-0 w-2 h-2 rounded-full"
                           style={{ backgroundColor: person.color }}
                         />
                         <span className={`font-medium truncate ${isCompactView ? "text-[11px]" : "text-xs"}`}>
-                          {assignment.customName || person.name}
+                          {assignment.customName || task.name}
                         </span>
                         {assignment.linkedGroupId && (
                           <Link2 className="ml-auto h-3 w-3 flex-shrink-0 opacity-70" aria-label="Part of a linked task group" />
@@ -169,7 +163,7 @@ export function PipelineView({
                 </div>
               );
             })}
-          </>
+          </Fragment>
         ))}
       </div>
     </div>

@@ -1,14 +1,22 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { X, Save, Copy, Trash2, CheckCircle, AlertCircle, RotateCcw } from "lucide-react";
-import { type Assignment, type Person, type Task, type User } from "@shared/schema";
+import { X, Save, Copy, Trash2, CheckCircle, AlertCircle, RotateCcw, Link2, Unlink } from "lucide-react";
+import { type Assignment, type Person, type Task, type User, type Instrument } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { extractErrorMessage } from "@/lib/extract-error";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { DuplicateAssignmentDialog } from "@/components/duplicate-assignment-dialog";
 import {
@@ -35,9 +43,11 @@ interface TaskDetailsDrawerProps {
   open: boolean;
   onClose: () => void;
   slackEnabled?: boolean;
+  // Current view's assignments — used to show the linked-group member count.
+  assignments?: Assignment[];
 }
 
-export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, slackEnabled = false }: TaskDetailsDrawerProps) {
+export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, slackEnabled = false, assignments = [] }: TaskDetailsDrawerProps) {
   const [batchNumber, setBatchNumber] = useState("");
   const [batchSize, setBatchSize] = useState("");
   const [notes, setNotes] = useState("");
@@ -45,14 +55,23 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
   const [customColor, setCustomColor] = useState("");
   const [slackNotify, setSlackNotify] = useState(0);
   const [slackChangeNotify, setSlackChangeNotify] = useState(0);
+  const [instrumentId, setInstrumentId] = useState<string | null>(null);
   const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteGroupConfirm, setShowDeleteGroupConfirm] = useState(false);
+  const [applyToGroup, setApplyToGroup] = useState(false);
   const { toast } = useToast();
 
   const { data: creator } = useQuery<User>({
     queryKey: ['/api/users', assignment?.createdById],
     enabled: !!assignment?.createdById,
+  });
+
+  // Shared react-query cache with the instrument view and add dialog.
+  const { data: instruments = [] } = useQuery<Instrument[]>({
+    queryKey: ["/api/instruments"],
+    enabled: open,
   });
 
   useEffect(() => {
@@ -64,6 +83,8 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       setCustomColor((assignment as any).customColor || "");
       setSlackNotify((assignment as any).slackNotify ?? 0);
       setSlackChangeNotify((assignment as any).slackChangeNotify ?? 0);
+      setInstrumentId(assignment.instrumentId ?? null);
+      setApplyToGroup(false);
     }
   }, [assignment]);
 
@@ -107,6 +128,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
         notes: snapshot.notes,
         customName: snapshot.customName,
         customColor: (snapshot as any).customColor,
+        instrumentId: snapshot.instrumentId,
       });
     },
     onSuccess: () => {
@@ -150,15 +172,93 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
     },
   });
 
+  const groupUpdateMutation = useMutation({
+    mutationFn: async (data: { groupId: string; fields: Record<string, unknown> }) => {
+      return apiRequest("PATCH", `/api/assignments/group/${data.groupId}`, data.fields);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) =>
+        typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments")
+      });
+      toast({
+        title: "Group updated",
+        description: "Changes applied to all linked cards",
+        variant: "success",
+      });
+      onClose();
+    },
+    onError: (error) => {
+      toast({ title: "Failed to update group", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/assignments/unlink", { assignmentId: assignment!.id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) =>
+        typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments")
+      });
+      toast({ title: "Card unlinked", description: "Removed from its task group" });
+      onClose();
+    },
+    onError: (error) => {
+      toast({ title: "Failed to unlink card", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (groupId: string) => {
+      const res = await apiRequest("DELETE", `/api/assignments/group/${groupId}`);
+      return res.json() as Promise<{ deletedCount: number }>;
+    },
+    onSuccess: ({ deletedCount }) => {
+      queryClient.invalidateQueries({ predicate: (query) =>
+        typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments")
+      });
+      toast({
+        title: "Group deleted",
+        description: `${deletedCount} linked assignment${deletedCount !== 1 ? "s" : ""} removed`,
+        variant: "destructive",
+        icon: <Trash2 className="h-4 w-4 shrink-0 mt-0.5" />,
+      });
+      onClose();
+    },
+    onError: (error) => {
+      toast({ title: "Failed to delete group", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
   const handleSave = () => {
     if (!assignment) return;
-    
+
     // Batch validation
     if (batchSize && !batchNumber) {
       toast({
         title: "Validation error",
         description: "Batch ID is required when a batch size is specified",
         variant: "warning",
+      });
+      return;
+    }
+
+    if (assignment.linkedGroupId && applyToGroup) {
+      const taskForSave = tasks.find((t) => t.id === assignment.taskId);
+      const isCustom = taskForSave?.name.toLowerCase() === "custom task";
+      // Group updates send null (not undefined) for cleared fields so the
+      // clear propagates to every member.
+      groupUpdateMutation.mutate({
+        groupId: assignment.linkedGroupId,
+        fields: {
+          batchNumber: batchNumber || null,
+          batchSize: batchSize ? parseInt(batchSize, 10) : null,
+          notes: notes || null,
+          ...(isCustom ? { customName: customName || null, customColor: customColor || null } : {}),
+          slackNotify,
+          slackChangeNotify,
+          instrumentId,
+        },
       });
       return;
     }
@@ -172,6 +272,8 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       weekStartDate: assignment.weekStartDate,
       slackNotify,
       slackChangeNotify,
+      // null (not undefined) so clearing back to "None" persists.
+      instrumentId,
     } as any);
   };
 
@@ -233,6 +335,44 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
               )}
             </div>
           </div>
+
+          {assignment.linkedGroupId && (
+            <div className="space-y-3 rounded-md border p-3" data-testid="group-info-block">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Link2 className="w-4 h-4 shrink-0" />
+                  <span>
+                    Part of a linked group
+                    {(() => {
+                      const n = assignments.filter((a) => a.linkedGroupId === assignment.linkedGroupId).length;
+                      return n > 0 ? ` — ${n} card${n !== 1 ? "s" : ""}` : "";
+                    })()}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => unlinkMutation.mutate()}
+                  disabled={unlinkMutation.isPending}
+                  data-testid="button-unlink-card"
+                >
+                  <Unlink className="w-3.5 h-3.5 mr-1" />
+                  Unlink
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="apply-to-group"
+                  checked={applyToGroup}
+                  onCheckedChange={(checked) => setApplyToGroup(checked === true)}
+                  data-testid="checkbox-apply-to-group"
+                />
+                <Label htmlFor="apply-to-group" className="cursor-pointer font-normal text-sm">
+                  Apply saved changes to all linked cards
+                </Label>
+              </div>
+            </div>
+          )}
 
           {isCustomTask && (
             <>
@@ -310,6 +450,31 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
               {assignment.day}
             </div>
           </div>
+
+          {instruments.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Instrument</Label>
+              <Select
+                value={instrumentId ?? "__none__"}
+                onValueChange={(value) => setInstrumentId(value === "__none__" ? null : value)}
+              >
+                <SelectTrigger data-testid="select-instrument">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {instruments.map((instrument) => (
+                    <SelectItem key={instrument.id} value={instrument.id}>
+                      {instrument.name}
+                      {(instrument.type || instrument.location) && (
+                        <span className="text-muted-foreground"> — {[instrument.type, instrument.location].filter(Boolean).join(" · ")}</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex gap-4">
             <div className="flex-1 space-y-2">
@@ -466,15 +631,28 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
         </div>
 
         <div className="h-14 border-t flex items-center justify-between gap-2 px-4 shrink-0">
-          <Button
-            variant="outline"
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-            data-testid="button-delete"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Delete</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              data-testid="button-delete"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Delete</span>
+            </Button>
+            {assignment.linkedGroupId && (
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteGroupConfirm(true)}
+                disabled={deleteGroupMutation.isPending}
+                data-testid="button-delete-group"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete group</span>
+              </Button>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -524,6 +702,28 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
               onClick={() => { setShowDeleteConfirm(false); deleteMutation.mutate(assignment); }}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={showDeleteGroupConfirm} onOpenChange={setShowDeleteGroupConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete linked task group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes every assignment in the group, including any on other weeks. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setShowDeleteGroupConfirm(false);
+                if (assignment.linkedGroupId) deleteGroupMutation.mutate(assignment.linkedGroupId);
+              }}
+            >
+              Delete group
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

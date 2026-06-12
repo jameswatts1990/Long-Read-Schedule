@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, Info } from "lucide-react";
+import { Plus, GripVertical, Info, Link2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
@@ -281,6 +281,12 @@ export function MonthView({
                                 <div className="flex-1 min-w-0">
                                   <div className={cn("text-xs font-medium flex items-start justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                     <span className="min-w-0 flex-1 truncate leading-tight">{assignment.customName || task.name}</span>
+                                    {assignment.linkedGroupId && (
+                                      <Link2
+                                        className={cn("mt-0.5 h-3 w-3 shrink-0", isTaskDark ? "text-white/80" : "text-foreground/70")}
+                                        aria-label="Part of a linked task group"
+                                      />
+                                    )}
                                     {!isCompactView && assignment.notes && (
                                       <Popover>
                                         <PopoverTrigger asChild>

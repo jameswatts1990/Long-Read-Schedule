@@ -39,7 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DAYS, type Person, type Task, type User, type Workspace, type RotaTask, type SiteAnnouncement } from "@shared/schema";
+import { DAYS, type Person, type Task, type Instrument, type User, type Workspace, type RotaTask, type SiteAnnouncement } from "@shared/schema";
 
 
 // Full-spectrum palette: 12 hues (Red→Pink) × 3 shades (light / mid / dark)
@@ -1280,6 +1280,324 @@ function AnnouncementsSection() {
   );
 }
 
+const instrumentFormSchema = z.object({
+  name: z.string().min(1, "Instrument name is required"),
+  type: z.string().optional(),
+  location: z.string().optional(),
+});
+
+type InstrumentFormData = z.infer<typeof instrumentFormSchema>;
+
+function InstrumentsSection() {
+  const { toast } = useToast();
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingInstrument, setEditingInstrument] = useState<Instrument | null>(null);
+  const [draggedInstrumentId, setDraggedInstrumentId] = useState<string | null>(null);
+  const [dragOverInstrumentIndex, setDragOverInstrumentIndex] = useState<number | null>(null);
+
+  const { data: instruments = [] } = useQuery<Instrument[]>({ queryKey: ["/api/instruments"] });
+
+  const instrumentForm = useForm<InstrumentFormData>({
+    resolver: zodResolver(instrumentFormSchema),
+    defaultValues: { name: "", type: "", location: "" },
+  });
+
+  const createInstrumentMutation = useMutation({
+    mutationFn: async (data: InstrumentFormData) => {
+      const res = await apiRequest("POST", "/api/instruments", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
+      toast({ title: "Instrument added", description: "It can now be booked on assignments", variant: "success" });
+      instrumentForm.reset({ name: "", type: "", location: "" });
+      setShowDialog(false);
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to add instrument", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const updateInstrumentMutation = useMutation({
+    mutationFn: async (data: InstrumentFormData) => {
+      if (!editingInstrument) throw new Error("No instrument selected");
+      const res = await apiRequest("PUT", `/api/instruments/${editingInstrument.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
+      toast({ title: "Instrument updated", description: "Changes have been saved", variant: "success" });
+      instrumentForm.reset({ name: "", type: "", location: "" });
+      setEditingInstrument(null);
+      setShowDialog(false);
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to update instrument", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const deleteInstrumentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/instruments/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      toast({ title: "Instrument removed", description: "Any bookings on it have been cleared" });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to delete instrument", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const reorderInstrumentMutation = useMutation({
+    mutationFn: async (instrumentIds: string[]) => {
+      const res = await apiRequest("POST", "/api/instruments/reorder-list", { instrumentIds });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Failed to reorder instruments", description: extractErrorMessage(error), variant: "destructive" });
+    },
+  });
+
+  const handleEditInstrument = (instrument: Instrument) => {
+    setEditingInstrument(instrument);
+    instrumentForm.reset({
+      name: instrument.name,
+      type: instrument.type ?? "",
+      location: instrument.location ?? "",
+    });
+    setShowDialog(true);
+  };
+
+  const onSubmit = (data: InstrumentFormData) => {
+    if (editingInstrument) {
+      updateInstrumentMutation.mutate(data);
+    } else {
+      createInstrumentMutation.mutate(data);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Wrench className="h-6 w-6" />
+            Instruments
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Equipment and instruments that assignments can be booked onto. The order here sets the row order in Instrument view.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            setEditingInstrument(null);
+            instrumentForm.reset({ name: "", type: "", location: "" });
+            setShowDialog(true);
+          }}
+          data-testid="button-add-instrument"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Instrument
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {instruments.length === 0 ? (
+          <p className="text-muted-foreground">No instruments added yet</p>
+        ) : (
+          <div className="space-y-0">
+            {draggedInstrumentId && dragOverInstrumentIndex === -1 && (
+              <div className="h-1 bg-primary mb-0.5"></div>
+            )}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverInstrumentIndex(-1);
+              }}
+              onDragLeave={() => setDragOverInstrumentIndex(null)}
+              onDrop={() => {
+                if (draggedInstrumentId) {
+                  const newOrder = instruments.filter(i => i.id !== draggedInstrumentId).map(i => i.id);
+                  newOrder.unshift(draggedInstrumentId);
+                  reorderInstrumentMutation.mutate(newOrder);
+                }
+                setDragOverInstrumentIndex(null);
+              }}
+              className="h-1"
+            />
+            {instruments.map((instrument, index) => (
+              <div key={instrument.id}>
+                {draggedInstrumentId && dragOverInstrumentIndex === index && draggedInstrumentId !== instrument.id && (
+                  <div className="h-1 bg-primary mb-0.5"></div>
+                )}
+                <div
+                  draggable
+                  onDragStart={() => setDraggedInstrumentId(instrument.id)}
+                  onDragEnd={() => {
+                    setDraggedInstrumentId(null);
+                    setDragOverInstrumentIndex(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverInstrumentIndex(index);
+                  }}
+                  onDragLeave={() => setDragOverInstrumentIndex(null)}
+                  onDrop={() => {
+                    if (draggedInstrumentId && draggedInstrumentId !== instrument.id) {
+                      const filtered = instruments.filter(i => i.id !== draggedInstrumentId);
+                      const newOrder = [...filtered.map(i => i.id)];
+                      newOrder.splice(index, 0, draggedInstrumentId);
+                      reorderInstrumentMutation.mutate(newOrder);
+                    }
+                    setDragOverInstrumentIndex(null);
+                  }}
+                  className={`flex items-center justify-between p-3 border rounded-md hover-elevate cursor-move transition-opacity mb-2 ${
+                    draggedInstrumentId === instrument.id ? "opacity-50" : ""
+                  }`}
+                  data-testid={`instrument-item-${instrument.id}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium">{instrument.name}</span>
+                      {(instrument.type || instrument.location) && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[instrument.type, instrument.location].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEditInstrument(instrument)}
+                      data-testid={`button-edit-instrument-${instrument.id}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (confirm(`Delete ${instrument.name}? Any assignments booked onto it will be unbooked (the assignments themselves are kept).`)) {
+                          deleteInstrumentMutation.mutate(instrument.id);
+                        }
+                      }}
+                      disabled={deleteInstrumentMutation.isPending}
+                      data-testid={`button-delete-instrument-${instrument.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverInstrumentIndex(instruments.length);
+              }}
+              onDragLeave={() => setDragOverInstrumentIndex(null)}
+              onDrop={() => {
+                if (draggedInstrumentId) {
+                  const newOrder = instruments.filter(i => i.id !== draggedInstrumentId).map(i => i.id);
+                  newOrder.push(draggedInstrumentId);
+                  reorderInstrumentMutation.mutate(newOrder);
+                }
+                setDragOverInstrumentIndex(null);
+              }}
+              className="h-12 -mx-3 -mb-3 px-3 pb-3"
+            />
+            {draggedInstrumentId && dragOverInstrumentIndex === instruments.length && (
+              <div className="h-1 bg-primary mb-2"></div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Instrument Dialog */}
+      <Dialog open={showDialog} onOpenChange={(open) => { if (!open) { setShowDialog(false); setEditingInstrument(null); } }}>
+        <DialogContent data-testid="dialog-add-instrument">
+          <DialogHeader>
+            <DialogTitle>{editingInstrument ? "Edit Instrument" : "Add Instrument"}</DialogTitle>
+            <DialogDescription>
+              {editingInstrument
+                ? "Update this instrument's details."
+                : "Add a piece of equipment that assignments can be booked onto."}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...instrumentForm}>
+            <form onSubmit={instrumentForm.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={instrumentForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. PromethION 24" {...field} data-testid="input-instrument-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={instrumentForm.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Sequencer, Automation robot" {...field} data-testid="input-instrument-type" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={instrumentForm.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Lab 2, Bench 4" {...field} data-testid="input-instrument-location" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setShowDialog(false); setEditingInstrument(null); }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createInstrumentMutation.isPending || updateInstrumentMutation.isPending}
+                  data-testid="button-save-instrument"
+                >
+                  {editingInstrument ? "Save Changes" : "Add Instrument"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const [showAddPerson, setShowAddPerson] = useState(false);
@@ -1293,7 +1611,7 @@ export default function Admin() {
   const [activeSection, setActiveSection] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const s = params.get("section");
-    return (s === "people" || s === "tasks" || s === "rota" || s === "workspaces" || s === "announcements") ? s : "people";
+    return (s === "people" || s === "tasks" || s === "instruments" || s === "rota" || s === "workspaces" || s === "announcements") ? s : "people";
   });
 
   const handleSectionChange = (section: string) => {
@@ -1612,6 +1930,7 @@ export default function Admin() {
               <SelectContent>
                 <SelectItem value="people">People</SelectItem>
                 <SelectItem value="tasks">Tasks</SelectItem>
+                <SelectItem value="instruments">Instruments</SelectItem>
                 <SelectItem value="rota">Rota</SelectItem>
                 {isSuperAdmin && <SelectItem value="workspaces">Workspaces</SelectItem>}
                 {isAdminUser && <SelectItem value="announcements">Announcements</SelectItem>}
@@ -2012,6 +2331,11 @@ export default function Admin() {
             )}
           </div>
         </Card>
+        )}
+
+        {/* Instruments section */}
+        {activeSection === "instruments" && (
+          <InstrumentsSection />
         )}
 
         {/* Rota section */}

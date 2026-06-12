@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CheckCircle, AlertCircle, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
-import { insertAssignmentSchema, type Task, type Assignment, DAYS } from "@shared/schema";
+import { CheckCircle, AlertCircle, ChevronDown, ChevronRight, Loader2, Link2 } from "lucide-react";
+import { insertAssignmentSchema, type Task, type Assignment, type Instrument, DAYS } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -63,6 +63,7 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
   notes: z.string().optional(),
   customName: z.string().optional(),
   customColor: z.string().optional(),
+  instrumentId: z.string().optional().nullable(),
 }).refine(data => {
   if (data.batchSize !== undefined && data.batchSize !== null && !data.batchNumber) {
     return false;
@@ -83,6 +84,9 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set([day]));
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
+  // When true, all cards created in the same calendar week share a linkedGroupId
+  // so they behave as one logical piece of work (move/delete together).
+  const [linkDays, setLinkDays] = useState(false);
   
   // Repeat state
   const [repeatOpen, setRepeatOpen] = useState(false);
@@ -112,9 +116,17 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       notes: "",
       customName: "",
       customColor: undefined,
+      instrumentId: null,
       slackNotify: 0,
       slackChangeNotify: 0,
     },
+  });
+
+  // Shared react-query cache with the instrument view and admin section — no
+  // extra fetch beyond the first time the dialog opens in a session.
+  const { data: instruments = [] } = useQuery<Instrument[]>({
+    queryKey: ["/api/instruments"],
+    enabled: open,
   });
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
@@ -222,6 +234,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         notes: "",
         customName: "",
         customColor: undefined,
+        instrumentId: null,
         slackNotify: 0,
         slackChangeNotify: 0,
       });
@@ -256,11 +269,13 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
         notes: "",
         customName: "",
         customColor: undefined,
+        instrumentId: null,
         slackNotify: 0,
         slackChangeNotify: 0,
       });
       setSelectedTaskId("");
       setSelectedDays(new Set([day]));
+      setLinkDays(false);
       // Reset repeat state
       setRepeatOpen(false);
       setRepeatEnabled(false);
@@ -299,6 +314,12 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
       // deleted together via DELETE /api/assignments/series/:seriesId.
       const seriesId = crypto.randomUUID();
 
+      // Linked groups compose with the series: one linkedGroupId per calendar
+      // week, so each week's cards act as one piece of work while the series
+      // still spans all weeks.
+      const linkGroups = linkDays && selectedDays.size >= 2;
+      const weekGroupIds = new Map<string, string>();
+
       // Generate all dates to create assignments for
       const allDates: { date: Date; dayName: string }[] = [];
 
@@ -325,6 +346,15 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
           const weekStartForDate = startOfWeek(date, { weekStartsOn: 1 });
           const weekStartStr = format(weekStartForDate, "yyyy-MM-dd");
 
+          let linkedGroupId: string | undefined;
+          if (linkGroups) {
+            linkedGroupId = weekGroupIds.get(weekStartStr);
+            if (!linkedGroupId) {
+              linkedGroupId = crypto.randomUUID();
+              weekGroupIds.set(weekStartStr, linkedGroupId);
+            }
+          }
+
           return apiRequest("POST", "/api/assignments", {
             ...data,
             personId,
@@ -332,6 +362,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
             weekStartDate: weekStartStr,
             date: dateStr,
             seriesId,
+            linkedGroupId,
             batchNumber: data.batchNumber || undefined,
             notes: data.notes || undefined,
             customName: data.customName || undefined,
@@ -385,12 +416,14 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
     if (!isMonthMode && selectedDays.size > 1) {
       // Multiple days in week mode (non-repeat)
       const daysArray = Array.from(selectedDays);
+      const linkedGroupId = linkDays ? crypto.randomUUID() : undefined;
       const promises = daysArray.map((d) =>
         apiRequest("POST", "/api/assignments", {
           ...data,
           personId,
           day: d,
           weekStartDate,
+          linkedGroupId,
           batchNumber: data.batchNumber || undefined,
           notes: data.notes || undefined,
           customName: data.customName || undefined,
@@ -435,12 +468,14 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
   };
 
   const handleCreateAllWeek = async (data: FormData) => {
+    const linkedGroupId = linkDays ? crypto.randomUUID() : undefined;
     const promises = DAYS.map((d) =>
       apiRequest("POST", "/api/assignments", {
         ...data,
         personId,
         day: d,
         weekStartDate,
+        linkedGroupId,
         batchNumber: data.batchNumber || undefined,
         notes: data.notes || undefined,
         customName: data.customName || undefined,
@@ -517,6 +552,40 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                   </FormItem>
                 )}
               />
+
+              {instruments.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="instrumentId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Instrument (Optional)</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === "__none__" ? null : value)}
+                        value={field.value ?? "__none__"}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-instrument">
+                            <SelectValue placeholder="None" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="__none__">None</SelectItem>
+                          {instruments.map((instrument) => (
+                            <SelectItem key={instrument.id} value={instrument.id} data-testid={`instrument-option-${instrument.id}`}>
+                              {instrument.name}
+                              {(instrument.type || instrument.location) && (
+                                <span className="text-muted-foreground"> — {[instrument.type, instrument.location].filter(Boolean).join(" · ")}</span>
+                              )}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {isCustomTask && (
                 <>
@@ -792,6 +861,25 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId, da
                       </div>
                     ))}
                   </div>
+                  {selectedDays.size >= 2 && (
+                    <div className="flex items-start gap-2 pt-1">
+                      <Checkbox
+                        id="link-days"
+                        checked={linkDays}
+                        onCheckedChange={(checked) => setLinkDays(checked === true)}
+                        data-testid="checkbox-link-days"
+                      />
+                      <label htmlFor="link-days" className="cursor-pointer flex flex-col leading-tight">
+                        <span className="text-sm flex items-center gap-1.5">
+                          <Link2 className="w-3.5 h-3.5" />
+                          Link these cards as one task group
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Linked cards can be moved and deleted together.
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
 

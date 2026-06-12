@@ -3,6 +3,8 @@ import {
   type InsertPerson,
   type Task,
   type InsertTask,
+  type Instrument,
+  type InsertInstrument,
   type Assignment,
   type InsertAssignment,
   type User,
@@ -20,6 +22,7 @@ import {
   DAYS,
   people,
   tasks,
+  instruments,
   assignments,
   users,
   premadeFilters,
@@ -99,6 +102,14 @@ export interface IStorage {
   deleteTask(id: string): Promise<void>;
   reorderTasks(taskIds: string[]): Promise<Task[]>;
 
+  // Instruments (scoped to workspace)
+  getInstruments(workspaceId: string): Promise<Instrument[]>;
+  getInstrument(id: string): Promise<Instrument | undefined>;
+  createInstrument(instrument: InsertInstrument): Promise<Instrument>;
+  updateInstrument(id: string, data: Partial<InsertInstrument>): Promise<Instrument>;
+  deleteInstrument(id: string): Promise<void>;
+  reorderInstruments(instrumentIds: string[]): Promise<Instrument[]>;
+
   // Assignments (scoped to workspace)
   getAssignments(workspaceId: string): Promise<Assignment[]>;
   getAssignmentsByWeek(weekStartDate: string, workspaceId: string): Promise<Assignment[]>;
@@ -111,6 +122,15 @@ export interface IStorage {
   deleteAssignmentsByTaskAndDate(taskId: string, workspaceId: string, afterDate?: string): Promise<{ deletedCount: number }>;
   reorderAssignmentsByCell(personId: string, day: string, weekStartDate: string, assignmentIds: string[]): Promise<Assignment[]>;
   getTrainedPersonsByTask(taskId: string, workspaceId: string): Promise<string[]>;
+
+  // Linked task groups (cards tied together as one logical piece of work)
+  getAssignmentsByGroup(groupId: string, workspaceId: string): Promise<Assignment[]>;
+  linkAssignments(assignmentIds: string[], workspaceId: string): Promise<{ groupId: string; assignments: Assignment[] }>;
+  unlinkAssignment(assignmentId: string, workspaceId: string): Promise<void>;
+  dissolveGroup(groupId: string, workspaceId: string): Promise<{ count: number }>;
+  updateGroupFields(groupId: string, workspaceId: string, fields: Partial<Pick<Assignment, "batchNumber" | "batchSize" | "notes" | "customName" | "customColor" | "slackNotify" | "slackChangeNotify" | "instrumentId">>): Promise<Assignment[]>;
+  moveGroup(groupId: string, workspaceId: string, dayOffset: number, newPersonId?: string): Promise<{ ok: true; assignments: Assignment[] } | { ok: false; reason: string }>;
+  deleteGroup(groupId: string, workspaceId: string): Promise<{ deleted: Assignment[] }>;
 
   // Slack notifications
   getTodaysSlackAssignments(): Promise<Array<{ taskName: string; personName: string; slackUserId: string }>>;
@@ -419,6 +439,51 @@ export class PostgresStorage implements IStorage {
     return first ? await this.getTasks(first.workspaceId) : [];
   }
 
+  // ─── Instruments ───────────────────────────────────────────────────────────
+
+  async getInstruments(workspaceId: string): Promise<Instrument[]> {
+    return await this.db
+      .select()
+      .from(instruments)
+      .where(eq(instruments.workspaceId, workspaceId))
+      .orderBy(instruments.order);
+  }
+
+  async getInstrument(id: string): Promise<Instrument | undefined> {
+    const [inst] = await this.db.select().from(instruments).where(eq(instruments.id, id));
+    return inst;
+  }
+
+  async createInstrument(insertInstrument: InsertInstrument): Promise<Instrument> {
+    const workspaceId = insertInstrument.workspaceId ?? "default";
+    const [{ max }] = await this.db
+      .select({ max: sql<number>`coalesce(max(${instruments.order}), -1)` })
+      .from(instruments)
+      .where(eq(instruments.workspaceId, workspaceId));
+    const [inst] = await this.db.insert(instruments).values({ ...insertInstrument, order: max + 1 }).returning();
+    return inst;
+  }
+
+  async updateInstrument(id: string, data: Partial<InsertInstrument>): Promise<Instrument> {
+    const [inst] = await this.db.update(instruments).set(data).where(eq(instruments.id, id)).returning();
+    return inst;
+  }
+
+  async deleteInstrument(id: string): Promise<void> {
+    // App-level SET NULL: unbook any assignments first (no FK constraint).
+    await this.db.update(assignments).set({ instrumentId: null }).where(eq(assignments.instrumentId, id));
+    await this.db.delete(instruments).where(eq(instruments.id, id));
+  }
+
+  async reorderInstruments(instrumentIds: string[]): Promise<Instrument[]> {
+    if (instrumentIds.length === 0) return [];
+    await Promise.all(
+      instrumentIds.map((id, i) => this.db.update(instruments).set({ order: i }).where(eq(instruments.id, id)))
+    );
+    const first = await this.getInstrument(instrumentIds[0]);
+    return first ? await this.getInstruments(first.workspaceId) : [];
+  }
+
   // ─── Assignments ───────────────────────────────────────────────────────────
 
   async getAssignments(workspaceId: string): Promise<Assignment[]> {
@@ -509,7 +574,7 @@ export class PostgresStorage implements IStorage {
     // Before deleting, check if this is a rota-generated assignment.
     // If so, create a tombstone so applyRotaTasksForWeek won't recreate it.
     const [row] = await this.db
-      .select({ rotaTaskId: assignments.rotaTaskId, weekStartDate: assignments.weekStartDate, day: assignments.day, workspaceId: assignments.workspaceId })
+      .select({ rotaTaskId: assignments.rotaTaskId, weekStartDate: assignments.weekStartDate, day: assignments.day, workspaceId: assignments.workspaceId, linkedGroupId: assignments.linkedGroupId })
       .from(assignments)
       .where(eq(assignments.id, id))
       .limit(1);
@@ -519,13 +584,31 @@ export class PostgresStorage implements IStorage {
     if (row?.rotaTaskId) {
       await this.createRotaSkip(row.rotaTaskId, row.weekStartDate, row.day, row.workspaceId);
     }
+    if (row?.linkedGroupId) {
+      await this.dissolveSingletonGroups(row.workspaceId, [row.linkedGroupId]);
+    }
   }
 
   async deleteAssignmentSeries(seriesId: string, workspaceId: string): Promise<{ deletedCount: number }> {
     const deleted = await this.db
       .delete(assignments)
       .where(and(eq(assignments.seriesId, seriesId), eq(assignments.workspaceId, workspaceId)))
-      .returning({ id: assignments.id });
+      .returning({
+        id: assignments.id,
+        rotaTaskId: assignments.rotaTaskId,
+        weekStartDate: assignments.weekStartDate,
+        day: assignments.day,
+        workspaceId: assignments.workspaceId,
+        linkedGroupId: assignments.linkedGroupId,
+      });
+    // Tombstone any rota-generated rows so rota re-apply won't recreate them
+    // (same guarantee deleteAssignment gives for single deletes).
+    for (const row of deleted) {
+      if (row.rotaTaskId) {
+        await this.createRotaSkip(row.rotaTaskId, row.weekStartDate, row.day, row.workspaceId);
+      }
+    }
+    await this.dissolveSingletonGroups(workspaceId, deleted.map((d) => d.linkedGroupId));
     return { deletedCount: deleted.length };
   }
 
@@ -549,6 +632,167 @@ export class PostgresStorage implements IStorage {
       assignmentIds.map((id, i) => this.db.update(assignments).set({ order: i }).where(eq(assignments.id, id)))
     );
     return await this.getConflictingAssignments(personId, day, weekStartDate);
+  }
+
+  // ─── Linked task groups ────────────────────────────────────────────────────
+
+  // Invariant: a group always has >= 2 members. Any operation that can shrink a
+  // group calls this to null out groups left with a single member.
+  private async dissolveSingletonGroups(workspaceId: string, groupIds: Array<string | null>): Promise<void> {
+    const candidates = Array.from(new Set(groupIds.filter((g): g is string => !!g)));
+    if (candidates.length === 0) return;
+    const counts = await this.db
+      .select({ groupId: assignments.linkedGroupId, n: sql<number>`count(*)` })
+      .from(assignments)
+      .where(and(eq(assignments.workspaceId, workspaceId), inArray(assignments.linkedGroupId, candidates)))
+      .groupBy(assignments.linkedGroupId);
+    const singletons = counts.filter((c) => Number(c.n) === 1).map((c) => c.groupId!);
+    if (singletons.length === 0) return;
+    await this.db
+      .update(assignments)
+      .set({ linkedGroupId: null })
+      .where(and(eq(assignments.workspaceId, workspaceId), inArray(assignments.linkedGroupId, singletons)));
+  }
+
+  async getAssignmentsByGroup(groupId: string, workspaceId: string): Promise<Assignment[]> {
+    return await this.db
+      .select()
+      .from(assignments)
+      .where(and(eq(assignments.linkedGroupId, groupId), eq(assignments.workspaceId, workspaceId)));
+  }
+
+  async linkAssignments(assignmentIds: string[], workspaceId: string): Promise<{ groupId: string; assignments: Assignment[] }> {
+    const ids = Array.from(new Set(assignmentIds));
+    const rows = await this.db
+      .select({ id: assignments.id, linkedGroupId: assignments.linkedGroupId })
+      .from(assignments)
+      .where(and(inArray(assignments.id, ids), eq(assignments.workspaceId, workspaceId)));
+    if (rows.length !== ids.length) {
+      throw new Error("One or more selected assignments no longer exist");
+    }
+    // Members pulled out of an existing group must not leave a 1-card group behind.
+    const previousGroupIds = rows.map((r) => r.linkedGroupId);
+    const groupId = randomUUID();
+    const updated = await this.db
+      .update(assignments)
+      .set({ linkedGroupId: groupId, updatedAt: new Date() })
+      .where(and(inArray(assignments.id, ids), eq(assignments.workspaceId, workspaceId)))
+      .returning();
+    await this.dissolveSingletonGroups(workspaceId, previousGroupIds);
+    return { groupId, assignments: updated };
+  }
+
+  async unlinkAssignment(assignmentId: string, workspaceId: string): Promise<void> {
+    const [row] = await this.db
+      .select({ linkedGroupId: assignments.linkedGroupId })
+      .from(assignments)
+      .where(and(eq(assignments.id, assignmentId), eq(assignments.workspaceId, workspaceId)))
+      .limit(1);
+    if (!row) throw new Error("Assignment not found");
+    if (!row.linkedGroupId) return;
+    await this.db
+      .update(assignments)
+      .set({ linkedGroupId: null, updatedAt: new Date() })
+      .where(eq(assignments.id, assignmentId));
+    await this.dissolveSingletonGroups(workspaceId, [row.linkedGroupId]);
+  }
+
+  async dissolveGroup(groupId: string, workspaceId: string): Promise<{ count: number }> {
+    const updated = await this.db
+      .update(assignments)
+      .set({ linkedGroupId: null, updatedAt: new Date() })
+      .where(and(eq(assignments.linkedGroupId, groupId), eq(assignments.workspaceId, workspaceId)))
+      .returning({ id: assignments.id });
+    return { count: updated.length };
+  }
+
+  async updateGroupFields(
+    groupId: string,
+    workspaceId: string,
+    fields: Partial<Pick<Assignment, "batchNumber" | "batchSize" | "notes" | "customName" | "customColor" | "slackNotify" | "slackChangeNotify" | "instrumentId">>,
+  ): Promise<Assignment[]> {
+    const next: Partial<Assignment> = { updatedAt: new Date() };
+    for (const [key, value] of Object.entries(fields)) {
+      if (value === undefined) continue;
+      (next as any)[key] = value;
+    }
+    return await this.db
+      .update(assignments)
+      .set(next)
+      .where(and(eq(assignments.linkedGroupId, groupId), eq(assignments.workspaceId, workspaceId)))
+      .returning();
+  }
+
+  async moveGroup(
+    groupId: string,
+    workspaceId: string,
+    dayOffset: number,
+    newPersonId?: string,
+  ): Promise<{ ok: true; assignments: Assignment[] } | { ok: false; reason: string }> {
+    const members = await this.db
+      .select()
+      .from(assignments)
+      .where(and(eq(assignments.linkedGroupId, groupId), eq(assignments.workspaceId, workspaceId)));
+    if (members.length === 0) return { ok: false, reason: "Linked group not found" };
+
+    // Validate every member's destination before touching anything so the
+    // move is all-or-nothing. Offsets are relative to each member's own date,
+    // preserving the group's internal spacing even across weeks.
+    const moves: Array<{ id: string; day: string; weekStartDate: string; date: string | null }> = [];
+    for (const m of members) {
+      const dayIndex = DAYS.indexOf(m.day as (typeof DAYS)[number]);
+      if (dayIndex === -1) return { ok: false, reason: `Assignment has an unrecognised day "${m.day}"` };
+      // weekStartDate is always a UTC Monday; UTC methods avoid DST drift.
+      const target = new Date(`${m.weekStartDate}T00:00:00Z`);
+      target.setUTCDate(target.getUTCDate() + dayIndex + dayOffset);
+      const dow = target.getUTCDay(); // 0=Sun … 6=Sat
+      if (dow === 0 || dow === 6) {
+        return { ok: false, reason: `Moving the group would land the ${m.day} card on a weekend` };
+      }
+      const monday = new Date(target);
+      monday.setUTCDate(target.getUTCDate() - (dow - 1));
+      moves.push({
+        id: m.id,
+        day: DAYS[dow - 1],
+        weekStartDate: monday.toISOString().slice(0, 10),
+        date: m.date ? target.toISOString().slice(0, 10) : null,
+      });
+    }
+
+    await Promise.all(
+      moves.map((mv) =>
+        this.db
+          .update(assignments)
+          .set({
+            day: mv.day,
+            weekStartDate: mv.weekStartDate,
+            ...(mv.date !== null ? { date: mv.date } : {}),
+            ...(newPersonId ? { personId: newPersonId } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(assignments.id, mv.id)),
+      ),
+    );
+
+    const updated = await this.db
+      .select()
+      .from(assignments)
+      .where(and(eq(assignments.linkedGroupId, groupId), eq(assignments.workspaceId, workspaceId)));
+    return { ok: true, assignments: updated };
+  }
+
+  async deleteGroup(groupId: string, workspaceId: string): Promise<{ deleted: Assignment[] }> {
+    const deleted = await this.db
+      .delete(assignments)
+      .where(and(eq(assignments.linkedGroupId, groupId), eq(assignments.workspaceId, workspaceId)))
+      .returning();
+    // Tombstone rota-generated members so rota re-apply won't recreate them.
+    for (const row of deleted) {
+      if (row.rotaTaskId) {
+        await this.createRotaSkip(row.rotaTaskId, row.weekStartDate, row.day, row.workspaceId);
+      }
+    }
+    return { deleted };
   }
 
   // ─── Slack Notifications ───────────────────────────────────────────────────

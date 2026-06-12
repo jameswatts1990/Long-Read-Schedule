@@ -234,6 +234,25 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: In any loop that processes independent records (rota tasks, bulk assignments), always wrap each iteration in try/catch so one failure doesn't abort the rest.
 - Evidence: `server/storage.ts` `applyRotaTasksForWeek` — fixed 2026-05-18.
 
+## Instruments scope — new table + assignment field, multiple zod parse paths to extend
+
+- Date: 2026-06-12
+- Trigger: Added the Instruments booking feature (instruments table, `assignments.instrument_id`, Instrument view, Admin → Instruments).
+- Learning: (1) Any new field on `assignments` must be added to THREE zod allowlists or it is silently stripped: `insertAssignmentSchema.extend()` in `shared/schema.ts` (POST + bulk), `assignmentPatchSchema` in `routes.ts` (PATCH from the details drawer), and `groupPatchSchema` in `routes.ts` (apply-to-group saves; also extend the `updateGroupFields` Pick type in `storage.ts` and its "cannot combine with move" refine). (2) Card-copying paths that must carry the field forward: `duplicate-assignment-dialog.tsx` payload builder, `weekly-calendar.tsx` `handlePaste`, and the drawer's `restoreMutation` (delete-undo). (3) The view switcher is now a single dropdown (`VIEW_OPTIONS` in `scheduler.tsx`); new views extend the `ViewMode` union, the week-query `enabled` guard, and the rota auto-apply guard. (4) `deleteInstrument` nulls out `assignments.instrument_id` in app code (no FK constraint) and the DELETE route broadcasts both "instruments" and "assignments". (5) Radix Select cannot represent `""` — use the `"__none__"` sentinel mapped to `null` (same pattern as the person-link dropdown in admin).
+- Action: When adding the next assignment-level field, grep for `slackChangeNotify` to find every allowlist/copy path at once. When adding a new scheduler view, copy `instrument-view.tsx` (which already fixes pipeline-view's key-on-fragment-child bug).
+- Evidence: SQL migration required (run in Replit's database shell BEFORE deploying this code):
+  ```sql
+  CREATE TABLE IF NOT EXISTS instruments (
+    id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+    name text NOT NULL,
+    type text,
+    location text,
+    "order" integer DEFAULT 0,
+    workspace_id varchar NOT NULL DEFAULT 'default'
+  );
+  ALTER TABLE assignments ADD COLUMN IF NOT EXISTS instrument_id varchar;
+  ```
+
 ## Rainbow Mode — day column colour coding via Tailwind static arrays
 
 - Date: 2026-06-08
@@ -258,6 +277,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Action: The `/api/auth/user` query in `useAuth.ts` must always use `on401: "returnNull"`. All other workspace-scoped queries should keep `on401: "throw"`.
 - Evidence: `client/src/hooks/useAuth.ts` line 10-14; `client/src/lib/queryClient.ts` `getQueryFn` options.
 
+## passport ≥0.6 req.login() regenerates the session ID — never use it for token refresh
+
+- Date: 2026-06-12
+- Trigger: Session-persistence review found users being logged out early despite a 180-day session TTL.
+- Learning: passport 0.6+/0.7 `req.login()` calls `req.session.regenerate()` by default (session-fixation protection). The token-refresh path in `isAuthenticated` (`server/replitAuth.ts`) called `req.login()` on every ~hourly refresh, which (a) wiped all session data including `activeWorkspaceId` (the real root cause behind the 2026-06-09 "workspace session loss" entry — the save race was secondary), (b) 401'd concurrent requests still holding the old session ID, and (c) with `rolling: true`, let a late response re-send the destroyed session ID cookie, permanently logging the user out. Because `serializeUser`/`deserializeUser` are pass-throughs, `req.user` IS `req.session.passport.user`, so after `updateUserSession(user, tokens)` a plain `req.session.save()` persists the new tokens — no `req.login()` needed.
+- Action: Never call `req.login()` outside the initial OIDC callback. On the callback route, pass `keepSessionInfo: true` to `passport.authenticate` so `session.returnTo` survives the (intentional) regeneration. When mutating sessions in concurrent-request paths, always reload-then-save: use `reloadSessionTolerant` (exported from `replitAuth.ts`) before the write, or `persistActiveWorkspace` in `routes.ts` for workspace writes (`overwrite: false` for auto-select paths so a concurrent explicit choice wins). The refresh path also reloads first and adopts already-fresh tokens instead of issuing a duplicate grant (refresh tokens may be single-use).
+- Evidence: Fixed 2026-06-12 in `server/replitAuth.ts` (refresh block now reload + direct `session.passport` write + save; `keepSessionInfo` on /api/callback; reload in `extendSessionRow`) and `server/routes.ts` (`persistActiveWorkspace` helper used by requireWorkspace recovery, GET/POST /api/my-workspace, complete-onboarding, workspace join). passport ^0.7.0 SessionManager.logIn regenerates the session ID by default.
+
 ## Workspace session loss — concurrent request race overwrites activeWorkspaceId
 
 - Date: 2026-06-09
@@ -265,6 +292,21 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Learning: When the page loads, multiple requests fire concurrently (assignments, workspace, auth, etc.). Each request independently loads the session from the DB. If `GET /api/my-workspace` and a token-refresh from `isAuthenticated` run concurrently: (1) both load the session without `activeWorkspaceId` (first load after server wake); (2) workspace route sets `activeWorkspaceId` in its in-memory copy; (3) token refresh calls `req.login()` + `req.session.save()` from its copy (still without `activeWorkspaceId`); (4) if the token-refresh save lands last it overwrites the workspace write, leaving `activeWorkspaceId` absent from the DB. Next request's `requireWorkspace` gets no workspace → 400.
 - Action: (1) `requireWorkspace` now auto-recovers by looking up the user's first workspace from DB when the session is missing it — this eliminates the visible error even when the race occurs. (2) `GET /api/my-workspace` (auto-select path) and `POST /api/my-workspace` now call `await session.save()` before sending the response, so the workspace is in the DB before the client fires any follow-up requests.
 - Evidence: `server/routes.ts` `requireWorkspace` middleware; `/api/my-workspace` GET and POST handlers.
+
+## Linked task groups — linkedGroupId composes with seriesId, never reuse seriesId
+
+- Date: 2026-06-12
+- Trigger: Added "linked task groups" (tie multiple cards together as one piece of work, e.g. a 5-day library prep) with delete/move/unlink/shared-edit group operations.
+- Learning: (1) `assignments.linked_group_id` (nullable varchar, no index) is a THIRD grouping mechanism alongside `seriesId` (recurring occurrences across weeks) and `rotaTaskId` (rota-generated). They compose: a weekly-recurring 5-day prep gets ONE seriesId across all weeks plus ONE linkedGroupId per calendar week (see `weekGroupIds` map in add-assignment-dialog.tsx). Never overload seriesId for intra-week grouping — "delete this week's group" and "delete the whole series" must stay distinct operations. (2) Invariant: a group always has ≥2 members; singletons are auto-dissolved via `dissolveSingletonGroups` in storage.ts, hooked into `deleteAssignment`, `deleteAssignmentSeries`, `unlinkAssignment`, and `linkAssignments` (re-linking out of an old group). (3) `deleteGroup` and the fixed `deleteAssignmentSeries` create rota_skips tombstones from the DELETE…RETURNING rows — any future bulk-delete of assignments must do the same or rota re-apply resurrects the rows. (4) No index on linked_group_id by design (rare ops, small table, insert cost matters more); add a partial index `WHERE linked_group_id IS NOT NULL` only if the assignments table grows ~100x. (5) Group routes: POST /api/assignments/link, POST /api/assignments/unlink, PATCH + DELETE /api/assignments/group/:groupId. PATCH rejects mixing a move (dayOffset/personId) with field edits; personId reassignment requires dayOffset (0 allowed). Group delete broadcasts `{ action: "delete-group", record: { ids } }` which App.tsx handles with a zero-refetch cache filter. (6) Copy/paste, Duplicate, and the drawer's delete-undo restore all use explicit field lists, so linkedGroupId is never copied — keep it that way.
+- Action: When adding new group operations, extend groupPatchSchema / the existing endpoints rather than adding per-card loops, and preserve the singleton sweep + tombstone behaviour.
+- Evidence: `shared/schema.ts` assignments.linkedGroupId; `server/storage.ts` "Linked task groups" section; `server/routes.ts` group routes; `client/src/components/weekly-calendar.tsx` group menus/dialogs; `client/src/components/task-details-drawer.tsx` apply-to-group save. SQL migration (run in Replit BEFORE deploying): `ALTER TABLE assignments ADD COLUMN IF NOT EXISTS linked_group_id VARCHAR;`
+
+## extractErrorMessage now lives in client/src/lib/extract-error.ts
+
+- Date: 2026-06-12
+- Trigger: Group-operation mutations needed server error messages (e.g. "Moving the group would land the Monday card on a weekend") surfaced in toasts; the helper was private to admin.tsx.
+- Learning: `extractErrorMessage` is exported from `client/src/lib/extract-error.ts` (strips the "400: " status prefix that apiRequest prepends). admin.tsx still has its own private copy — its call sites were deliberately not churned in this change.
+- Action: Import from `@/lib/extract-error` in new mutation onError/catch blocks instead of redefining it. Migrating admin.tsx to the shared helper is safe whenever that file is next touched.
 
 ## Workspace-level display toggles — rainbowMode pattern
 

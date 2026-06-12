@@ -72,6 +72,17 @@ export const tasks = pgTable("tasks", {
   workspaceId: varchar("workspace_id").notNull().default("default"),
 });
 
+// Instruments — bookable equipment (automation robots, sequencers, lab
+// equipment), managed per-workspace in Admin → Instruments.
+export const instruments = pgTable("instruments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type"),
+  location: text("location"),
+  order: integer("order").default(0),
+  workspaceId: varchar("workspace_id").notNull().default("default"),
+});
+
 export const assignments = pgTable("assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   taskId: varchar("task_id").notNull(),
@@ -95,6 +106,15 @@ export const assignments = pgTable("assignments", {
   // Groups all assignments created together as a recurring series so the whole
   // series can be deleted at once. NULL for one-off assignments.
   seriesId: varchar("series_id"),
+  // Ties multiple cards together as one logical piece of work (e.g. a 5-day
+  // library prep). Person-agnostic; may span weeks after individual moves.
+  // NULL for ungrouped cards. Invariant: a group always has >= 2 members
+  // (singletons are auto-dissolved). Composes with seriesId: a recurring
+  // multi-day prep shares one seriesId across weeks, one linkedGroupId per week.
+  linkedGroupId: varchar("linked_group_id"),
+  // Books this assignment onto a piece of equipment (instruments table).
+  // NULL = no instrument. No FK constraint; deleteInstrument nulls these out.
+  instrumentId: varchar("instrument_id"),
   // When 1, a Slack DM is sent to the assigned person at 9 AM on the day.
   slackNotify: integer("slack_notify").notNull().default(0),
   // When 1, Slack DMs are sent when this assignment is created or deleted.
@@ -195,7 +215,12 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id:
   // the values survive the parse on both client and server.
   slackNotify: z.number().int().min(0).max(1).optional(),
   slackChangeNotify: z.number().int().min(0).max(1).optional(),
+  // Explicit override so the field is guaranteed to survive .parse() (same
+  // strip-on-parse risk class as the integer-with-default columns above).
+  linkedGroupId: z.string().nullable().optional(),
+  instrumentId: z.string().nullable().optional(),
 });
+export const insertInstrumentSchema = createInsertSchema(instruments).omit({ id: true });
 export const insertPremadeFilterSchema = createInsertSchema(premadeFilters).omit({ id: true });
 export const insertRotaTaskSchema = createInsertSchema(rotaTasks).omit({ id: true, createdAt: true, archivedAt: true }).extend({
   day: z.enum(DAYS),
@@ -219,6 +244,9 @@ export type InsertPerson = z.infer<typeof insertPersonSchema>;
 
 export type Task = typeof tasks.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
+
+export type Instrument = typeof instruments.$inferSelect;
+export type InsertInstrument = z.infer<typeof insertInstrumentSchema>;
 
 export type Assignment = typeof assignments.$inferSelect;
 export type InsertAssignment = z.infer<typeof insertAssignmentSchema>;

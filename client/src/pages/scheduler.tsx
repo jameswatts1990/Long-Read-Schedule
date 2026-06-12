@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock, UserX, Megaphone, Building2, Bell } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock, UserX, Megaphone, Building2, Bell, Wrench } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { WeeklyCalendar } from "@/components/weekly-calendar";
 import { MonthView } from "@/components/month-view";
 import { PipelineView } from "@/components/pipeline-view";
+import { InstrumentView } from "@/components/instrument-view";
 import { TaskDetailsDrawer } from "@/components/task-details-drawer";
 import { FilterMegaMenu } from "@/components/filter-mega-menu";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
@@ -51,7 +52,30 @@ function formatWeekDisplay(weekStart: Date): string {
   return `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
 }
 
-type ViewMode = "week" | "month" | "pipeline";
+type ViewMode = "week" | "month" | "pipeline" | "instrument";
+
+const VIEW_OPTIONS: Record<ViewMode, { label: string; icon: JSX.Element; description: string }> = {
+  week: {
+    label: "People View",
+    icon: <Users className="w-4 h-4" />,
+    description: "People as rows, days as columns — the default weekly schedule",
+  },
+  pipeline: {
+    label: "Pipeline View",
+    icon: <LayoutList className="w-4 h-4" />,
+    description: "Tasks flagged for pipeline view as rows",
+  },
+  instrument: {
+    label: "Instrument View",
+    icon: <Wrench className="w-4 h-4" />,
+    description: "Instruments as rows — equipment bookings for the week",
+  },
+  month: {
+    label: "Month View",
+    icon: <CalendarDays className="w-4 h-4" />,
+    description: "All weeks in the current month",
+  },
+};
 
 function getWeeksInMonth(date: Date): Date[] {
   const weeks: Date[] = [];
@@ -87,6 +111,7 @@ export default function Scheduler() {
   const [isCompactView, setIsCompactView] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [hideEmptyPipelines, setHideEmptyPipelines] = useState(false);
+  const [hideEmptyInstruments, setHideEmptyInstruments] = useState(false);
   const [showOnlyMyAssignments, setShowOnlyMyAssignments] = useState(false);
   const [activeTrainedFilterName, setActiveTrainedFilterName] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -111,10 +136,11 @@ export default function Scheduler() {
       ) return;
       if (showOnlyMyAssignments) setShowOnlyMyAssignments(false);
       if (hideEmptyPipelines) setHideEmptyPipelines(false);
+      if (hideEmptyInstruments) setHideEmptyInstruments(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showOnlyMyAssignments, hideEmptyPipelines]);
+  }, [showOnlyMyAssignments, hideEmptyPipelines, hideEmptyInstruments]);
 
   const { data: people = [], isLoading: peopleLoading } = useQuery<Person[]>({ queryKey: ["/api/people"] });
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -164,7 +190,7 @@ export default function Scheduler() {
   // Fetch assignments filtered by week for week/pipeline view
   const weekAssignmentsQuery = useQuery<Assignment[]>({ 
     queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`],
-    enabled: viewMode === "week" || viewMode === "pipeline",
+    enabled: viewMode === "week" || viewMode === "pipeline" || viewMode === "instrument",
     placeholderData: (previousData) => previousData,
   });
 
@@ -212,7 +238,7 @@ export default function Scheduler() {
   // Guard on both user auth and workspace to avoid firing before auth resolves.
   useEffect(() => {
     if (!user || !activeWorkspace) return;
-    if (viewMode !== "week" && viewMode !== "pipeline") return;
+    if (viewMode !== "week" && viewMode !== "pipeline" && viewMode !== "instrument") return;
     applyRotaMutation.mutate(weekStartStr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStartStr, activeWorkspace?.id, viewMode, (user as any)?.id]);
@@ -305,14 +331,6 @@ export default function Scheduler() {
       setCurrentWeekStart(getMonday(date));
       setCalendarOpen(false);
     }
-  };
-
-  const togglePipelineView = () => {
-    setViewMode(viewMode === "pipeline" ? "week" : "pipeline");
-  };
-
-  const toggleMonthView = () => {
-    setViewMode(viewMode === "month" ? "week" : "month");
   };
 
   const handleExport = async () => {
@@ -547,30 +565,39 @@ export default function Scheduler() {
               <span className="text-xs opacity-60">· Esc to cancel</span>
             </div>
           )}
+          {hideEmptyInstruments && (
+            <div className="flex items-center gap-2 rounded-full border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 px-3 py-1 text-sm font-medium shrink-0" data-testid="banner-hide-empty-instruments">
+              <span>Hiding empty instruments</span>
+              <span className="text-xs opacity-60">· Esc to cancel</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          {/* View Mode Toggles */}
-          <Button
-            variant={viewMode === "pipeline" ? "default" : "outline"}
-            size="default"
-            onClick={togglePipelineView}
-            title="Pipeline view — shows tasks flagged for pipeline view as rows"
-            data-testid="button-toggle-pipeline-view"
-          >
-            <LayoutList className="w-4 h-4" />
-            <span>Pipeline View</span>
-          </Button>
-          <Button
-            variant={viewMode === "month" ? "default" : "outline"}
-            size="default"
-            onClick={toggleMonthView}
-            title="Month view — shows all weeks in the current month"
-            data-testid="button-toggle-month-view"
-          >
-            <CalendarDays className="w-4 h-4" />
-            <span>Month View</span>
-          </Button>
+          {/* View Mode Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="default" className="gap-1.5" data-testid="button-view-mode">
+                {VIEW_OPTIONS[viewMode].icon}
+                <span>{VIEW_OPTIONS[viewMode].label}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              {(Object.keys(VIEW_OPTIONS) as ViewMode[]).map((mode) => (
+                <DropdownMenuItem
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={mode === viewMode ? "bg-accent" : ""}
+                  title={VIEW_OPTIONS[mode].description}
+                  data-testid={`menu-item-view-${mode}`}
+                >
+                  {VIEW_OPTIONS[mode].icon}
+                  <span className="ml-2">{VIEW_OPTIONS[mode].label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Navigation Controls */}
           <div className="flex items-center gap-2 border rounded-md">
@@ -696,6 +723,12 @@ export default function Scheduler() {
                     <DropdownMenuItem data-testid="menu-item-admin-tasks">
                       <LayoutList className="mr-2 h-4 w-4" />
                       <span>Tasks</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/admin?section=instruments">
+                    <DropdownMenuItem data-testid="menu-item-admin-instruments">
+                      <Wrench className="mr-2 h-4 w-4" />
+                      <span>Instruments</span>
                     </DropdownMenuItem>
                   </Link>
                   <Link href="/admin?section=rota">
@@ -852,6 +885,18 @@ export default function Scheduler() {
             onToggleHideEmptyPipelines={() => setHideEmptyPipelines((prev) => !prev)}
           />
         )}
+        {!isInitialLoading && viewMode === "instrument" && (
+          <InstrumentView
+            weekStartDate={weekStartStr}
+            assignments={weekAssignments}
+            people={people}
+            tasks={tasks}
+            onAssignmentClick={setSelectedAssignment}
+            isCompactView={isCompactView}
+            hideEmptyInstruments={hideEmptyInstruments}
+            onToggleHideEmptyInstruments={() => setHideEmptyInstruments((prev) => !prev)}
+          />
+        )}
       </div>
       <TaskDetailsDrawer
         assignment={selectedAssignment}
@@ -860,6 +905,7 @@ export default function Scheduler() {
         open={!!selectedAssignment}
         onClose={() => setSelectedAssignment(null)}
         slackEnabled={!!(user as any)?.slackEnabled}
+        assignments={weekAssignments}
       />
     </div>
   );

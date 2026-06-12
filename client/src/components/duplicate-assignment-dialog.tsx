@@ -58,6 +58,7 @@ export function DuplicateAssignmentDialog({
         if (assignment.date) payload.date = assignment.date;
         if (assignment.customName) payload.customName = assignment.customName;
         if (assignment.customColor) payload.customColor = assignment.customColor;
+        if (assignment.instrumentId) payload.instrumentId = assignment.instrumentId;
 
         return apiRequest("POST", "/api/assignments", payload);
       });

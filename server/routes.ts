@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import {
   insertPersonSchema,
   insertTaskSchema,
+  insertInstrumentSchema,
   insertAssignmentSchema,
   insertPremadeFilterSchema,
   insertRotaTaskSchema,
@@ -12,7 +13,7 @@ import {
   isoDateString,
 } from "@shared/schema";
 import { z, ZodError } from "zod";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, reloadSessionTolerant } from "./replitAuth";
 import { getDiagnosticsSnapshot } from "./diagnostics";
 import { sendSlackDM, isSlackEnabled, verifySlackSignature, getMondayUTC, getOffsetMondayUTC, getTodayInfo, formatWeekScheduleMessage, formatDayScheduleMessage, buildAppHomeBlocks, publishAppHome, buildSchedulerLink, buildChangeSummary } from "./slack.js";
 
@@ -43,6 +44,28 @@ declare module "express-session" {
   }
 }
 
+// Persist the active workspace into the session, reloading from the store
+// first so the save doesn't clobber fields written by a concurrent request
+// (e.g. freshly rotated OIDC tokens) with this request's stale snapshot.
+// With overwrite=false, a workspace already present after the reload (set by
+// a concurrent request — possibly the user's explicit choice) wins over the
+// auto-selected default. Returns the workspace id that ended up in session.
+const persistActiveWorkspace = async (
+  req: Request,
+  workspaceId: string,
+  { overwrite = true }: { overwrite?: boolean } = {},
+): Promise<string> => {
+  await reloadSessionTolerant(req);
+  const existing = req.session.activeWorkspaceId;
+  if (!overwrite && existing) return existing;
+  if (existing === workspaceId) return workspaceId; // nothing to write
+  req.session.activeWorkspaceId = workspaceId;
+  await new Promise<void>((resolve, reject) =>
+    req.session.save((err) => (err ? reject(err) : resolve()))
+  );
+  return workspaceId;
+};
+
 // Middleware: require an active workspace in session.
 // Auto-recovers from DB when the session is missing the workspace — this can happen due to
 // a race condition on page load where a concurrent token-refresh session.save() runs after
@@ -59,8 +82,11 @@ const requireWorkspace = async (req: Request, res: Response, next: NextFunction)
           ? await storage.getWorkspaces()
           : await storage.getUserWorkspaces(userId);
         if (userWorkspaces.length > 0) {
-          workspaceId = userWorkspaces[0].id;
-          (req.session as any).activeWorkspaceId = workspaceId;
+          try {
+            workspaceId = await persistActiveWorkspace(req, userWorkspaces[0].id, { overwrite: false });
+          } catch {
+            workspaceId = userWorkspaces[0].id; // persist failed — still serve this request
+          }
         }
       } catch {
         // DB lookup failed — fall through to 400
@@ -241,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         linkedExisting = false;
       }
 
-      (req.session as any).activeWorkspaceId = workspaceId;
+      await persistActiveWorkspace(req, workspaceId);
       const workspace = await storage.getWorkspace(workspaceId);
 
       broadcastUpdate("people", workspaceId);
@@ -329,13 +355,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? await storage.getWorkspaces()
           : await storage.getUserWorkspaces(userId);
         if (userWorkspaces.length > 0) {
-          workspaceId = userWorkspaces[0].id;
-          (req.session as any).activeWorkspaceId = workspaceId;
-          // Save synchronously before responding so the workspace is in DB before
-          // the client fires subsequent requests (avoids the concurrent-request race).
-          await new Promise<void>((resolve, reject) =>
-            req.session.save((err) => (err ? reject(err) : resolve()))
-          );
+          // Persisted (reload-then-save) before responding so the workspace is in
+          // DB before the client fires subsequent requests, without clobbering
+          // concurrent session writes (e.g. rotated tokens).
+          workspaceId = await persistActiveWorkspace(req, userWorkspaces[0].id, { overwrite: false });
         }
       }
 
@@ -360,12 +383,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!membership) return res.status(403).json({ message: "Not a member of this workspace" });
       }
 
-      (req.session as any).activeWorkspaceId = workspaceId;
-      // Save before responding so the workspace is in DB before the client fires
-      // subsequent workspace-scoped requests.
-      await new Promise<void>((resolve, reject) =>
-        req.session.save((err) => (err ? reject(err) : resolve()))
-      );
+      // Persisted (reload-then-save) before responding so the workspace is in DB
+      // before the client fires subsequent workspace-scoped requests.
+      await persistActiveWorkspace(req, workspaceId);
       const workspace = await storage.getWorkspace(workspaceId);
       res.json(workspace);
     } catch (error) {
@@ -397,7 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.addUserToWorkspace(userId, workspaceId, "member");
       }
 
-      (req.session as any).activeWorkspaceId = workspaceId;
+      await persistActiveWorkspace(req, workspaceId);
       res.json(workspace);
     } catch {
       res.status(500).json({ message: "Failed to join workspace" });
@@ -730,6 +750,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Instruments (workspace-scoped) ─────────────────────────────────────────
+
+  app.get("/api/instruments", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const instruments = await storage.getInstruments(req.workspaceId!);
+      res.json(instruments);
+    } catch (error) {
+      console.error("Failed to fetch instruments:", error);
+      res.status(500).json({ message: "Failed to fetch instruments" });
+    }
+  });
+
+  app.post("/api/instruments", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const data = insertInstrumentSchema.parse({ ...req.body, workspaceId: req.workspaceId });
+      const instrument = await storage.createInstrument(data);
+      broadcastUpdate("instruments", req.workspaceId);
+      res.json(instrument);
+    } catch (error) {
+      console.error("Failed to create instrument:", error);
+      if (error instanceof ZodError) {
+        res.status(400).json({ message: error.errors[0]?.message ?? "Invalid instrument data" });
+      } else {
+        res.status(500).json({ message: "Failed to create instrument" });
+      }
+    }
+  });
+
+  app.put("/api/instruments/:id", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const existing = await storage.getInstrument(req.params.id);
+      if (!existing || existing.workspaceId !== req.workspaceId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const data = insertInstrumentSchema.partial().parse(req.body);
+      const instrument = await storage.updateInstrument(req.params.id, data);
+      broadcastUpdate("instruments", req.workspaceId);
+      res.json(instrument);
+    } catch (error) {
+      console.error("Failed to update instrument:", error);
+      if (error instanceof ZodError) {
+        res.status(400).json({ message: error.errors[0]?.message ?? "Invalid instrument data" });
+      } else {
+        res.status(500).json({ message: "Failed to update instrument" });
+      }
+    }
+  });
+
+  app.delete("/api/instruments/:id", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const existing = await storage.getInstrument(req.params.id);
+      if (!existing || existing.workspaceId !== req.workspaceId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      await storage.deleteInstrument(req.params.id);
+      broadcastUpdate("instruments", req.workspaceId);
+      // Deletion unbooks assignments (instrumentId set to NULL), so clients must refetch them too.
+      broadcastUpdate("assignments", req.workspaceId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete instrument:", error);
+      res.status(500).json({ message: "Failed to delete instrument" });
+    }
+  });
+
+  app.post("/api/instruments/reorder-list", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const { instrumentIds } = req.body;
+      if (!Array.isArray(instrumentIds)) return res.status(400).json({ message: "instrumentIds must be an array" });
+      const result = await storage.reorderInstruments(instrumentIds);
+      broadcastUpdate("instruments", req.workspaceId);
+      res.json(result);
+    } catch (error) {
+      console.error("Failed to reorder instruments:", error);
+      res.status(400).json({ message: "Failed to reorder instruments" });
+    }
+  });
+
   // ── Rota Tasks (workspace-scoped) ──────────────────────────────────────────
 
   app.get("/api/rota-tasks", isAuthenticated, requireWorkspace, async (req, res) => {
@@ -971,6 +1069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     weekStartDate: isoDateString.optional(),
     slackNotify: z.number().int().min(0).max(1).optional(),
     slackChangeNotify: z.number().int().min(0).max(1).optional(),
+    instrumentId: z.string().optional().nullable(),
   });
 
   app.get("/api/assignments/trained-persons", isAuthenticated, requireWorkspace, async (req, res) => {
@@ -1111,7 +1210,218 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.json({ success: true, deletedCount });
     } catch (error) {
+      console.error("DELETE assignment series error:", error);
       res.status(500).json({ message: "Failed to delete assignment series" });
+    }
+  });
+
+  // ── Linked task groups ──────────────────────────────────────────────────────
+
+  const linkAssignmentsSchema = z.object({
+    assignmentIds: z
+      .array(z.string().min(1))
+      .min(2, "Select at least 2 assignments to link")
+      .max(50, "Cannot link more than 50 assignments at once"),
+  });
+
+  app.post("/api/assignments/link", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const { assignmentIds } = linkAssignmentsSchema.parse(req.body ?? {});
+      const { groupId, assignments: linked } = await storage.linkAssignments(assignmentIds, req.workspaceId!);
+      broadcastUpdate("assignments", req.workspaceId);
+      res.json({ groupId, count: linked.length });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({ message: error.errors[0]?.message ?? "Invalid link request" });
+      } else if (error instanceof Error && error.message.includes("no longer exist")) {
+        res.status(400).json({ message: error.message });
+      } else {
+        console.error("POST link assignments error:", error);
+        res.status(500).json({ message: "Failed to link assignments" });
+      }
+    }
+  });
+
+  const unlinkSchema = z
+    .object({
+      assignmentId: z.string().min(1).optional(),
+      groupId: z.string().min(1).optional(),
+    })
+    .refine((d) => !!d.assignmentId !== !!d.groupId, {
+      message: "Provide exactly one of assignmentId or groupId",
+    });
+
+  app.post("/api/assignments/unlink", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const parsed = unlinkSchema.parse(req.body ?? {});
+      if (parsed.assignmentId) {
+        await storage.unlinkAssignment(parsed.assignmentId, req.workspaceId!);
+      } else {
+        const { count } = await storage.dissolveGroup(parsed.groupId!, req.workspaceId!);
+        if (count === 0) return res.status(404).json({ message: "Linked group not found" });
+      }
+      broadcastUpdate("assignments", req.workspaceId);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({ message: error.errors[0]?.message ?? "Invalid unlink request" });
+      } else if (error instanceof Error && error.message === "Assignment not found") {
+        res.status(404).json({ message: error.message });
+      } else {
+        console.error("POST unlink assignment error:", error);
+        res.status(500).json({ message: "Failed to unlink" });
+      }
+    }
+  });
+
+  const groupPatchSchema = z
+    .object({
+      dayOffset: z.number().int().min(-365).max(365).optional(),
+      personId: z.string().min(1).optional(),
+      batchNumber: z.string().nullable().optional(),
+      batchSize: z.number().int().positive().nullable().optional(),
+      notes: z.string().nullable().optional(),
+      customName: z.string().nullable().optional(),
+      customColor: z.string().nullable().optional(),
+      slackNotify: z.number().int().min(0).max(1).optional(),
+      slackChangeNotify: z.number().int().min(0).max(1).optional(),
+      instrumentId: z.string().nullable().optional(),
+    })
+    .refine((d) => Object.values(d).some((v) => v !== undefined), { message: "No changes provided" })
+    .refine((d) => d.personId === undefined || d.dayOffset !== undefined, {
+      message: "personId reassignment requires a dayOffset (use 0 for same-day)",
+    })
+    .refine(
+      (d) =>
+        d.dayOffset === undefined ||
+        (d.batchNumber === undefined &&
+          d.batchSize === undefined &&
+          d.notes === undefined &&
+          d.customName === undefined &&
+          d.customColor === undefined &&
+          d.slackNotify === undefined &&
+          d.slackChangeNotify === undefined &&
+          d.instrumentId === undefined),
+      { message: "Cannot combine a move with field changes" },
+    );
+
+  app.patch("/api/assignments/group/:groupId", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const parsed = groupPatchSchema.parse(req.body ?? {});
+      const groupId = req.params.groupId;
+
+      if (parsed.dayOffset !== undefined) {
+        // Snapshot pre-move members when reassigning so the people losing the
+        // group can be notified (post-move rows already carry the new person).
+        const before = isSlackEnabled() && parsed.personId
+          ? await storage.getAssignmentsByGroup(groupId, req.workspaceId!)
+          : null;
+        const result = await storage.moveGroup(groupId, req.workspaceId!, parsed.dayOffset, parsed.personId);
+        if (!result.ok) {
+          const status = result.reason === "Linked group not found" ? 404 : 400;
+          return res.status(status).json({ message: result.reason });
+        }
+        broadcastUpdate("assignments", req.workspaceId);
+        res.json({ success: true, assignments: result.assignments });
+
+        // Slack summaries — one DM per affected person (fire-and-forget)
+        if (isSlackEnabled()) {
+          (async () => {
+            const moved = result.assignments;
+            const notifyRows = moved.filter((a) => a.slackChangeNotify === 1);
+            if (notifyRows.length === 0) return;
+            const sample = moved[0];
+            const task = await storage.getTask(sample.taskId);
+            const label = sample.customName ?? task?.name ?? "a task";
+            const link = buildSchedulerLink(sample.weekStartDate);
+            if (parsed.personId) {
+              const targetPerson = await storage.getPerson(parsed.personId);
+              const oldPersonIds = Array.from(
+                new Set((before ?? []).filter((a) => a.slackChangeNotify === 1).map((a) => a.personId)),
+              ).filter((pid) => pid !== parsed.personId);
+              for (const pid of oldPersonIds) {
+                const p = await storage.getPerson(pid);
+                if (!p?.slackUserId) continue;
+                const toName = targetPerson?.name ? ` to *${targetPerson.name}*` : "";
+                await sendSlackDM(
+                  p.slackUserId,
+                  `:x: The linked task group *${label}* has been reassigned${toName}.${link}`,
+                );
+              }
+              if (targetPerson?.slackUserId) {
+                await sendSlackDM(
+                  targetPerson.slackUserId,
+                  `:calendar: You've been assigned the linked task group *${label}* (${moved.length} assignments, week of ${sample.weekStartDate}).${link}`,
+                );
+              }
+            } else {
+              const personIds = Array.from(new Set(notifyRows.map((a) => a.personId)));
+              for (const pid of personIds) {
+                const p = await storage.getPerson(pid);
+                if (!p?.slackUserId) continue;
+                const n = notifyRows.filter((a) => a.personId === pid).length;
+                await sendSlackDM(
+                  p.slackUserId,
+                  `:calendar: Your linked task group *${label}* has been moved — ${n} assignment(s) shifted by ${parsed.dayOffset} day(s).${link}`,
+                );
+              }
+            }
+          })().catch((err) => console.error("[slack] group move notification error:", err));
+        }
+        return;
+      }
+
+      // Shared-field update. No Slack DMs here — low value, high spam.
+      const { dayOffset: _o, personId: _p, ...fields } = parsed;
+      const updated = await storage.updateGroupFields(groupId, req.workspaceId!, fields);
+      if (updated.length === 0) return res.status(404).json({ message: "Linked group not found" });
+      broadcastUpdate("assignments", req.workspaceId);
+      res.json({ success: true, assignments: updated });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({ message: error.errors[0]?.message ?? "Invalid group update" });
+      } else {
+        console.error("PATCH assignment group error:", error);
+        res.status(500).json({ message: "Failed to update linked group" });
+      }
+    }
+  });
+
+  app.delete("/api/assignments/group/:groupId", isAuthenticated, requireWorkspace, async (req, res) => {
+    try {
+      const { deleted } = await storage.deleteGroup(req.params.groupId, req.workspaceId!);
+      if (deleted.length === 0) return res.status(404).json({ message: "Linked group not found" });
+      broadcastUpdate("assignments", req.workspaceId!, {
+        action: "delete-group",
+        record: { groupId: req.params.groupId, ids: deleted.map((a) => a.id) },
+      });
+      res.json({ success: true, deletedCount: deleted.length });
+
+      // One summary DM per affected person (fire-and-forget, after deletion
+      // completes — never before, per the Slack delete-DM learning).
+      if (isSlackEnabled()) {
+        (async () => {
+          const notifyRows = deleted.filter((a) => a.slackChangeNotify === 1);
+          if (notifyRows.length === 0) return;
+          const sample = deleted[0];
+          const task = await storage.getTask(sample.taskId);
+          const label = sample.customName ?? task?.name ?? "a task";
+          const link = buildSchedulerLink(sample.weekStartDate);
+          const personIds = Array.from(new Set(notifyRows.map((a) => a.personId)));
+          for (const pid of personIds) {
+            const p = await storage.getPerson(pid);
+            if (!p?.slackUserId) continue;
+            const n = notifyRows.filter((a) => a.personId === pid).length;
+            await sendSlackDM(
+              p.slackUserId,
+              `:x: The linked task group *${label}* has been removed — ${n} of your assignment(s) deleted.${link}`,
+            );
+          }
+        })().catch((err) => console.error("[slack] group delete notification error:", err));
+      }
+    } catch (error) {
+      console.error("DELETE assignment group error:", error);
+      res.status(500).json({ message: "Failed to delete linked group" });
     }
   });
 

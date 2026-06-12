@@ -2,12 +2,25 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, DAYS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User, UserCheck, Copy, MoreHorizontal, Loader2 } from "lucide-react";
+import { Plus, GripVertical, CheckCircle, ArrowRight, Trash2, AlertCircle, User, UserCheck, Copy, MoreHorizontal, Loader2, Link2, Unlink, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddAssignmentDialog } from "@/components/add-assignment-dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { extractErrorMessage } from "@/lib/extract-error";
 import { useToast } from "@/hooks/use-toast";
-import { parse, addDays, format, isToday, isSameDay } from "date-fns";
+import { parse, addDays, format, isToday, isSameDay, startOfWeek } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -146,6 +159,11 @@ export function WeeklyCalendar({
   const [clipboardAssignments, setClipboardAssignments] = useState<Assignment[]>([]);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [trainedTaskId, setTrainedTaskId] = useState<string | null>(null);
+  // Linked task groups
+  const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
+  const [pendingGroupMove, setPendingGroupMove] = useState<{ assignment: Assignment; targetPersonId: string; targetDay: string } | null>(null);
+  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState<{ groupId: string; count: number } | null>(null);
+  const [weekPickerGroup, setWeekPickerGroup] = useState<{ groupId: string; fromWeekStart: string } | null>(null);
   const { data: trainedPersonIds = [] } = useQuery<string[]>({
     queryKey: [`/api/assignments/trained-persons?taskId=${trainedTaskId}`],
     enabled: trainedTaskId !== null,
@@ -273,6 +291,78 @@ export function WeeklyCalendar({
     }
   };
 
+  const invalidateAssignmentQueries = () =>
+    queryClient.invalidateQueries({
+      predicate: (query) =>
+        typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments"),
+    });
+
+  const linkSelectedAssignments = async (assignmentIds: string[]) => {
+    try {
+      const res = await apiRequest("POST", "/api/assignments/link", { assignmentIds });
+      const { count } = await res.json();
+      await invalidateAssignmentQueries();
+      clearSelection();
+      toast({
+        title: "Cards linked",
+        description: `${count} assignments now form one task group`,
+        variant: "success",
+        icon: <Link2 className="h-4 w-4 shrink-0 mt-0.5" />,
+      });
+    } catch (error) {
+      toast({ title: "Failed to link cards", description: extractErrorMessage(error), variant: "destructive" });
+    }
+  };
+
+  const unlinkOneAssignment = async (assignmentId: string) => {
+    try {
+      await apiRequest("POST", "/api/assignments/unlink", { assignmentId });
+      await invalidateAssignmentQueries();
+      toast({ title: "Card unlinked", description: "Removed from its task group" });
+    } catch (error) {
+      toast({ title: "Failed to unlink card", description: extractErrorMessage(error), variant: "destructive" });
+    }
+  };
+
+  const dissolveGroupAction = async (groupId: string) => {
+    try {
+      await apiRequest("POST", "/api/assignments/unlink", { groupId });
+      await invalidateAssignmentQueries();
+      toast({ title: "Group unlinked", description: "The cards are no longer linked together" });
+    } catch (error) {
+      toast({ title: "Failed to unlink group", description: extractErrorMessage(error), variant: "destructive" });
+    }
+  };
+
+  const moveGroupAction = async (groupId: string, dayOffset: number, personId?: string) => {
+    try {
+      await apiRequest("PATCH", `/api/assignments/group/${groupId}`, {
+        dayOffset,
+        ...(personId ? { personId } : {}),
+      });
+      await invalidateAssignmentQueries();
+      toast({ title: "Group moved", description: "All linked cards have been moved", variant: "success" });
+    } catch (error) {
+      toast({ title: "Failed to move group", description: extractErrorMessage(error), variant: "destructive" });
+    }
+  };
+
+  const deleteGroupAction = async (groupId: string) => {
+    try {
+      const res = await apiRequest("DELETE", `/api/assignments/group/${groupId}`);
+      const { deletedCount } = await res.json();
+      await invalidateAssignmentQueries();
+      toast({
+        title: "Group deleted",
+        description: `${deletedCount} linked assignment${deletedCount !== 1 ? "s" : ""} removed`,
+        variant: "destructive",
+        icon: <Trash2 className="h-4 w-4 shrink-0 mt-0.5" />,
+      });
+    } catch (error) {
+      toast({ title: "Failed to delete group", description: extractErrorMessage(error), variant: "destructive" });
+    }
+  };
+
   const handleCopy = (toCopy: Assignment[]) => {
     setClipboardAssignments(toCopy);
     toast({
@@ -297,6 +387,7 @@ export function WeeklyCalendar({
       notes: a.notes,
       customName: a.customName,
       customColor: (a as any).customColor ?? null,
+      instrumentId: a.instrumentId ?? null,
       date: targetDate,
     }));
     try {
@@ -382,6 +473,19 @@ export function WeeklyCalendar({
   const getAssignmentsForCell = (personId: string, day: string) => {
     return assignmentsByCell.get(`${personId}-${day}`) || [];
   };
+
+  // Member count per linked group — powers badges and "Delete group (N)" labels.
+  // Only counts members visible in the current week's data, so the label reads
+  // as "N cards" within this view even if a member was moved to another week.
+  const groupCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of assignments) {
+      if (a.linkedGroupId) {
+        map.set(a.linkedGroupId, (map.get(a.linkedGroupId) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [assignments]);
 
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
@@ -646,11 +750,21 @@ export function WeeklyCalendar({
                               return;
                             }
                             if (draggedAssignment.personId !== person.id || draggedAssignment.day !== day) {
-                              updateAssignmentMutation.mutate({
-                                assignmentId: draggedAssignment.id,
-                                personId: person.id,
-                                day,
-                              });
+                              if (draggedAssignment.linkedGroupId) {
+                                // Grouped card: defer the move and ask whether to
+                                // move just this card or the whole group.
+                                setPendingGroupMove({
+                                  assignment: draggedAssignment,
+                                  targetPersonId: person.id,
+                                  targetDay: day,
+                                });
+                              } else {
+                                updateAssignmentMutation.mutate({
+                                  assignmentId: draggedAssignment.id,
+                                  personId: person.id,
+                                  day,
+                                });
+                              }
                             } else {
                               const reorderedIds = cellAssignments.map(a => a.id);
                               const draggedIndex = reorderedIds.indexOf(draggedAssignment.id);
@@ -698,7 +812,8 @@ export function WeeklyCalendar({
                                         : "rounded-md border hover-elevate active-elevate-2 p-1 min-h-6",
                                       draggedAssignment?.id === assignment.id && "opacity-50",
                                       highlightedTaskId && task.id !== highlightedTaskId && "opacity-20",
-                                      selectedAssignmentIds.has(assignment.id) && "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                                      selectedAssignmentIds.has(assignment.id) && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                                      hoveredGroupId !== null && assignment.linkedGroupId === hoveredGroupId && "ring-2 ring-amber-400/80 ring-offset-1 ring-offset-background"
                                     )}
                                     style={{
                                       backgroundColor: (assignment as any).customColor ?? task.color,
@@ -718,6 +833,10 @@ export function WeeklyCalendar({
                                       setDraggedAssignmentIds([]);
                                       setDeleteDragTarget(null);
                                     }}
+                                    onMouseEnter={() => {
+                                      if (assignment.linkedGroupId) setHoveredGroupId(assignment.linkedGroupId);
+                                    }}
+                                    onMouseLeave={() => setHoveredGroupId(null)}
                                     onClick={(event) => {
                                       const isMultiSelect = event.ctrlKey || event.metaKey;
                                       if (isMultiSelect) {
@@ -745,8 +864,26 @@ export function WeeklyCalendar({
                                       <div className="flex-1 min-w-0">
                                         <div className={cn("text-xs font-medium flex items-center justify-between gap-1", isTaskDark ? "text-white" : "text-foreground")}>
                                           <span className="min-w-0 flex-1 truncate leading-tight">{assignment.customName || task.name}</span>
+                                          {isCompactView && assignment.linkedGroupId && (
+                                            <Link2 className="w-2.5 h-2.5 shrink-0 opacity-70" aria-label="Part of a linked task group" />
+                                          )}
                                           {!isCompactView && (
                                             <div className="flex items-center gap-0.5 shrink-0">
+                                              {assignment.linkedGroupId && (
+                                                <span
+                                                  className={cn(
+                                                    "relative z-20 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border shadow-sm backdrop-blur-[2px]",
+                                                    isTaskDark
+                                                      ? "border-white/45 bg-black/25 text-white/95"
+                                                      : "border-black/15 bg-white/80 text-foreground/80"
+                                                  )}
+                                                  title={`Linked task group (${groupCounts.get(assignment.linkedGroupId) ?? 1} cards this week)`}
+                                                  aria-label="Part of a linked task group"
+                                                  data-testid={`group-badge-${assignment.id}`}
+                                                >
+                                                  <Link2 className="h-3.5 w-3.5 stroke-[2.6]" />
+                                                </span>
+                                              )}
                                               {assignment.notes && (
                                                 <Popover>
                                                   <PopoverTrigger asChild>
@@ -821,6 +958,35 @@ export function WeeklyCalendar({
                                                   >
                                                     {trainedTaskId === task.id ? "Clear trained filter" : "Highlight trained"}
                                                   </DropdownMenuItem>
+                                                  {(assignment.linkedGroupId || (selectedAssignmentIds.size >= 2 && selectedAssignmentIds.has(assignment.id))) && (
+                                                    <DropdownMenuSeparator />
+                                                  )}
+                                                  {selectedAssignmentIds.size >= 2 && selectedAssignmentIds.has(assignment.id) && (
+                                                    <DropdownMenuItem
+                                                      onSelect={() => void linkSelectedAssignments(Array.from(selectedAssignmentIds))}
+                                                    >
+                                                      <Link2 className="w-4 h-4 mr-2" />
+                                                      Link {selectedAssignmentIds.size} cards together
+                                                    </DropdownMenuItem>
+                                                  )}
+                                                  {assignment.linkedGroupId && (
+                                                    <>
+                                                      <DropdownMenuItem onSelect={() => void unlinkOneAssignment(assignment.id)}>
+                                                        <Unlink className="w-4 h-4 mr-2" />
+                                                        Unlink this card
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuItem onSelect={() => void dissolveGroupAction(assignment.linkedGroupId!)}>
+                                                        <Unlink className="w-4 h-4 mr-2" />
+                                                        Unlink whole group
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuItem
+                                                        onSelect={() => setWeekPickerGroup({ groupId: assignment.linkedGroupId!, fromWeekStart: assignment.weekStartDate })}
+                                                      >
+                                                        <CalendarDays className="w-4 h-4 mr-2" />
+                                                        Move group to week…
+                                                      </DropdownMenuItem>
+                                                    </>
+                                                  )}
                                                   <DropdownMenuSeparator />
                                                   <DropdownMenuItem
                                                     className="text-destructive focus:text-destructive"
@@ -833,6 +999,17 @@ export function WeeklyCalendar({
                                                   >
                                                     Delete
                                                   </DropdownMenuItem>
+                                                  {assignment.linkedGroupId && (
+                                                    <DropdownMenuItem
+                                                      className="text-destructive focus:text-destructive"
+                                                      onSelect={() => setConfirmDeleteGroup({
+                                                        groupId: assignment.linkedGroupId!,
+                                                        count: groupCounts.get(assignment.linkedGroupId!) ?? 0,
+                                                      })}
+                                                    >
+                                                      Delete group ({groupCounts.get(assignment.linkedGroupId!) ?? 0})
+                                                    </DropdownMenuItem>
+                                                  )}
                                                   {assignment.seriesId && (
                                                     <DropdownMenuItem
                                                       className="text-destructive focus:text-destructive"
@@ -887,6 +1064,35 @@ export function WeeklyCalendar({
                                   >
                                     {trainedTaskId === task.id ? "Clear trained filter" : "Highlight trained"}
                                   </ContextMenuItem>
+                                  {(assignment.linkedGroupId || (selectedAssignmentIds.size >= 2 && selectedAssignmentIds.has(assignment.id))) && (
+                                    <ContextMenuSeparator />
+                                  )}
+                                  {selectedAssignmentIds.size >= 2 && selectedAssignmentIds.has(assignment.id) && (
+                                    <ContextMenuItem
+                                      onSelect={() => void linkSelectedAssignments(Array.from(selectedAssignmentIds))}
+                                    >
+                                      <Link2 className="w-4 h-4 mr-2" />
+                                      Link {selectedAssignmentIds.size} cards together
+                                    </ContextMenuItem>
+                                  )}
+                                  {assignment.linkedGroupId && (
+                                    <>
+                                      <ContextMenuItem onSelect={() => void unlinkOneAssignment(assignment.id)}>
+                                        <Unlink className="w-4 h-4 mr-2" />
+                                        Unlink this card
+                                      </ContextMenuItem>
+                                      <ContextMenuItem onSelect={() => void dissolveGroupAction(assignment.linkedGroupId!)}>
+                                        <Unlink className="w-4 h-4 mr-2" />
+                                        Unlink whole group
+                                      </ContextMenuItem>
+                                      <ContextMenuItem
+                                        onSelect={() => setWeekPickerGroup({ groupId: assignment.linkedGroupId!, fromWeekStart: assignment.weekStartDate })}
+                                      >
+                                        <CalendarDays className="w-4 h-4 mr-2" />
+                                        Move group to week…
+                                      </ContextMenuItem>
+                                    </>
+                                  )}
                                   <ContextMenuSeparator />
                                   <ContextMenuItem
                                     className="text-destructive focus:text-destructive"
@@ -899,6 +1105,17 @@ export function WeeklyCalendar({
                                   >
                                     Delete
                                   </ContextMenuItem>
+                                  {assignment.linkedGroupId && (
+                                    <ContextMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onSelect={() => setConfirmDeleteGroup({
+                                        groupId: assignment.linkedGroupId!,
+                                        count: groupCounts.get(assignment.linkedGroupId!) ?? 0,
+                                      })}
+                                    >
+                                      Delete group ({groupCounts.get(assignment.linkedGroupId!) ?? 0})
+                                    </ContextMenuItem>
+                                  )}
                                   {assignment.seriesId && (
                                     <ContextMenuItem
                                       className="text-destructive focus:text-destructive"
@@ -946,6 +1163,112 @@ export function WeeklyCalendar({
           </table>
         </div>
       </div>
+
+      {/* Grouped-card drag prompt: move one card or the whole group */}
+      <AlertDialog open={!!pendingGroupMove} onOpenChange={(open) => { if (!open) setPendingGroupMove(null); }}>
+        <AlertDialogContent>
+          {pendingGroupMove && (() => {
+            const { assignment, targetPersonId, targetDay } = pendingGroupMove;
+            const groupSize = groupCounts.get(assignment.linkedGroupId!) ?? 0;
+            const offset = DAYS.indexOf(targetDay as typeof DAYS[number]) - DAYS.indexOf(assignment.day as typeof DAYS[number]);
+            const personChanged = targetPersonId !== assignment.personId;
+            const targetPersonName = people.find((p) => p.id === targetPersonId)?.name ?? "this person";
+            const dayPhrase = offset !== 0 ? `shift${personChanged ? "" : "s"} ${offset > 0 ? "forward" : "back"} by ${Math.abs(offset)} day${Math.abs(offset) !== 1 ? "s" : ""}` : "";
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>This card is part of a linked group</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {personChanged
+                      ? `Moving the whole group will reassign all ${groupSize} linked cards to ${targetPersonName}${dayPhrase ? ` and ${dayPhrase.replace(/^shift/, "shift them")}` : ""}.`
+                      : `Moving the whole group ${dayPhrase} for all ${groupSize} linked cards.`}
+                    {" "}Moving only this card leaves the rest of the group where it is.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      updateAssignmentMutation.mutate({
+                        assignmentId: assignment.id,
+                        personId: targetPersonId,
+                        day: targetDay,
+                      });
+                      setPendingGroupMove(null);
+                    }}
+                    data-testid="button-move-single-card"
+                  >
+                    Move only this card
+                  </Button>
+                  <AlertDialogAction
+                    onClick={() => {
+                      void moveGroupAction(assignment.linkedGroupId!, offset, personChanged ? targetPersonId : undefined);
+                      setPendingGroupMove(null);
+                    }}
+                    data-testid="button-move-whole-group"
+                  >
+                    Move whole group
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm group delete */}
+      <AlertDialog open={!!confirmDeleteGroup} onOpenChange={(open) => { if (!open) setConfirmDeleteGroup(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete linked task group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes all {confirmDeleteGroup?.count ?? 0} assignments in the group, including any on other weeks. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (confirmDeleteGroup) void deleteGroupAction(confirmDeleteGroup.groupId);
+                setConfirmDeleteGroup(null);
+              }}
+              data-testid="button-confirm-delete-group"
+            >
+              Delete group
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Week picker for "Move group to week…" */}
+      <Dialog open={!!weekPickerGroup} onOpenChange={(open) => { if (!open) setWeekPickerGroup(null); }}>
+        <DialogContent className="w-auto max-w-fit">
+          <DialogHeader>
+            <DialogTitle>Move group to another week</DialogTitle>
+            <DialogDescription>
+              Pick any day in the destination week. Every linked card keeps its weekday.
+            </DialogDescription>
+          </DialogHeader>
+          <Calendar
+            mode="single"
+            defaultMonth={weekPickerGroup ? parse(weekPickerGroup.fromWeekStart, "yyyy-MM-dd", new Date()) : undefined}
+            onSelect={(date) => {
+              if (!date || !weekPickerGroup) return;
+              // Whole-week delta between two local midnights; Math.round absorbs
+              // the ±1h DST wobble so the offset is always an exact multiple of 7.
+              const targetMonday = startOfWeek(date, { weekStartsOn: 1 });
+              const fromMonday = parse(weekPickerGroup.fromWeekStart, "yyyy-MM-dd", new Date());
+              const dayOffset = Math.round((targetMonday.getTime() - fromMonday.getTime()) / 86_400_000);
+              setWeekPickerGroup(null);
+              if (dayOffset !== 0) {
+                void moveGroupAction(weekPickerGroup.groupId, dayOffset);
+              }
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <AddAssignmentDialog
         open={!!selectedCell}

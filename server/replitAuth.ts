@@ -3,7 +3,7 @@ import { Strategy, type VerifyFunction } from "openid-client/passport";
 
 import passport from "passport";
 import session from "express-session";
-import type { Express, RequestHandler } from "express";
+import type { Express, Request, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage, sessionPool } from "./storage";
@@ -64,15 +64,24 @@ export const extendSessionRow: RequestHandler = (req, _res, next) => {
   if (sess.lastExtendedAt && now - sess.lastExtendedAt < SESSION_EXTEND_INTERVAL_MS) {
     return next();
   }
-  sess.lastExtendedAt = now;
-  // touch() resets cookie.expires from cookie.maxAge so the subsequent save()
-  // writes a fresh TTL into the Postgres row. Without this, save() can persist
-  // the original (drifting) expiry and the row TTL won't keep up with the
-  // rolling cookie.
-  req.session.touch();
-  req.session.save((err) => {
-    if (err) console.error("[auth] Failed to extend session row TTL:", err);
-    next();
+  // Reload first so this save doesn't clobber fields written by a concurrent
+  // request (freshly rotated tokens, activeWorkspaceId) with this request's
+  // stale snapshot. Reload failure is tolerated — save() recreates the row.
+  req.session.reload(() => {
+    const fresh = req.session as any;
+    if (fresh.lastExtendedAt && now - fresh.lastExtendedAt < SESSION_EXTEND_INTERVAL_MS) {
+      return next(); // a concurrent request already extended the row
+    }
+    fresh.lastExtendedAt = now;
+    // touch() resets cookie.expires from cookie.maxAge so the subsequent save()
+    // writes a fresh TTL into the Postgres row. Without this, save() can persist
+    // the original (drifting) expiry and the row TTL won't keep up with the
+    // rolling cookie.
+    req.session.touch();
+    req.session.save((err) => {
+      if (err) console.error("[auth] Failed to extend session row TTL:", err);
+      next();
+    });
   });
 };
 
@@ -214,6 +223,10 @@ export async function setupAuth(app: Express) {
     passport.authenticate(`replitauth:${req.hostname}`, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
+      // Login intentionally regenerates the session ID (fixation protection),
+      // but session contents — notably returnTo set by /api/login — must be
+      // merged into the new session or the user always lands back at "/".
+      keepSessionInfo: true,
     })(req, res, next);
   });
 
@@ -226,6 +239,18 @@ export async function setupAuth(app: Express) {
         }).href
       );
     });
+  });
+}
+
+// Reload the session from the store, tolerating failures (e.g. a pruned row):
+// on error the in-memory session is left untouched and the caller proceeds
+// with its current snapshot. Used before session writes so that a save here
+// can't clobber fields written by a concurrent request (rotated tokens,
+// activeWorkspaceId) with this request's stale snapshot.
+export function reloadSessionTolerant(req: Request): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof req.session?.reload !== "function") return resolve();
+    req.session.reload(() => resolve());
   });
 }
 
@@ -341,18 +366,47 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     let lastErr: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
+        // Pick up writes from concurrent requests (or another process on a
+        // multi-instance deployment) before refreshing: if fresh tokens are
+        // already in the store, adopt them instead of issuing a duplicate
+        // grant — refresh tokens may be single-use, so a duplicate grant can
+        // fail with invalid_grant and revoke the token the other refresh just
+        // obtained.
+        await reloadSessionTolerant(req);
+        const storedUser = (req.session as any)?.passport?.user;
+        // Adopt the stored tokens wholesale: if another writer rotated the
+        // refresh token, we must grant with (and on success keep) that one,
+        // not this request's stale copy.
+        if (storedUser) Object.assign(user, storedUser);
+        if (
+          user.expires_at &&
+          Math.floor(Date.now() / 1000) < user.expires_at - 300
+        ) {
+          sessionRefreshFirstFailureAt.delete(sessionId);
+          return;
+        }
         const config = await getOidcConfig();
-        const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
+        const tokenResponse = await client.refreshTokenGrant(
+          config,
+          user.refresh_token ?? refreshToken
+        );
         updateUserSession(user, tokenResponse);
-        await new Promise<void>((resolve, reject) => {
-          req.login(user, (error) => {
-            if (error) { reject(error); return; }
-            req.session.save((sessionError) => {
-              if (sessionError) { reject(sessionError); return; }
-              resolve();
-            });
-          });
-        });
+        // Persist by writing the session directly — never via req.login():
+        // passport ≥0.6 regenerates the session ID inside login(), which
+        // destroys the session row out from under concurrent requests (they
+        // 401) and wipes session data such as activeWorkspaceId. A rolling
+        // cookie race could then leave the browser holding the dead session
+        // ID, logging the user out entirely. req.user is already the same
+        // object as session.passport.user (pass-through serializer), but we
+        // re-point it explicitly because the reload above replaced req.session
+        // with a fresh object.
+        (req.session as any).passport = {
+          ...((req.session as any).passport ?? {}),
+          user,
+        };
+        await new Promise<void>((resolve, reject) =>
+          req.session.save((err) => (err ? reject(err) : resolve()))
+        );
         sessionRefreshFirstFailureAt.delete(sessionId);
         return;
       } catch (err) {

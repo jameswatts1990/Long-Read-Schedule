@@ -48,8 +48,9 @@ Preferred communication style: Simple, everyday language.
 - Week navigation with Monday-based week starts
 - Calendar popover for quick date navigation (click date display to open calendar picker)
 - Month view mode showing multiple weeks in continuous scroll
-- View mode toggle between single week, month, and pipeline views
+- View mode dropdown switching between People (default week grid), Pipeline, Instrument, and Month views
 - Pipeline view: tasks (flagged for pipeline) as rows, days as columns, person names shown in cells
+- Instrument view: workspace instruments/equipment as rows, days as columns — assignments booked onto an instrument (via the add dialog or details drawer) appear as cards; admin-managed list under Admin → Instruments
 - Drag-to-delete functionality (drag task onto person name to delete)
 
 ### Backend Architecture

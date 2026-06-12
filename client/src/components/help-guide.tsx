@@ -121,7 +121,8 @@ export function HelpGuide() {
             </Section>
 
             <Section title="Editing & details">
-              <Item label="Click a task" description="Opens the Task Details drawer where you can edit batch number, batch size, notes, custom name, custom colour, and Slack reminder toggle." />
+              <Item label="Click a task" description="Opens the Task Details drawer where you can edit batch number, batch size, notes, custom name, custom colour, instrument booking, and Slack reminder toggle." />
+              <Item label="Instrument" description="Optionally book the assignment onto a piece of equipment (set up in Admin → Instruments). Booked assignments appear in Instrument view. Choose 'None' to clear the booking. Duplicated cards keep the instrument." />
               <Item label="⋯ menu button" description="Hover any task card to reveal a ⋯ (more) button in the top-right corner. Click it for a quick menu with Copy, Edit Details, Highlight, and Delete options — the same actions as the right-click menu." />
               <Item label="Custom name" description="Overrides the task name for this assignment only — useful for labelling specific samples." />
               <Item label="Custom colour" description="Overrides the task colour for this assignment only." />
@@ -134,10 +135,21 @@ export function HelpGuide() {
               <Item label="Friday schedule preview" description="Every Friday at 08:00 UTC, the bot automatically sends each linked person their full schedule for the coming week." />
             </Section>
 
+            <Section title="Linked task groups">
+              <Item label="What they are" description="Tie several cards together as one piece of work — for example a library prep that runs Monday to Friday as 5 cards. Linked cards show a chain (🔗) badge, and hovering one highlights every card in the group with an amber ring." />
+              <Item label="Link at creation" description="In the Add Assignment dialog, tick two or more days and then tick 'Link these cards as one task group'. With Repeat enabled, each week's cards form their own group while the series can still be deleted as a whole." />
+              <Item label="Link existing cards" description="Ctrl+Click two or more cards (they can belong to different people), then choose 'Link N cards together' from the ⋯ or right-click menu." />
+              <Item label="Moving a linked card" description="Dragging a linked card asks whether to move only that card or the whole group. Moving the whole group shifts every card by the same number of days — and if you dropped it on a different person, all cards in the group are reassigned to that person. Moves that would push a card onto a weekend are blocked." />
+              <Item label="Move group to another week" description="Choose 'Move group to week…' from the card menu and pick any day in the destination week. Every card keeps its weekday." />
+              <Item label="Edit all at once" description="In the Task Details drawer of a linked card, tick 'Apply saved changes to all linked cards' before saving to update batch number, size, notes (and custom name/colour for Custom Tasks) across the whole group." />
+              <Item label="Unlink" description="'Unlink this card' removes one card from its group; 'Unlink whole group' dissolves the link entirely. Nothing is deleted. A group always has at least 2 cards — when only one remains it is unlinked automatically." />
+              <Item label="Delete group" description="'Delete group (N)' in the card menu (or 'Delete group' in the drawer) removes every assignment in the group after a confirmation — including cards moved to other weeks. This cannot be undone, and restoring a single deleted card via Undo does not restore its group membership." />
+            </Section>
+
             <Section title="Moving & copying">
               <Item label="Drag to move" description="Drag any task box to a different person/day cell to move it." />
               <Item label="Reorder in cell" description="Drag a task up or down within the same cell to change its display order." />
-              <Item label="Copy & paste" description="Select tasks with Ctrl+Click, press Ctrl+C, then right-click the target cell and choose Paste (or press Ctrl+V)." />
+              <Item label="Copy & paste" description="Select tasks with Ctrl+Click, press Ctrl+C, then right-click the target cell and choose Paste (or press Ctrl+V). Pasted copies are not linked to the original's group." />
               <Item label="Duplicate" description="Open a task's detail drawer and click 'Duplicate' to copy it to multiple people and days in one action." />
             </Section>
 
@@ -157,20 +169,31 @@ export function HelpGuide() {
 
           {/* ── Views ── */}
           <TabsContent value="views" className="flex-1 overflow-y-auto mt-4 pr-1">
-            <Section title="Week view (default)">
+            <Section title="Switching views">
+              <Item label="View dropdown" description="Use the view dropdown in the toolbar to switch between People View (default), Pipeline View, Instrument View, and Month View." />
+            </Section>
+
+            <Section title="People view (default)">
               <Item label="Layout" description="People as rows, Mon–Fri as columns. Today's column is highlighted in blue." />
               <Item label="Annual leave" description="Cells with leave tasks are highlighted red." />
               <Item label="Missing tasks" description="A red info icon in a day header means a 'required daily' task has not been scheduled for that day. Hover to see which tasks are missing." />
             </Section>
 
             <Section title="Month view">
-              <Item label="Overview" description="Shows all weeks in the selected month. Same editing and drag interactions as week view." />
+              <Item label="Overview" description="Shows all weeks in the selected month. Same editing and drag interactions as people view." />
               <Item label="Navigation" description="Previous/Next moves by one month. The date picker jumps to any month." />
             </Section>
 
             <Section title="Pipeline view">
               <Item label="Layout" description="Only tasks flagged 'Show in pipeline view' (set in Admin) appear as rows, with people listed per day." />
               <Item label="Hide empty" description="Toggle the eye icon to hide pipeline rows with no assignments, keeping the view focused. When active, a blue banner appears in the toolbar — press Escape to cancel." />
+            </Section>
+
+            <Section title="Instrument view">
+              <Item label="Layout" description="Instruments and equipment as rows, Mon–Fri as columns — an equipment booking planner for the week. Each card shows the task and the assigned person's colour dot; click a card to open its details." />
+              <Item label="Booking" description="Assignments appear here when their 'Instrument' field is set. Choose an instrument in the Add Assignment dialog or the Task Details drawer." />
+              <Item label="Hide empty" description="Toggle the eye icon to hide instruments with no bookings this week. When active, a blue banner appears in the toolbar — press Escape to cancel." />
+              <Item label="Setup" description="Instruments are managed by admins in Admin → Instruments." />
             </Section>
 
             <Section title="Compact view">
@@ -216,7 +239,7 @@ export function HelpGuide() {
                 keys={<span><Kbd>Delete</Kbd> or <Kbd>Backspace</Kbd></span>}
               />
               <ShortcutRow
-                description="Clear active view filter (highlight trained, show only my assignments, hide empty pipeline rows)"
+                description="Clear active view filter (highlight trained, show only my assignments, hide empty pipeline rows, hide empty instruments)"
                 keys={<Kbd>Escape</Kbd>}
               />
               <ShortcutRow
@@ -227,7 +250,7 @@ export function HelpGuide() {
 
             <Section title="Mouse interactions">
               <Item label="Left-click task" description="Open Task Details drawer." />
-              <Item label="Right-click task" description="Context menu: Edit, Highlight, Highlight trained, Duplicate, Delete, Delete Series (recurring assignments only)." />
+              <Item label="Right-click task" description="Context menu: Edit, Highlight, Highlight trained, Duplicate, Delete, Delete Series (recurring assignments only), plus Link/Unlink, Move group to week… and Delete group for linked task groups." />
               <Item label="Right-click cell" description="Context menu: Add Task, Paste." />
               <Item label="Drag task" description="Move to a new person/day cell." />
               <Item label="Drag to name column" description="Drop on the person name (turns red) to delete." />
@@ -240,12 +263,12 @@ export function HelpGuide() {
           {/* ── Admin ── */}
           <TabsContent value="admin" className="flex-1 overflow-y-auto mt-4 pr-1">
             <Section title="Accessing admin">
-              <Item label="Admin cog" description="Click the ⚙ cog icon in the toolbar. The dropdown shows admin sections (People, Tasks, Rota) and — for admins — a Reporting section (Capacity, Annual Leave, Absence), plus Export, Import, and Logout." />
+              <Item label="Admin cog" description="Click the ⚙ cog icon in the toolbar. The dropdown shows admin sections (People, Tasks, Instruments, Rota) and — for admins — a Reporting section (Capacity, Annual Leave, Absence), plus Export, Import, and Logout." />
               <Item label="Reporting (admin only)" description="Reporting links are visible in the cog menu only to Admin and Super Admin users. There are three reports: Capacity Reporting, AL Reporting, and Absence Reporting." />
               <Item label="Absence report" description="Shows a monthly heatmap of days where team members were recorded as absent, plus a per-person bar chart of total absence days for the selected year. Requires a task named 'Absent' or 'Absence' to exist in the system. Use the person filter dropdown (top-right) to show only one person's absences on the heatmap." />
               <Item label="Annual Leave report" description="Shows a monthly heatmap of AL events and a per-person AL summary bar chart. Use the person filter dropdown (top-right) to isolate one person's leave on the heatmap." />
-              <Item label="Section navigation" description="Use the dropdown next to 'Admin' at the top of the Admin page to switch between sections. Each section (People, Tasks, Rota, Workspaces) is shown as the main focus." />
-              <Item label="Direct links" description="Selecting People, Tasks, or Rota from the cog dropdown takes you straight to that section of the Admin page." />
+              <Item label="Section navigation" description="Use the dropdown next to 'Admin' at the top of the Admin page to switch between sections. Each section (People, Tasks, Instruments, Rota, Workspaces) is shown as the main focus." />
+              <Item label="Direct links" description="Selecting People, Tasks, Instruments, or Rota from the cog dropdown takes you straight to that section of the Admin page." />
             </Section>
 
             <Section title="People">
@@ -260,6 +283,13 @@ export function HelpGuide() {
               <Item label="Add task" description="Set a name, colour, and optional description. Flags: Production (counts in reporting), Required daily (warns if missing), Show in pipeline view." />
               <Item label="Required daily" description="When enabled, a red warning appears in the day header if this task has not been assigned to anyone that day." />
               <Item label="Pipeline view" description="Tasks must be flagged here before they appear in Pipeline view." />
+            </Section>
+
+            <Section title="Instruments">
+              <Item label="Purpose" description="Maintain the workspace's list of bookable equipment — automation robots, sequencers, lab equipment. Assignments can be booked onto an instrument and viewed in Instrument view." />
+              <Item label="Add instrument" description="Set a name (required), plus optional free-text type (e.g. 'Sequencer') and location (e.g. 'Lab 2, Bench 4')." />
+              <Item label="Reorder" description="Drag the handle next to an instrument to change its row order in Instrument view." />
+              <Item label="Delete" description="Deleting an instrument unbooks any assignments that used it — the assignments themselves are kept." />
             </Section>
 
             <Section title="Rota tasks">

@@ -52,6 +52,13 @@ function useRealTimeUpdates(workspaceId: string | null) {
           { predicate: isAssignmentQuery },
           (old) => (old ? old.filter((a) => a.id !== record.id) : old),
         );
+      } else if (action === "delete-group" && Array.isArray((record as any)?.ids)) {
+        // Linked-group delete: remove every member id from cached lists — zero refetches
+        const ids = new Set((record as any).ids as string[]);
+        queryClient.setQueriesData<Assignment[]>(
+          { predicate: isAssignmentQuery },
+          (old) => (old ? old.filter((a) => !ids.has(a.id)) : old),
+        );
       } else {
         // Fallback for reorder-cell and any future ops: predicate invalidation
         // Fixes Issue 2: catches all compound query keys like "?weekStartDate=..."
@@ -61,6 +68,8 @@ function useRealTimeUpdates(workspaceId: string | null) {
       queryClient.invalidateQueries({ queryKey: ["/api/people"] });
     } else if (type === "tasks") {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+    } else if (type === "instruments") {
+      queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
     } else if (type === "rota-tasks") {
       queryClient.invalidateQueries({ queryKey: ["/api/rota-tasks"] });
     } else if (type === "premade-filters") {
@@ -112,6 +121,7 @@ function useRealTimeUpdates(workspaceId: string | null) {
         queryClient.invalidateQueries({ predicate: isAssignmentQuery });
         queryClient.invalidateQueries({ queryKey: ["/api/people"] });
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
         queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
       }
     };
