@@ -190,9 +190,10 @@ export function HelpGuide() {
             </Section>
 
             <Section title="Instrument view">
-              <Item label="Layout" description="Instruments and equipment as rows, Mon–Fri as columns — an equipment booking planner for the week. Each card shows the task and the assigned person's colour dot; click a card to open its details." />
+              <Item label="Layout" description="Instruments and equipment as rows, Mon–Fri as columns — an equipment booking planner for the week. Each card shows the person's name first, the task underneath, and the batch number if set; click a card to open its details." />
               <Item label="Booking" description="Assignments appear here when their 'Instrument' field is set. Choose an instrument in the Add Assignment dialog or the Task Details drawer." />
-              <Item label="Hide empty" description="Toggle the eye icon to hide instruments with no bookings this week. When active, a blue banner appears in the toolbar — press Escape to cancel." />
+              <Item label="Drag and drop" description="Drag a card to another cell to rebook it onto a different instrument and/or day. The change applies everywhere — People, Pipeline, and Month views update too." />
+              <Item label="Hide empty" description="Toggle the eye icon to hide instruments with no bookings this week. When active, a blue banner appears in the toolbar — press Escape to cancel, or use the 'Show all instruments' button if no instruments have bookings." />
               <Item label="Setup" description="Instruments are managed by admins in Admin → Instruments." />
             </Section>
 

@@ -1,9 +1,12 @@
-import { Fragment } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { Fragment, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Person, type Task, type Assignment, type Instrument, DAYS } from "@shared/schema";
 import { addDays } from "date-fns";
 import { Eye, EyeOff, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface InstrumentViewProps {
   weekStartDate: string;
@@ -21,6 +24,17 @@ function getDayLabel(weekStart: Date, dayIndex: number): string {
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
+const getLuminance = (hexColor: string): number => {
+  const hex = hexColor.replace("#", "");
+  if (hex.length !== 6) return 1;
+  const r = parseInt(hex.substring(0, 2), 16) / 255;
+  const g = parseInt(hex.substring(2, 4), 16) / 255;
+  const b = parseInt(hex.substring(4, 6), 16) / 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+};
+
+const isDarkColor = (hexColor: string): boolean => getLuminance(hexColor) < 0.5;
+
 export function InstrumentView({
   weekStartDate,
   assignments,
@@ -32,6 +46,38 @@ export function InstrumentView({
   onToggleHideEmptyInstruments,
 }: InstrumentViewProps) {
   const { data: instruments = [] } = useQuery<Instrument[]>({ queryKey: ["/api/instruments"] });
+  const { toast } = useToast();
+
+  const [draggedAssignment, setDraggedAssignment] = useState<Assignment | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ instrumentId: string; day: string } | null>(null);
+
+  const moveAssignmentMutation = useMutation({
+    mutationFn: async (data: { assignmentId: string; instrumentId: string; day: string }) => {
+      const res = await apiRequest("PATCH", `/api/assignments/${data.assignmentId}`, {
+        instrumentId: data.instrumentId,
+        day: data.day,
+        weekStartDate,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) =>
+        typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/assignments")
+      });
+      toast({
+        title: "Booking moved",
+        description: "Assignment updated successfully",
+        variant: "success",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to move booking",
+        description: error instanceof Error ? error.message : "Could not update the assignment",
+        variant: "destructive",
+      });
+    },
+  });
 
   const visibleInstruments = hideEmptyInstruments
     ? instruments.filter((instrument) => assignments.some((a) => a.instrumentId === instrument.id))
@@ -59,6 +105,15 @@ export function InstrumentView({
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-24">
         <p className="text-base">No instruments have bookings this week.</p>
         <p className="text-sm">Turn off the visibility filter to show all instruments.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onToggleHideEmptyInstruments}
+          data-testid="button-show-all-instruments"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          <span>Show all instruments</span>
+        </Button>
       </div>
     );
   }
@@ -124,38 +179,114 @@ export function InstrumentView({
               const dayAssignments = assignments.filter(
                 (a) => a.instrumentId === instrument.id && a.day === day
               );
+              const isDropTarget =
+                dropTarget?.instrumentId === instrument.id && dropTarget?.day === day;
 
               return (
                 <div
                   key={`${instrument.id}-${day}`}
-                  className={`border-b border-r px-2 py-1.5 flex flex-col gap-1 ${cellHeight}`}
+                  className={cn(
+                    "border-b border-r px-2 py-1.5 flex flex-col gap-1",
+                    cellHeight,
+                    isDropTarget && "bg-primary/10 ring-2 ring-inset ring-primary"
+                  )}
+                  onDragOver={(e) => {
+                    if (draggedAssignment) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDropTarget({ instrumentId: instrument.id, day });
+                    }
+                  }}
+                  onDragLeave={() => setDropTarget(null)}
+                  onDrop={() => {
+                    if (
+                      draggedAssignment &&
+                      (draggedAssignment.instrumentId !== instrument.id || draggedAssignment.day !== day)
+                    ) {
+                      moveAssignmentMutation.mutate({
+                        assignmentId: draggedAssignment.id,
+                        instrumentId: instrument.id,
+                        day,
+                      });
+                    }
+                    setDropTarget(null);
+                    setDraggedAssignment(null);
+                  }}
                   data-testid={`instrument-cell-${instrument.id}-${day}`}
                 >
                   {dayAssignments.map((assignment) => {
                     const person = personMap.get(assignment.personId);
                     const task = taskMap.get(assignment.taskId);
                     if (!person || !task) return null;
+                    const cardColor = (assignment as any).customColor ?? task.color;
+                    const isTaskDark = isDarkColor(cardColor);
                     return (
                       <button
                         key={assignment.id}
                         onClick={() => onAssignmentClick(assignment)}
-                        className="w-full text-left rounded px-2 py-1 flex items-center gap-1.5 hover-elevate active-elevate-2 transition-colors"
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedAssignment(assignment);
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => {
+                          setDraggedAssignment(null);
+                          setDropTarget(null);
+                        }}
+                        className={cn(
+                          "w-full text-left rounded px-2 py-1 hover-elevate active-elevate-2 transition-colors cursor-grab active:cursor-grabbing",
+                          draggedAssignment?.id === assignment.id && "opacity-50"
+                        )}
                         style={{
-                          backgroundColor: (assignment as any).customColor ?? task.color,
+                          backgroundColor: cardColor,
                           border: `1.5px solid ${person.color}`,
                         }}
                         title={`${person.name} — ${assignment.customName || task.name}`}
                         data-testid={`instrument-assignment-${assignment.id}`}
                       >
-                        <span
-                          className="flex-shrink-0 w-2 h-2 rounded-full"
-                          style={{ backgroundColor: person.color }}
-                        />
-                        <span className={`font-medium truncate ${isCompactView ? "text-[11px]" : "text-xs"}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="flex-shrink-0 w-2 h-2 rounded-full"
+                            style={{ backgroundColor: person.color }}
+                          />
+                          <span
+                            className={cn(
+                              "font-medium truncate",
+                              isCompactView ? "text-[11px]" : "text-xs",
+                              isTaskDark ? "text-white" : "text-foreground"
+                            )}
+                          >
+                            {person.name}
+                          </span>
+                          {assignment.linkedGroupId && (
+                            <Link2
+                              className={cn(
+                                "ml-auto h-3 w-3 flex-shrink-0 opacity-70",
+                                isTaskDark ? "text-white" : "text-foreground"
+                              )}
+                              aria-label="Part of a linked task group"
+                            />
+                          )}
+                        </div>
+                        <div
+                          className={cn(
+                            "truncate leading-tight",
+                            isCompactView ? "text-[10px]" : "text-[11px]",
+                            isTaskDark ? "text-white/80" : "text-foreground/70"
+                          )}
+                        >
                           {assignment.customName || task.name}
-                        </span>
-                        {assignment.linkedGroupId && (
-                          <Link2 className="ml-auto h-3 w-3 flex-shrink-0 opacity-70" aria-label="Part of a linked task group" />
+                        </div>
+                        {(assignment.batchNumber || assignment.batchSize) && (
+                          <div
+                            className={cn(
+                              "text-xs font-mono mt-px flex gap-1",
+                              isTaskDark ? "text-white/80" : "text-foreground/70"
+                            )}
+                          >
+                            {assignment.batchNumber && <span>#{assignment.batchNumber}</span>}
+                            {assignment.batchSize && <span>({assignment.batchSize})</span>}
+                          </div>
                         )}
                       </button>
                     );
