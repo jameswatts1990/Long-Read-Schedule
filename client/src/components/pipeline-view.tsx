@@ -145,14 +145,6 @@ export function PipelineView({
                   style={{ backgroundColor: `${task.color}18` }}
                   data-testid={`pipeline-cell-${task.id}-${day}`}
                 >
-                  <button
-                    onClick={() => setSelectedCell({ taskId: task.id, day })}
-                    className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-opacity px-1 py-0.5 rounded hover:bg-black/5"
-                    data-testid={`pipeline-cell-add-${task.id}-${day}`}
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Add</span>
-                  </button>
                   {dayAssignments.map((assignment) => {
                     const person = personMap.get(assignment.personId);
                     if (!person) return null;
@@ -180,6 +172,14 @@ export function PipelineView({
                       </button>
                     );
                   })}
+                  <button
+                    onClick={() => setSelectedCell({ taskId: task.id, day })}
+                    className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-opacity px-1 py-0.5 rounded hover:bg-black/5"
+                    data-testid={`pipeline-cell-add-${task.id}-${day}`}
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add</span>
+                  </button>
                 </div>
               );
             })}

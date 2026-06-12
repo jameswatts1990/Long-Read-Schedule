@@ -900,18 +900,6 @@ export function WeeklyCalendar({
                               className={cn("group h-full w-full", isCompactView ? "space-y-0" : "space-y-1")}
                               style={{ minHeight: isCompactView ? undefined : "120px" }}
                             >
-                          {!isCompactView && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="opacity-0 group-hover:opacity-100 w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1 transition-opacity"
-                              onClick={() => setSelectedCell({ personId: person.id, day })}
-                              data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
-                            >
-                              <Plus className="w-3 h-3 mr-1" />
-                              <span className="text-xs">Add</span>
-                            </Button>
-                          )}
                           {cellAssignments.map(assignment => {
                             const task = getTaskById(assignment.taskId);
                             if (!task) return null;
@@ -1253,6 +1241,18 @@ export function WeeklyCalendar({
                               </ContextMenu>
                             );
                           })}
+                          {!isCompactView && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="opacity-0 group-hover:opacity-100 w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1 transition-opacity"
+                              onClick={() => setSelectedCell({ personId: person.id, day })}
+                              data-testid={`button-add-${person.id}-${day.toLowerCase()}`}
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              <span className="text-xs">Add</span>
+                            </Button>
+                          )}
 
                             </div>
                           </ContextMenuTrigger>

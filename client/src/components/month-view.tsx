@@ -248,17 +248,6 @@ export function MonthView({
                       }}
                     >
                       <div className={cn("group space-y-1", isCompactView && "space-y-0.5")}>
-                        {!isCompactView && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="opacity-0 group-hover:opacity-100 w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1 transition-opacity"
-                            onClick={() => setSelectedCell({ personId: person.id, day, weekStartDate: weekStr })}
-                          >
-                            <Plus className="w-3 h-3 mr-1" />
-                            <span className="text-xs">Add</span>
-                          </Button>
-                        )}
                         {cellAssignments.map(assignment => {
                           const task = getTaskById(assignment.taskId);
                           if (!task) return null;
@@ -341,7 +330,17 @@ export function MonthView({
                             </div>
                           );
                         })}
-
+                        {!isCompactView && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-0 group-hover:opacity-100 w-full justify-start text-muted-foreground hover:text-foreground h-auto py-1 px-1 transition-opacity"
+                            onClick={() => setSelectedCell({ personId: person.id, day, weekStartDate: weekStr })}
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            <span className="text-xs">Add</span>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
