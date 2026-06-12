@@ -257,6 +257,8 @@ export function HelpGuide() {
               <Item label="Right-click task" description="Context menu: Edit, Highlight, Highlight trained, Duplicate, Delete, Delete Series (recurring assignments only), plus Link/Unlink, Move group to week… and Delete group for linked task groups." />
               <Item label="Right-click cell" description="Context menu: Add Task, Paste." />
               <Item label="Drag task" description="Move to a new person/day cell." />
+              <Item label="Ctrl + Drag linked card" description="Move the entire linked group without a confirmation popup." />
+              <Item label="Shift + Drag linked card" description="Move only that single card out of its linked group without a confirmation popup." />
               <Item label="Drag to name column" description="Drop on the person name (turns red) to delete." />
               <Item label="Ctrl+Click" description="Multi-select tasks for bulk copy/delete." />
             </Section>

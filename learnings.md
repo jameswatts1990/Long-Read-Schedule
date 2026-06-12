@@ -336,3 +336,10 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
     END IF;
   END $$;
   ```
+
+## Modifier-key drag shortcuts — access via DragEvent, not keyboard state
+
+- Date: 2026-06-12
+- Trigger: Added Ctrl/Shift modifier shortcuts to skip the linked-group drag popup.
+- Learning: The HTML drag `onDrop` handler receives a `DragEvent` that carries `e.ctrlKey` and `e.shiftKey` at drop time. No separate keydown tracking is needed. Change `onDrop={() => {` → `onDrop={(e) => {` to access these. The modifier check sits inside the `linkedGroupId` branch, before `setPendingGroupMove`, so the popup is only shown when no modifier is held.
+- Action: For future modifier-key drag behaviour, capture the event in `onDrop={(e) => {` and branch on `e.ctrlKey` / `e.shiftKey` / `e.altKey`. Always add the new shortcuts to the "Mouse interactions" section of `help-guide.tsx`.

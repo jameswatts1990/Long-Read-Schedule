@@ -828,7 +828,7 @@ export function WeeklyCalendar({
                           }
                         }}
                         onDragLeave={() => setDropTargetCell(null)}
-                        onDrop={() => {
+                        onDrop={(e) => {
                           if (draggedAssignment) {
                             if (draggedAssignmentIds.length > 1) {
                               toast({
@@ -843,13 +843,26 @@ export function WeeklyCalendar({
                             }
                             if (draggedAssignment.personId !== person.id || draggedAssignment.day !== day) {
                               if (draggedAssignment.linkedGroupId) {
-                                // Grouped card: defer the move and ask whether to
-                                // move just this card or the whole group.
-                                setPendingGroupMove({
-                                  assignment: draggedAssignment,
-                                  targetPersonId: person.id,
-                                  targetDay: day,
-                                });
+                                if (e.ctrlKey) {
+                                  // Ctrl held: move whole group without popup
+                                  const offset = DAYS.indexOf(day as typeof DAYS[number]) - DAYS.indexOf(draggedAssignment.day as typeof DAYS[number]);
+                                  const personChanged = person.id !== draggedAssignment.personId;
+                                  void moveGroupAction(draggedAssignment.linkedGroupId, offset, personChanged ? person.id : undefined);
+                                } else if (e.shiftKey) {
+                                  // Shift held: move only this card without popup
+                                  updateAssignmentMutation.mutate({
+                                    assignmentId: draggedAssignment.id,
+                                    personId: person.id,
+                                    day,
+                                  });
+                                } else {
+                                  // No modifier: defer the move and ask
+                                  setPendingGroupMove({
+                                    assignment: draggedAssignment,
+                                    targetPersonId: person.id,
+                                    targetDay: day,
+                                  });
+                                }
                               } else {
                                 updateAssignmentMutation.mutate({
                                   assignmentId: draggedAssignment.id,
