@@ -161,7 +161,7 @@ export function InstrumentView({
             <div
               className={`sticky left-0 z-10 border-b border-r flex flex-col px-3 py-2 ${cellHeight}`}
               style={{ backgroundColor: "hsl(var(--background))" }}
-              title={[instrument.name, instrument.type, instrument.location].filter(Boolean).join(" · ")}
+              title={[instrument.name, instrument.type, instrument.location, instrument.assetNumber ? `Asset: ${instrument.assetNumber}` : null].filter(Boolean).join(" · ")}
               data-testid={`instrument-label-${instrument.id}`}
             >
               <span className={`font-medium leading-tight ${isCompactView ? "text-xs" : "text-sm"}`}>
@@ -170,6 +170,11 @@ export function InstrumentView({
               {(instrument.type || instrument.location) && (
                 <span className="text-[11px] text-muted-foreground leading-tight truncate">
                   {[instrument.type, instrument.location].filter(Boolean).join(" · ")}
+                </span>
+              )}
+              {instrument.assetNumber && (
+                <span className="text-[11px] text-muted-foreground/70 leading-tight truncate font-mono">
+                  {instrument.assetNumber}
                 </span>
               )}
             </div>

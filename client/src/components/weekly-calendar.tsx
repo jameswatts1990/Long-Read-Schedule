@@ -50,6 +50,16 @@ interface CellData {
   day: string;
 }
 
+// One drawn segment of a linked-group connector, in coordinates relative to
+// the table wrapper (which scrolls with the content, so no scroll handling).
+interface GroupConnector {
+  groupId: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 // Calculate luminance of a color to determine if text should be white or dark
 const getLuminance = (hexColor: string): number => {
   const hex = hexColor.replace("#", "");
@@ -164,6 +174,9 @@ export function WeeklyCalendar({
   const [pendingGroupMove, setPendingGroupMove] = useState<{ assignment: Assignment; targetPersonId: string; targetDay: string } | null>(null);
   const [confirmDeleteGroup, setConfirmDeleteGroup] = useState<{ groupId: string; count: number } | null>(null);
   const [weekPickerGroup, setWeekPickerGroup] = useState<{ groupId: string; fromWeekStart: string } | null>(null);
+  const [groupConnectors, setGroupConnectors] = useState<GroupConnector[]>([]);
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const groupCardElsRef = useRef(new Map<string, HTMLDivElement>());
   const { data: trainedPersonIds = [] } = useQuery<string[]>({
     queryKey: [`/api/assignments/trained-persons?taskId=${trainedTaskId}`],
     enabled: trainedTaskId !== null,
@@ -455,6 +468,19 @@ export function WeeklyCalendar({
 
   // Pre-group assignments by person+day for O(1) lookup instead of O(A) per cell
   const assignmentsByCell = useMemo(() => {
+    // Members of a linked group share a display rank (the lowest cell order
+    // among the group's members this week) so they sit at the same position
+    // in every cell — reordering one member repositions the whole group.
+    const groupRank = new Map<string, number>();
+    for (const a of assignments) {
+      if (!a.linkedGroupId) continue;
+      const o = (a as any).order ?? 0;
+      const cur = groupRank.get(a.linkedGroupId);
+      if (cur === undefined || o < cur) groupRank.set(a.linkedGroupId, o);
+    }
+    const rankOf = (a: Assignment) =>
+      a.linkedGroupId ? groupRank.get(a.linkedGroupId)! : ((a as any).order ?? 0);
+
     const map = new Map<string, Assignment[]>();
     for (const a of assignments) {
       const key = `${a.personId}-${a.day}`;
@@ -463,9 +489,16 @@ export function WeeklyCalendar({
       }
       map.get(key)!.push(a);
     }
-    // Sort each cell's assignments by order
     map.forEach((arr: Assignment[]) => {
-      arr.sort((x: Assignment, y: Assignment) => ((x as any).order ?? 0) - ((y as any).order ?? 0));
+      arr.sort(
+        (x: Assignment, y: Assignment) =>
+          rankOf(x) - rankOf(y) ||
+          // Equal ranks: grouped cards first, then a stable groupId/id compare
+          // so every cell breaks the tie identically (keeps groups aligned).
+          (x.linkedGroupId ? 0 : 1) - (y.linkedGroupId ? 0 : 1) ||
+          (x.linkedGroupId ?? x.id).localeCompare(y.linkedGroupId ?? y.id) ||
+          ((x as any).order ?? 0) - ((y as any).order ?? 0)
+      );
     });
     return map;
   }, [assignments]);
@@ -486,6 +519,59 @@ export function WeeklyCalendar({
     }
     return map;
   }, [assignments]);
+
+  // Measure each rendered group card and build the connector segments drawn
+  // between consecutive members. ResizeObserver re-measures when row heights
+  // or table size change (cards added, notes wrapping, compact toggle, etc.).
+  useEffect(() => {
+    const wrap = tableWrapRef.current;
+    if (!wrap) return;
+
+    const recompute = () => {
+      const wrapRect = wrap.getBoundingClientRect();
+      const rectsByGroup = new Map<string, DOMRect[]>();
+      for (const a of assignments) {
+        if (!a.linkedGroupId) continue;
+        const el = groupCardElsRef.current.get(a.id);
+        if (!el) continue; // member not rendered (filtered out or other week)
+        if (!rectsByGroup.has(a.linkedGroupId)) rectsByGroup.set(a.linkedGroupId, []);
+        rectsByGroup.get(a.linkedGroupId)!.push(el.getBoundingClientRect());
+      }
+      const lines: GroupConnector[] = [];
+      rectsByGroup.forEach((rects, groupId) => {
+        rects.sort((p, q) => p.left - q.left || p.top - q.top);
+        for (let i = 0; i < rects.length - 1; i++) {
+          const a = rects[i];
+          const b = rects[i + 1];
+          if (b.left < a.right - 4) {
+            // Same column (stacked) — connect bottom edge to top edge
+            lines.push({
+              groupId,
+              x1: a.left + a.width / 2 - wrapRect.left,
+              y1: a.bottom - wrapRect.top,
+              x2: b.left + b.width / 2 - wrapRect.left,
+              y2: b.top - wrapRect.top,
+            });
+          } else {
+            // Adjacent columns — connect right edge to left edge at mid-height
+            lines.push({
+              groupId,
+              x1: a.right - wrapRect.left,
+              y1: a.top + a.height / 2 - wrapRect.top,
+              x2: b.left - wrapRect.left,
+              y2: b.top + b.height / 2 - wrapRect.top,
+            });
+          }
+        }
+      });
+      setGroupConnectors(lines);
+    };
+
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [assignments, isCompactView, hidePersonColumn, showColumnHeader, trainedTaskId, trainedPersonIds, people]);
 
   const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
@@ -549,6 +635,9 @@ export function WeeklyCalendar({
     <>
       <div className="border rounded-md bg-card h-full flex flex-col">
         <div className="overflow-auto flex-1">
+          {/* Relative wrapper sized to the table so the connector overlay
+              scrolls with the content (sticky headers/columns unaffected). */}
+          <div ref={tableWrapRef} className="relative min-w-fit">
           <table className="w-full border-collapse min-w-fit" style={{ tableLayout: 'fixed' }}>
             <colgroup>
               {!hidePersonColumn && <col style={{ width: '150px', minWidth: '150px' }} />}
@@ -805,6 +894,14 @@ export function WeeklyCalendar({
                               <ContextMenu key={assignment.id}>
                                 <ContextMenuTrigger asChild>
                                   <div
+                                    ref={(el) => {
+                                      if (!assignment.linkedGroupId) return;
+                                      if (el) {
+                                        groupCardElsRef.current.set(assignment.id, el);
+                                      } else {
+                                        groupCardElsRef.current.delete(assignment.id);
+                                      }
+                                    }}
                                     className={cn(
                                       "cursor-grab active:cursor-grabbing group relative transition-opacity duration-150",
                                       isCompactView
@@ -1161,6 +1258,32 @@ export function WeeklyCalendar({
               ))}
             </tbody>
           </table>
+
+          {/* Physical connector lines between linked cards. z-10 paints above
+              card bodies but below their badges (z-20), the sticky person
+              column (z-30) and headers (z-40+). */}
+          {groupConnectors.length > 0 && (
+            <svg
+              className="pointer-events-none absolute inset-0 z-10 h-full w-full text-amber-500 dark:text-amber-400"
+              aria-hidden="true"
+              data-testid="group-connector-overlay"
+            >
+              {groupConnectors.map((c, i) => (
+                <line
+                  key={`${c.groupId}-${i}`}
+                  x1={c.x1}
+                  y1={c.y1}
+                  x2={c.x2}
+                  y2={c.y2}
+                  stroke="currentColor"
+                  strokeWidth={hoveredGroupId === c.groupId ? 3.5 : 2}
+                  strokeOpacity={hoveredGroupId === c.groupId ? 1 : 0.75}
+                  strokeLinecap="round"
+                />
+              ))}
+            </svg>
+          )}
+          </div>
         </div>
       </div>
 

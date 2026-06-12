@@ -79,6 +79,7 @@ export const instruments = pgTable("instruments", {
   name: text("name").notNull(),
   type: text("type"),
   location: text("location"),
+  assetNumber: text("asset_number"),
   order: integer("order").default(0),
   workspaceId: varchar("workspace_id").notNull().default("default"),
 });

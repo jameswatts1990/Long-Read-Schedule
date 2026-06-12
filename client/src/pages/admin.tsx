@@ -1284,6 +1284,7 @@ const instrumentFormSchema = z.object({
   name: z.string().min(1, "Instrument name is required"),
   type: z.string().optional(),
   location: z.string().optional(),
+  assetNumber: z.string().optional(),
 });
 
 type InstrumentFormData = z.infer<typeof instrumentFormSchema>;
@@ -1299,7 +1300,7 @@ function InstrumentsSection() {
 
   const instrumentForm = useForm<InstrumentFormData>({
     resolver: zodResolver(instrumentFormSchema),
-    defaultValues: { name: "", type: "", location: "" },
+    defaultValues: { name: "", type: "", location: "", assetNumber: "" },
   });
 
   const createInstrumentMutation = useMutation({
@@ -1310,7 +1311,7 @@ function InstrumentsSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
       toast({ title: "Instrument added", description: "It can now be booked on assignments", variant: "success" });
-      instrumentForm.reset({ name: "", type: "", location: "" });
+      instrumentForm.reset({ name: "", type: "", location: "", assetNumber: "" });
       setShowDialog(false);
     },
     onError: (error: unknown) => {
@@ -1327,7 +1328,7 @@ function InstrumentsSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
       toast({ title: "Instrument updated", description: "Changes have been saved", variant: "success" });
-      instrumentForm.reset({ name: "", type: "", location: "" });
+      instrumentForm.reset({ name: "", type: "", location: "", assetNumber: "" });
       setEditingInstrument(null);
       setShowDialog(false);
     },
@@ -1370,6 +1371,7 @@ function InstrumentsSection() {
       name: instrument.name,
       type: instrument.type ?? "",
       location: instrument.location ?? "",
+      assetNumber: instrument.assetNumber ?? "",
     });
     setShowDialog(true);
   };
@@ -1397,7 +1399,7 @@ function InstrumentsSection() {
         <Button
           onClick={() => {
             setEditingInstrument(null);
-            instrumentForm.reset({ name: "", type: "", location: "" });
+            instrumentForm.reset({ name: "", type: "", location: "", assetNumber: "" });
             setShowDialog(true);
           }}
           data-testid="button-add-instrument"
@@ -1466,9 +1468,9 @@ function InstrumentsSection() {
                     <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div className="min-w-0 flex-1">
                       <span className="font-medium">{instrument.name}</span>
-                      {(instrument.type || instrument.location) && (
+                      {(instrument.type || instrument.location || instrument.assetNumber) && (
                         <p className="text-xs text-muted-foreground truncate">
-                          {[instrument.type, instrument.location].filter(Boolean).join(" · ")}
+                          {[instrument.type, instrument.location, instrument.assetNumber ? `Asset: ${instrument.assetNumber}` : null].filter(Boolean).join(" · ")}
                         </p>
                       )}
                     </div>
@@ -1569,6 +1571,19 @@ function InstrumentsSection() {
                     <FormLabel>Location (optional)</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Lab 2, Bench 4" {...field} data-testid="input-instrument-location" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={instrumentForm.control}
+                name="assetNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Asset number (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. SCI-00123" {...field} data-testid="input-instrument-asset-number" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

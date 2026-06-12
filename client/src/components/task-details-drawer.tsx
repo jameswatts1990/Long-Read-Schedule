@@ -60,7 +60,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDeleteGroupConfirm, setShowDeleteGroupConfirm] = useState(false);
-  const [applyToGroup, setApplyToGroup] = useState(false);
+  const [showApplyToGroupPrompt, setShowApplyToGroupPrompt] = useState(false);
   const { toast } = useToast();
 
   const { data: creator } = useQuery<User>({
@@ -84,7 +84,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       setSlackNotify((assignment as any).slackNotify ?? 0);
       setSlackChangeNotify((assignment as any).slackChangeNotify ?? 0);
       setInstrumentId(assignment.instrumentId ?? null);
-      setApplyToGroup(false);
+      setShowApplyToGroupPrompt(false);
     }
   }, [assignment]);
 
@@ -230,6 +230,42 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
     },
   });
 
+  const saveSingleCard = () => {
+    if (!assignment) return;
+    updateMutation.mutate({
+      batchNumber: batchNumber || undefined,
+      batchSize: batchSize ? parseInt(batchSize, 10) : undefined,
+      notes: notes || undefined,
+      customName: customName || undefined,
+      customColor: customColor || undefined,
+      weekStartDate: assignment.weekStartDate,
+      slackNotify,
+      slackChangeNotify,
+      // null (not undefined) so clearing back to "None" persists.
+      instrumentId,
+    } as any);
+  };
+
+  const saveWholeGroup = () => {
+    if (!assignment?.linkedGroupId) return;
+    const taskForSave = tasks.find((t) => t.id === assignment.taskId);
+    const isCustom = taskForSave?.name.toLowerCase() === "custom task";
+    // Group updates send null (not undefined) for cleared fields so the
+    // clear propagates to every member.
+    groupUpdateMutation.mutate({
+      groupId: assignment.linkedGroupId,
+      fields: {
+        batchNumber: batchNumber || null,
+        batchSize: batchSize ? parseInt(batchSize, 10) : null,
+        notes: notes || null,
+        ...(isCustom ? { customName: customName || null, customColor: customColor || null } : {}),
+        slackNotify,
+        slackChangeNotify,
+        instrumentId,
+      },
+    });
+  };
+
   const handleSave = () => {
     if (!assignment) return;
 
@@ -243,38 +279,24 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       return;
     }
 
-    if (assignment.linkedGroupId && applyToGroup) {
-      const taskForSave = tasks.find((t) => t.id === assignment.taskId);
-      const isCustom = taskForSave?.name.toLowerCase() === "custom task";
-      // Group updates send null (not undefined) for cleared fields so the
-      // clear propagates to every member.
-      groupUpdateMutation.mutate({
-        groupId: assignment.linkedGroupId,
-        fields: {
-          batchNumber: batchNumber || null,
-          batchSize: batchSize ? parseInt(batchSize, 10) : null,
-          notes: notes || null,
-          ...(isCustom ? { customName: customName || null, customColor: customColor || null } : {}),
-          slackNotify,
-          slackChangeNotify,
-          instrumentId,
-        },
-      });
+    const hasChanges =
+      batchNumber !== (assignment.batchNumber || "") ||
+      batchSize !== (assignment.batchSize ? String(assignment.batchSize) : "") ||
+      notes !== (assignment.notes || "") ||
+      customName !== (assignment.customName || "") ||
+      customColor !== ((assignment as any).customColor || "") ||
+      slackNotify !== ((assignment as any).slackNotify ?? 0) ||
+      slackChangeNotify !== ((assignment as any).slackChangeNotify ?? 0) ||
+      (instrumentId ?? null) !== (assignment.instrumentId ?? null);
+
+    // Grouped card with real changes: ask whether to apply them to every
+    // linked card before saving anything.
+    if (assignment.linkedGroupId && hasChanges) {
+      setShowApplyToGroupPrompt(true);
       return;
     }
 
-    updateMutation.mutate({
-      batchNumber: batchNumber || undefined,
-      batchSize: batchSize ? parseInt(batchSize, 10) : undefined,
-      notes: notes || undefined,
-      customName: customName || undefined,
-      customColor: customColor || undefined,
-      weekStartDate: assignment.weekStartDate,
-      slackNotify,
-      slackChangeNotify,
-      // null (not undefined) so clearing back to "None" persists.
-      instrumentId,
-    } as any);
+    saveSingleCard();
   };
 
   const handleDelete = () => {
@@ -337,7 +359,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
           </div>
 
           {assignment.linkedGroupId && (
-            <div className="space-y-3 rounded-md border p-3" data-testid="group-info-block">
+            <div className="space-y-2 rounded-md border p-3" data-testid="group-info-block">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Link2 className="w-4 h-4 shrink-0" />
@@ -360,17 +382,9 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
                   Unlink
                 </Button>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="apply-to-group"
-                  checked={applyToGroup}
-                  onCheckedChange={(checked) => setApplyToGroup(checked === true)}
-                  data-testid="checkbox-apply-to-group"
-                />
-                <Label htmlFor="apply-to-group" className="cursor-pointer font-normal text-sm">
-                  Apply saved changes to all linked cards
-                </Label>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                When you save, you'll be asked whether to apply your changes to all linked cards.
+              </p>
             </div>
           )}
 
@@ -724,6 +738,41 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
               }}
             >
               Delete group
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={showApplyToGroupPrompt} onOpenChange={setShowApplyToGroupPrompt}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply changes to all linked cards?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const n = assignments.filter((a) => a.linkedGroupId === assignment.linkedGroupId).length;
+                return `This card is part of a linked group${n > 0 ? ` of ${n} cards` : ""}. Save your changes to just this card, or to every card in the group.`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowApplyToGroupPrompt(false);
+                saveSingleCard();
+              }}
+              data-testid="button-save-single-card"
+            >
+              Only this card
+            </Button>
+            <AlertDialogAction
+              onClick={() => {
+                setShowApplyToGroupPrompt(false);
+                saveWholeGroup();
+              }}
+              data-testid="button-save-whole-group"
+            >
+              All linked cards
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
