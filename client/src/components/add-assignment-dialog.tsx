@@ -533,14 +533,12 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "
           <Form {...form}>
             <form id="add-assignment-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               {!personId && people && people.length > 0 && (
-                <FormItem>
-                  <FormLabel>Person</FormLabel>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium leading-none">Person</label>
                   <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-person">
-                        <SelectValue placeholder="Select a person" />
-                      </SelectTrigger>
-                    </FormControl>
+                    <SelectTrigger data-testid="select-person">
+                      <SelectValue placeholder="Select a person" />
+                    </SelectTrigger>
                     <SelectContent>
                       {people.filter(p => !p.excluded).map((person) => (
                         <SelectItem key={person.id} value={person.id}>
@@ -552,7 +550,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "
                       ))}
                     </SelectContent>
                   </Select>
-                </FormItem>
+                </div>
               )}
               <FormField
                 control={form.control}

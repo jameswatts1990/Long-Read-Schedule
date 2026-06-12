@@ -310,6 +310,14 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Learning: `extractErrorMessage` is exported from `client/src/lib/extract-error.ts` (strips the "400: " status prefix that apiRequest prepends). admin.tsx still has its own private copy — its call sites were deliberately not churned in this change.
 - Action: Import from `@/lib/extract-error` in new mutation onError/catch blocks instead of redefining it. Migrating admin.tsx to the shared helper is safe whenever that file is next touched.
 
+## AddAssignmentDialog — optional personId + initial field pre-fill pattern
+
+- Date: 2026-06-12
+- Trigger: Added cell-click to create assignments from pipeline and instrument views, where the task/instrument is known from the row but the person is not.
+- Learning: `personId` is now optional in `AddAssignmentDialogProps` (default `""`). When empty, a Person dropdown is rendered at the top of the form. `initialTaskId` and `initialInstrumentId` props pre-fill those fields on open. `effectivePersonId = personId || selectedPersonId` is used in all mutation payloads. Validation at the start of `onSubmit` and `handleCreateAllWeek` rejects submission when `effectivePersonId` is empty. The person picker uses a plain `<label>` + `<Select>` (NOT `FormControl`/`FormField`) since it is not a react-hook-form field. `useEffect` reset applies initial values; deps include `personId, initialTaskId, initialInstrumentId`.
+- Action: When calling `AddAssignmentDialog` without a known person (e.g. from a view where the row is the task or instrument), pass `people={people}` and omit `personId`. Pass `initialTaskId` or `initialInstrumentId` to pre-fill context from the row. Views that host the dialog must add `slackEnabled` prop and manage their own `selectedCell` state.
+- Evidence: `client/src/components/add-assignment-dialog.tsx`; `client/src/components/pipeline-view.tsx`; `client/src/components/instrument-view.tsx`.
+
 ## Workspace-level display toggles — rainbowMode pattern
 
 - Date: 2026-06-08 (corrected 2026-06-08)
