@@ -224,6 +224,14 @@ export function InstrumentView({
                   }}
                   data-testid={`instrument-cell-${instrument.id}-${day}`}
                 >
+                  <button
+                    onClick={() => setSelectedCell({ instrumentId: instrument.id, day })}
+                    className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-opacity px-1 py-0.5 rounded hover:bg-black/5"
+                    data-testid={`instrument-cell-add-${instrument.id}-${day}`}
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add</span>
+                  </button>
                   {dayAssignments.map((assignment) => {
                     const person = personMap.get(assignment.personId);
                     const task = taskMap.get(assignment.taskId);
@@ -301,14 +309,6 @@ export function InstrumentView({
                       </button>
                     );
                   })}
-                  <button
-                    onClick={() => setSelectedCell({ instrumentId: instrument.id, day })}
-                    className="opacity-0 group-hover:opacity-100 mt-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-opacity px-1 py-0.5 rounded hover:bg-black/5"
-                    data-testid={`instrument-cell-add-${instrument.id}-${day}`}
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Add</span>
-                  </button>
                 </div>
               );
             })}
