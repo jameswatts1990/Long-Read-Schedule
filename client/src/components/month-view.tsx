@@ -124,8 +124,8 @@ export function MonthView({
       <div className="border rounded-md bg-card h-full overflow-auto relative">
         <div 
           className="grid relative"
-          style={{ 
-            gridTemplateColumns: `200px repeat(${totalColumns}, minmax(140px, 1fr))`,
+          style={{
+            gridTemplateColumns: `200px repeat(${totalColumns}, minmax(70px, 1fr))`,
             width: "max-content"
           }}
         >
@@ -219,7 +219,7 @@ export function MonthView({
                       key={`${weekStr}-${person.id}-${day}`}
                       className={cn(
                         "border-b hover-elevate relative",
-                        isCompactView ? "p-0.5" : "p-1.5 min-h-[100px]",
+                        isCompactView ? "p-0" : "p-1.5 min-h-[100px]",
                         isTodayDay ? "bg-blue-100/50 dark:bg-blue-950/30" : 
                         personIndex % 2 === 0 ? "bg-muted/20" : "",
                         isDropTarget && "bg-primary/10 border-2 border-primary",
@@ -247,7 +247,7 @@ export function MonthView({
                         setDraggedAssignment(null);
                       }}
                     >
-                      <div className={cn("group space-y-1", isCompactView && "space-y-0.5")}>
+                      <div className={cn("group space-y-1", isCompactView && "space-y-0")}>
                         {cellAssignments.map(assignment => {
                           const task = getTaskById(assignment.taskId);
                           if (!task) return null;
@@ -257,13 +257,15 @@ export function MonthView({
                             <div
                               key={assignment.id}
                               className={cn(
-                                "rounded-md cursor-grab active:cursor-grabbing group relative border hover-elevate active-elevate-2",
-                                isCompactView ? "px-1 py-0.5" : "p-1 min-h-6",
+                                "cursor-grab active:cursor-grabbing group relative",
+                                isCompactView
+                                  ? "px-1 py-px"
+                                  : "rounded-md border hover-elevate active-elevate-2 p-1 min-h-6",
                                 draggedAssignment?.id === assignment.id && "opacity-50"
                               )}
-                              style={{ 
+                              style={{
                                 backgroundColor: task.color,
-                                borderColor: person.color,
+                                ...(isCompactView ? {} : { borderColor: person.color }),
                               }}
                               draggable
                               onDragStart={(e) => {
