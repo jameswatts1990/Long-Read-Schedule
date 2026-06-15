@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock, UserX, Megaphone, Building2, Bell, Wrench } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Upload, ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, LogOut, CalendarDays, LayoutList, ChevronDown, Layers, Loader2, Users, BarChart3, Sun, CalendarClock, UserX, Megaphone, Building2, Bell, Wrench, LockKeyhole } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -118,7 +118,7 @@ export default function Scheduler() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { activeWorkspace, availableWorkspaces, setWorkspace } = useWorkspace();
-  const { user } = useAuth();
+  const { user, sessionExpired } = useAuth();
   const isAdmin = (user as any)?.role === 'admin' || (user as any)?.role === 'super_admin' || (user as any)?.isSuperAdmin === true;
 
   const handleTrainedFilterChange = useCallback((taskName: string | null) => {
@@ -187,10 +187,12 @@ export default function Scheduler() {
   const monthStartStr = weeksInMonth.length > 0 ? formatDate(weeksInMonth[0]) : weekStartStr;
   const monthEndStr = weeksInMonth.length > 0 ? formatDate(weeksInMonth[weeksInMonth.length - 1]) : weekStartStr;
   
-  // Fetch assignments filtered by week for week/pipeline view
-  const weekAssignmentsQuery = useQuery<Assignment[]>({ 
+  // Fetch assignments filtered by week for week/pipeline view.
+  // Disabled when session is expired: queries would return 401, clearing any
+  // cached data that React Query would otherwise preserve for display.
+  const weekAssignmentsQuery = useQuery<Assignment[]>({
     queryKey: [`/api/assignments?weekStartDate=${weekStartStr}`],
-    enabled: viewMode === "week" || viewMode === "pipeline" || viewMode === "instrument",
+    enabled: (viewMode === "week" || viewMode === "pipeline" || viewMode === "instrument") && !sessionExpired,
     placeholderData: (previousData) => previousData,
   });
 
@@ -243,15 +245,23 @@ export default function Scheduler() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStartStr, activeWorkspace?.id, viewMode, (user as any)?.id]);
   
-  // Fetch assignments for entire month range for month view
-  const monthAssignmentsQuery = useQuery<Assignment[]>({ 
+  // Fetch assignments for entire month range for month view.
+  // Also disabled when session is expired (same reason as weekAssignmentsQuery).
+  const monthAssignmentsQuery = useQuery<Assignment[]>({
     queryKey: [`/api/assignments?startDate=${monthStartStr}&endDate=${monthEndStr}`],
-    enabled: viewMode === "month",
+    enabled: viewMode === "month" && !sessionExpired,
     placeholderData: (previousData) => previousData,
   });
 
   const weekAssignmentsData = weekAssignmentsQuery.data ?? [];
   const monthAssignmentsData = monthAssignmentsQuery.data ?? [];
+  // True when session expired AND no cached data is available for the current
+  // view — the calendar would appear blank, so we show a sign-in prompt instead.
+  const showSessionExpiredPlaceholder =
+    sessionExpired &&
+    (viewMode === "month"
+      ? monthAssignmentsQuery.data === undefined
+      : weekAssignmentsQuery.data === undefined);
   const isAssignmentDataFetching = viewMode === "month"
     ? monthAssignmentsQuery.isFetching
     : weekAssignmentsQuery.isFetching;
@@ -826,7 +836,27 @@ export default function Scheduler() {
           </div>
         )}
 
-        {isInitialLoading && (
+        {showSessionExpiredPlaceholder && (
+          <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+            <LockKeyhole className="h-10 w-10 opacity-40" />
+            <p className="text-sm font-medium">Session timed out</p>
+            <p className="text-xs text-center max-w-xs">
+              Sign back in to load this week&apos;s schedule. Your previous data is saved.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-1"
+              onClick={() => {
+                const returnTo = window.location.pathname + window.location.search;
+                window.location.assign(`/api/login?returnTo=${encodeURIComponent(returnTo)}`);
+              }}
+            >
+              Sign back in
+            </Button>
+          </div>
+        )}
+        {!showSessionExpiredPlaceholder && isInitialLoading && (
           <div className="space-y-2" aria-label="Loading schedule" aria-busy="true">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex gap-2">
@@ -838,14 +868,14 @@ export default function Scheduler() {
             ))}
           </div>
         )}
-        {!isInitialLoading && (viewMode === "week" || viewMode === "month") && people.length === 0 && (
+        {!showSessionExpiredPlaceholder && !isInitialLoading && (viewMode === "week" || viewMode === "month") && people.length === 0 && (
           <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
             <Users className="h-10 w-10 opacity-40" />
             <p className="text-sm font-medium">No team members yet</p>
             <p className="text-xs">Add people in <Link href="/admin" className="underline underline-offset-2">Admin</Link> to start scheduling.</p>
           </div>
         )}
-        {!isInitialLoading && viewMode === "week" && people.length > 0 && (
+        {!showSessionExpiredPlaceholder && !isInitialLoading && viewMode === "week" && people.length > 0 && (
           <WeeklyCalendar
             weekStartDate={weekStartStr}
             assignments={weekAssignments}
@@ -861,7 +891,7 @@ export default function Scheduler() {
             rainbowMode={activeWorkspace?.rainbowMode !== 0}
           />
         )}
-        {!isInitialLoading && viewMode === "month" && people.length > 0 && (
+        {!showSessionExpiredPlaceholder && !isInitialLoading && viewMode === "month" && people.length > 0 && (
           <MonthView
             weeksInMonth={weeksInMonth}
             weekAssignments={weekAssignments}
@@ -873,7 +903,7 @@ export default function Scheduler() {
             slackEnabled={!!(user as any)?.slackEnabled}
           />
         )}
-        {!isInitialLoading && viewMode === "pipeline" && (
+        {!showSessionExpiredPlaceholder && !isInitialLoading && viewMode === "pipeline" && (
           <PipelineView
             weekStartDate={weekStartStr}
             assignments={weekAssignments}
@@ -886,7 +916,7 @@ export default function Scheduler() {
             slackEnabled={!!(user as any)?.slackEnabled}
           />
         )}
-        {!isInitialLoading && viewMode === "instrument" && (
+        {!showSessionExpiredPlaceholder && !isInitialLoading && viewMode === "instrument" && (
           <InstrumentView
             weekStartDate={weekStartStr}
             assignments={weekAssignments}

@@ -33,5 +33,10 @@ export function useAuth() {
     isLoading,
     isAuthenticated,
     sessionExpired,
+    // True if the user was ever authenticated this page lifecycle.
+    // Used by App.tsx to avoid flashing <Landing /> for one render cycle during
+    // the isAuthenticated→sessionExpired transition, which would unmount
+    // <Scheduler> and lose currentWeekStart + cached assignment data.
+    wasEverAuthenticated: wasAuthenticated.current,
   };
 }

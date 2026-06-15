@@ -28,8 +28,13 @@ const isAssignmentQuery = (query: { queryKey: readonly unknown[] }) => {
   return typeof k === "string" && k.startsWith("/api/assignments");
 };
 
-function useRealTimeUpdates(workspaceId: string | null) {
+function useRealTimeUpdates(workspaceId: string | null, sessionExpired: boolean) {
   const socketRef = useRef<Socket | null>(null);
+  // Keep a ref so the visibilitychange closure always reads the latest value
+  // without the effect needing sessionExpired as a dependency (which would
+  // disconnect/reconnect the socket on every expiry state change).
+  const sessionExpiredRef = useRef(sessionExpired);
+  sessionExpiredRef.current = sessionExpired;
 
   const handleUpdate = (data: { type?: string; action?: string; record?: Assignment & { id: string; weekStartDate?: string } }) => {
     const { type, action, record } = data ?? {};
@@ -114,15 +119,21 @@ function useRealTimeUpdates(workspaceId: string | null) {
         disconnect();
       } else {
         connect();
-        // Check auth first so an expired session surfaces immediately on tab
-        // focus rather than mid-interaction after a long absence.
+        // Always re-check auth so an expired session surfaces immediately.
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-        // Refresh everything that may have changed while the tab was away
-        queryClient.invalidateQueries({ predicate: isAssignmentQuery });
-        queryClient.invalidateQueries({ queryKey: ["/api/people"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+
+        // Only re-fetch data queries when we believe the session is still valid.
+        // If the session is already expired (sessionExpired=true), skip the
+        // invalidations so React Query keeps showing the last cached values
+        // rather than firing requests that will all return 401 and leave every
+        // query in error state with no data. The user can sign back in first.
+        if (!sessionExpiredRef.current) {
+          queryClient.invalidateQueries({ predicate: isAssignmentQuery });
+          queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/instruments"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/premade-filters"] });
+        }
       }
     };
 
@@ -161,7 +172,7 @@ function useIsMobile() {
 }
 
 function Router() {
-  const { isAuthenticated, isLoading: authLoading, user, sessionExpired } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user, sessionExpired, wasEverAuthenticated } = useAuth();
   const isAdminUser = (user as any)?.role === 'admin' || (user as any)?.role === 'super_admin' || (user as any)?.isSuperAdmin === true;
   const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const { data: onboardingStatus, isLoading: onboardingLoading } = useQuery<{ needsOnboarding: boolean }>({
@@ -173,7 +184,7 @@ function Router() {
   const [location, setLocation] = useLocation();
   const [hasRedirected, setHasRedirected] = useState(false);
 
-  useRealTimeUpdates(activeWorkspace?.id ?? null);
+  useRealTimeUpdates(activeWorkspace?.id ?? null, sessionExpired);
 
   useEffect(() => {
     if (!authLoading && !workspaceLoading && isAuthenticated && activeWorkspace && isMobile && !location.startsWith("/my-day") && !hasRedirected) {
@@ -192,8 +203,12 @@ function Router() {
     );
   }
 
-  // User has never authenticated in this session → show landing page
-  if (!isAuthenticated && !sessionExpired) {
+  // User has never authenticated in this session → show landing page.
+  // wasEverAuthenticated guards the one-render gap between the auth query
+  // resolving null (isAuthenticated=false) and the useEffect setting
+  // sessionExpired=true — without it, <Landing> mounts for one cycle,
+  // unmounting <Scheduler> and resetting currentWeekStart to today.
+  if (!isAuthenticated && !sessionExpired && !wasEverAuthenticated) {
     return <Landing />;
   }
 
