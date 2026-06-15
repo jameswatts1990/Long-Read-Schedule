@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { InstrumentMultiSelect } from "@/components/instrument-multi-select";
 import { DuplicateAssignmentDialog } from "@/components/duplicate-assignment-dialog";
 import {
   AlertDialog,
@@ -55,7 +56,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
   const [customColor, setCustomColor] = useState("");
   const [slackNotify, setSlackNotify] = useState(0);
   const [slackChangeNotify, setSlackChangeNotify] = useState(0);
-  const [instrumentId, setInstrumentId] = useState<string | null>(null);
+  const [instrumentIds, setInstrumentIds] = useState<string[]>([]);
   const [isGeneratingBatchId, setIsGeneratingBatchId] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -83,7 +84,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       setCustomColor((assignment as any).customColor || "");
       setSlackNotify((assignment as any).slackNotify ?? 0);
       setSlackChangeNotify((assignment as any).slackChangeNotify ?? 0);
-      setInstrumentId(assignment.instrumentId ?? null);
+      setInstrumentIds(assignment.instrumentIds ?? []);
       setShowApplyToGroupPrompt(false);
     }
   }, [assignment]);
@@ -128,7 +129,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
         notes: snapshot.notes,
         customName: snapshot.customName,
         customColor: (snapshot as any).customColor,
-        instrumentId: snapshot.instrumentId,
+        instrumentIds: snapshot.instrumentIds ?? [],
       });
     },
     onSuccess: () => {
@@ -241,8 +242,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       weekStartDate: assignment.weekStartDate,
       slackNotify,
       slackChangeNotify,
-      // null (not undefined) so clearing back to "None" persists.
-      instrumentId,
+      instrumentIds,
     } as any);
   };
 
@@ -261,7 +261,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
         ...(isCustom ? { customName: customName || null, customColor: customColor || null } : {}),
         slackNotify,
         slackChangeNotify,
-        instrumentId,
+        instrumentIds,
       },
     });
   };
@@ -287,7 +287,7 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
       customColor !== ((assignment as any).customColor || "") ||
       slackNotify !== ((assignment as any).slackNotify ?? 0) ||
       slackChangeNotify !== ((assignment as any).slackChangeNotify ?? 0) ||
-      (instrumentId ?? null) !== (assignment.instrumentId ?? null);
+      JSON.stringify(instrumentIds) !== JSON.stringify(assignment.instrumentIds ?? []);
 
     // Grouped card with real changes: ask whether to apply them to every
     // linked card before saving anything.
@@ -468,25 +468,11 @@ export function TaskDetailsDrawer({ assignment, people, tasks, open, onClose, sl
           {instruments.length > 0 && (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Instrument</Label>
-              <Select
-                value={instrumentId ?? "__none__"}
-                onValueChange={(value) => setInstrumentId(value === "__none__" ? null : value)}
-              >
-                <SelectTrigger data-testid="select-instrument">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {instruments.map((instrument) => (
-                    <SelectItem key={instrument.id} value={instrument.id}>
-                      {instrument.name}
-                      {(instrument.type || instrument.location) && (
-                        <span className="text-muted-foreground"> — {[instrument.type, instrument.location].filter(Boolean).join(" · ")}</span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <InstrumentMultiSelect
+                instruments={instruments}
+                value={instrumentIds}
+                onChange={setInstrumentIds}
+              />
             </div>
           )}
 

@@ -58,7 +58,8 @@ export function InstrumentView({
   const moveAssignmentMutation = useMutation({
     mutationFn: async (data: { assignmentId: string; instrumentId: string; day: string }) => {
       const res = await apiRequest("PATCH", `/api/assignments/${data.assignmentId}`, {
-        instrumentId: data.instrumentId,
+        // Drag-drop replaces the full instrument set with just the target instrument.
+        instrumentIds: [data.instrumentId],
         day: data.day,
         weekStartDate,
       });
@@ -84,7 +85,7 @@ export function InstrumentView({
   });
 
   const visibleInstruments = hideEmptyInstruments
-    ? instruments.filter((instrument) => assignments.some((a) => a.instrumentId === instrument.id))
+    ? instruments.filter((instrument) => assignments.some((a) => a.instrumentIds?.includes(instrument.id)))
     : instruments;
 
   const weekStart = new Date(weekStartDate + "T00:00:00");
@@ -187,7 +188,7 @@ export function InstrumentView({
             {/* Day cells for this instrument */}
             {DAYS.map((day) => {
               const dayAssignments = assignments.filter(
-                (a) => a.instrumentId === instrument.id && a.day === day
+                (a) => a.instrumentIds?.includes(instrument.id) && a.day === day
               );
               const isDropTarget =
                 dropTarget?.instrumentId === instrument.id && dropTarget?.day === day;
@@ -211,7 +212,7 @@ export function InstrumentView({
                   onDrop={() => {
                     if (
                       draggedAssignment &&
-                      (draggedAssignment.instrumentId !== instrument.id || draggedAssignment.day !== day)
+                      (!draggedAssignment.instrumentIds?.includes(instrument.id) || draggedAssignment.day !== day)
                     ) {
                       moveAssignmentMutation.mutate({
                         assignmentId: draggedAssignment.id,
@@ -323,7 +324,7 @@ export function InstrumentView({
         day={selectedCell?.day || "Monday"}
         tasks={tasks}
         people={people}
-        initialInstrumentId={selectedCell?.instrumentId}
+        initialInstrumentIds={selectedCell ? [selectedCell.instrumentId] : undefined}
         slackEnabled={slackEnabled}
       />
     </>

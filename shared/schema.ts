@@ -113,9 +113,10 @@ export const assignments = pgTable("assignments", {
   // (singletons are auto-dissolved). Composes with seriesId: a recurring
   // multi-day prep shares one seriesId across weeks, one linkedGroupId per week.
   linkedGroupId: varchar("linked_group_id"),
-  // Books this assignment onto a piece of equipment (instruments table).
-  // NULL = no instrument. No FK constraint; deleteInstrument nulls these out.
-  instrumentId: varchar("instrument_id"),
+  // Books this assignment onto one or more pieces of equipment (instruments table).
+  // Empty array = no instrument booked. No FK constraint; deleteInstrument removes
+  // entries from this array via array_remove.
+  instrumentIds: text("instrument_ids").array().notNull().default([]),
   // When 1, a Slack DM is sent to the assigned person at 9 AM on the day.
   slackNotify: integer("slack_notify").notNull().default(0),
   // When 1, Slack DMs are sent when this assignment is created or deleted.
@@ -219,7 +220,7 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id:
   // Explicit override so the field is guaranteed to survive .parse() (same
   // strip-on-parse risk class as the integer-with-default columns above).
   linkedGroupId: z.string().nullable().optional(),
-  instrumentId: z.string().nullable().optional(),
+  instrumentIds: z.array(z.string()).optional().default([]),
 });
 export const insertInstrumentSchema = createInsertSchema(instruments).omit({ id: true });
 export const insertPremadeFilterSchema = createInsertSchema(premadeFilters).omit({ id: true });

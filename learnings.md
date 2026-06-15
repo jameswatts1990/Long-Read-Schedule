@@ -343,3 +343,16 @@ Add entries only when the lesson is likely to help with future tasks. Keep entri
 - Trigger: Added Ctrl/Shift modifier shortcuts to skip the linked-group drag popup.
 - Learning: The HTML drag `onDrop` handler receives a `DragEvent` that carries `e.ctrlKey` and `e.shiftKey` at drop time. No separate keydown tracking is needed. Change `onDrop={() => {` → `onDrop={(e) => {` to access these. The modifier check sits inside the `linkedGroupId` branch, before `setPendingGroupMove`, so the popup is only shown when no modifier is held.
 - Action: For future modifier-key drag behaviour, capture the event in `onDrop={(e) => {` and branch on `e.ctrlKey` / `e.shiftKey` / `e.altKey`. Always add the new shortcuts to the "Mouse interactions" section of `help-guide.tsx`.
+
+## Multiple instruments per assignment — instrumentId → instrumentIds array
+
+- Date: 2026-06-15
+- Trigger: Changed instrument booking from a single `instrumentId varchar` column to `instrumentIds text[]` (Postgres array), supporting parallel runs (same task on multiple instruments simultaneously).
+- Learning: (1) `assignments.instrument_ids` is a `text[]` NOT NULL DEFAULT `{}` column. The old `instrument_id` column was dropped. (2) The DB migration is a three-step operation: add column, back-fill, drop old column (alert user to run in Replit). (3) `deleteInstrument` now uses `array_remove(instrument_ids, id)` instead of `SET NULL` — use Drizzle `sql` template tag: `sql\`array_remove(\${assignments.instrumentIds}, \${id})\``, with WHERE clause `sql\`\${id} = ANY(\${assignments.instrumentIds})\``. (4) Instrument view filters use `.instrumentIds?.includes(instrument.id)` instead of `=== instrument.id`. An assignment appears in EVERY row for each instrument it's booked onto. (5) Drag-drop in instrument view replaces the full `instrumentIds` array with `[targetInstrumentId]` — dragging expresses intent to move to that single instrument. (6) All four zod allowlists were updated: `insertAssignmentSchema` (`shared/schema.ts`), `assignmentPatchSchema` and `groupPatchSchema` (`routes.ts`), and the `updateGroupFields` Pick type (`storage.ts`). (7) The reusable `InstrumentMultiSelect` component uses Popover + Command (cmdk) + Badge chips — searchable, handles any count. (8) `premadeFilters.person_ids` and `rota_tasks.person_ids` already used `text().array()` — follow the same pattern for any future array columns.
+- Action: Use the `InstrumentMultiSelect` component from `client/src/components/instrument-multi-select.tsx` for any future multi-entity picker. Grep for `instrumentIds` to find all assignment-level allowlists that need updating when adding further fields.
+- Evidence: SQL migration (run in Replit BEFORE deploying):
+  ```sql
+  ALTER TABLE assignments ADD COLUMN IF NOT EXISTS instrument_ids text[] NOT NULL DEFAULT '{}';
+  UPDATE assignments SET instrument_ids = ARRAY[instrument_id]::text[] WHERE instrument_id IS NOT NULL;
+  ALTER TABLE assignments DROP COLUMN IF EXISTS instrument_id;
+  ```

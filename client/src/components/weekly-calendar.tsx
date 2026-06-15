@@ -401,7 +401,7 @@ export function WeeklyCalendar({
       notes: a.notes,
       customName: a.customName,
       customColor: (a as any).customColor ?? null,
-      instrumentId: a.instrumentId ?? null,
+      instrumentIds: a.instrumentIds ?? [],
       date: targetDate,
     }));
     try {

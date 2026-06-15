@@ -806,7 +806,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       await storage.deleteInstrument(req.params.id);
       broadcastUpdate("instruments", req.workspaceId);
-      // Deletion unbooks assignments (instrumentId set to NULL), so clients must refetch them too.
+      // Deletion strips the instrument from assignment arrays, so clients must refetch them too.
       broadcastUpdate("assignments", req.workspaceId);
       res.json({ success: true });
     } catch (error) {
@@ -1069,7 +1069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     weekStartDate: isoDateString.optional(),
     slackNotify: z.number().int().min(0).max(1).optional(),
     slackChangeNotify: z.number().int().min(0).max(1).optional(),
-    instrumentId: z.string().optional().nullable(),
+    instrumentIds: z.array(z.string()).optional(),
   });
 
   app.get("/api/assignments/trained-persons", isAuthenticated, requireWorkspace, async (req, res) => {
@@ -1285,7 +1285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       customColor: z.string().nullable().optional(),
       slackNotify: z.number().int().min(0).max(1).optional(),
       slackChangeNotify: z.number().int().min(0).max(1).optional(),
-      instrumentId: z.string().nullable().optional(),
+      instrumentIds: z.array(z.string()).optional(),
     })
     .refine((d) => Object.values(d).some((v) => v !== undefined), { message: "No changes provided" })
     .refine((d) => d.personId === undefined || d.dayOffset !== undefined, {
@@ -1301,7 +1301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           d.customColor === undefined &&
           d.slackNotify === undefined &&
           d.slackChangeNotify === undefined &&
-          d.instrumentId === undefined),
+          d.instrumentIds === undefined),
       { message: "Cannot combine a move with field changes" },
     );
 

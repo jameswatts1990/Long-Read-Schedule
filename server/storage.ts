@@ -128,7 +128,7 @@ export interface IStorage {
   linkAssignments(assignmentIds: string[], workspaceId: string): Promise<{ groupId: string; assignments: Assignment[] }>;
   unlinkAssignment(assignmentId: string, workspaceId: string): Promise<void>;
   dissolveGroup(groupId: string, workspaceId: string): Promise<{ count: number }>;
-  updateGroupFields(groupId: string, workspaceId: string, fields: Partial<Pick<Assignment, "batchNumber" | "batchSize" | "notes" | "customName" | "customColor" | "slackNotify" | "slackChangeNotify" | "instrumentId">>): Promise<Assignment[]>;
+  updateGroupFields(groupId: string, workspaceId: string, fields: Partial<Pick<Assignment, "batchNumber" | "batchSize" | "notes" | "customName" | "customColor" | "slackNotify" | "slackChangeNotify" | "instrumentIds">>): Promise<Assignment[]>;
   moveGroup(groupId: string, workspaceId: string, dayOffset: number, newPersonId?: string): Promise<{ ok: true; assignments: Assignment[] } | { ok: false; reason: string }>;
   deleteGroup(groupId: string, workspaceId: string): Promise<{ deleted: Assignment[] }>;
 
@@ -470,8 +470,11 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteInstrument(id: string): Promise<void> {
-    // App-level SET NULL: unbook any assignments first (no FK constraint).
-    await this.db.update(assignments).set({ instrumentId: null }).where(eq(assignments.instrumentId, id));
+    // App-level remove: strip this instrument from any assignment that references it.
+    await this.db
+      .update(assignments)
+      .set({ instrumentIds: sql`array_remove(${assignments.instrumentIds}, ${id})` })
+      .where(sql`${id} = ANY(${assignments.instrumentIds})`);
     await this.db.delete(instruments).where(eq(instruments.id, id));
   }
 
@@ -709,7 +712,7 @@ export class PostgresStorage implements IStorage {
   async updateGroupFields(
     groupId: string,
     workspaceId: string,
-    fields: Partial<Pick<Assignment, "batchNumber" | "batchSize" | "notes" | "customName" | "customColor" | "slackNotify" | "slackChangeNotify" | "instrumentId">>,
+    fields: Partial<Pick<Assignment, "batchNumber" | "batchSize" | "notes" | "customName" | "customColor" | "slackNotify" | "slackChangeNotify" | "instrumentIds">>,
   ): Promise<Assignment[]> {
     const next: Partial<Assignment> = { updatedAt: new Date() };
     for (const [key, value] of Object.entries(fields)) {

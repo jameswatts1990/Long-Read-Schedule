@@ -34,6 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useToast } from "@/hooks/use-toast";
 import { startOfWeek, addDays, addWeeks, addMonths, format, parse, isToday, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter } from "date-fns";
 import { cn } from "@/lib/utils";
+import { InstrumentMultiSelect } from "@/components/instrument-multi-select";
 
 type RepeatUnit = "days" | "weeks" | "months";
 type EndType = "never" | "date" | "occurrences";
@@ -54,7 +55,7 @@ interface AddAssignmentDialogProps {
   day: string;
   tasks: Task[];
   initialTaskId?: string;
-  initialInstrumentId?: string;
+  initialInstrumentIds?: string[];
   isMonthMode?: boolean;
   slackEnabled?: boolean;
 }
@@ -66,7 +67,7 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
   notes: z.string().optional(),
   customName: z.string().optional(),
   customColor: z.string().optional(),
-  instrumentId: z.string().optional().nullable(),
+  instrumentIds: z.array(z.string()).optional().default([]),
 }).refine(data => {
   if (data.batchSize !== undefined && data.batchSize !== null && !data.batchNumber) {
     return false;
@@ -79,7 +80,7 @@ const formSchema = insertAssignmentSchema.omit({ weekStartDate: true, personId: 
 
 type FormData = z.infer<typeof formSchema>;
 
-export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "", people, day, tasks, initialTaskId, initialInstrumentId, isMonthMode = false, slackEnabled = false }: AddAssignmentDialogProps) {
+export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "", people, day, tasks, initialTaskId, initialInstrumentIds, isMonthMode = false, slackEnabled = false }: AddAssignmentDialogProps) {
   const { toast } = useToast();
   const [conflictData, setConflictData] = useState<{ conflicts: any[], conflictCount: number } | null>(null);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
@@ -122,7 +123,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "
       notes: "",
       customName: "",
       customColor: undefined,
-      instrumentId: initialInstrumentId || null,
+      instrumentIds: initialInstrumentIds || [],
       slackNotify: 0,
       slackChangeNotify: 0,
     },
@@ -240,7 +241,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "
         notes: "",
         customName: "",
         customColor: undefined,
-        instrumentId: null,
+        instrumentIds: [],
         slackNotify: 0,
         slackChangeNotify: 0,
       });
@@ -276,7 +277,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "
         notes: "",
         customName: "",
         customColor: undefined,
-        instrumentId: initialInstrumentId || null,
+        instrumentIds: initialInstrumentIds || [],
         slackNotify: 0,
         slackChangeNotify: 0,
       });
@@ -305,7 +306,7 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "
         }
       }
     }
-  }, [open, form, day, isMonthMode, weekStartDate, personId, initialTaskId, initialInstrumentId]);
+  }, [open, form, day, isMonthMode, weekStartDate, personId, initialTaskId, initialInstrumentIds]);
 
   const onSubmit = async (data: FormData) => {
     if (!effectivePersonId) {
@@ -592,31 +593,17 @@ export function AddAssignmentDialog({ open, onClose, weekStartDate, personId = "
               {instruments.length > 0 && (
                 <FormField
                   control={form.control}
-                  name="instrumentId"
+                  name="instrumentIds"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Instrument (Optional)</FormLabel>
-                      <Select
-                        onValueChange={(value) => field.onChange(value === "__none__" ? null : value)}
-                        value={field.value ?? "__none__"}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-instrument">
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__none__">None</SelectItem>
-                          {instruments.map((instrument) => (
-                            <SelectItem key={instrument.id} value={instrument.id} data-testid={`instrument-option-${instrument.id}`}>
-                              {instrument.name}
-                              {(instrument.type || instrument.location) && (
-                                <span className="text-muted-foreground"> — {[instrument.type, instrument.location].filter(Boolean).join(" · ")}</span>
-                              )}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <InstrumentMultiSelect
+                          instruments={instruments}
+                          value={field.value ?? []}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

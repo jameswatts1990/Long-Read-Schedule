@@ -122,7 +122,7 @@ export function HelpGuide() {
 
             <Section title="Editing & details">
               <Item label="Click a task" description="Opens the Task Details drawer where you can edit batch number, batch size, notes, custom name, custom colour, instrument booking, and Slack reminder toggle." />
-              <Item label="Instrument" description="Optionally book the assignment onto a piece of equipment (set up in Admin → Instruments). Booked assignments appear in Instrument view. Choose 'None' to clear the booking. Duplicated cards keep the instrument." />
+              <Item label="Instrument" description="Optionally book the assignment onto one or more pieces of equipment (set up in Admin → Instruments). Use the searchable dropdown to select as many instruments as needed — for example when running the same prep on multiple sequencers in parallel. Selected instruments appear as removable chips below the picker. Booked assignments appear in Instrument view under each booked instrument's row. Duplicated cards keep the full instrument selection." />
               <Item label="⋯ menu button" description="Hover any task card to reveal a ⋯ (more) button in the top-right corner. Click it for a quick menu with Copy, Edit Details, Highlight, and Delete options — the same actions as the right-click menu." />
               <Item label="Custom name" description="Overrides the task name for this assignment only — useful for labelling specific samples." />
               <Item label="Custom colour" description="Overrides the task colour for this assignment only." />
@@ -194,8 +194,8 @@ export function HelpGuide() {
             <Section title="Instrument view">
               <Item label="Layout" description="Instruments and equipment as rows, Mon–Fri as columns — an equipment booking planner for the week. Each card shows the person's name first, the task underneath, and the batch number if set; click a card to open its details." />
               <Item label="Add assignment" description="Hover any instrument cell and click the '+ Add' button that appears to open the Add Assignment dialog. The instrument for that row is pre-filled; choose a task, person, and any other details." />
-              <Item label="Booking" description="Assignments appear here when their 'Instrument' field is set. Choose an instrument in the Add Assignment dialog or the Task Details drawer." />
-              <Item label="Drag and drop" description="Drag a card to another cell to rebook it onto a different instrument and/or day. The change applies everywhere — People, Pipeline, and Month views update too." />
+              <Item label="Booking" description="Assignments appear here when one or more instruments are selected. An assignment booked onto multiple instruments appears in each of those instrument rows simultaneously." />
+              <Item label="Drag and drop" description="Drag a card to another cell to rebook it onto a different instrument and/or day. Dropping onto an instrument row replaces the full instrument selection with just that instrument. The change applies everywhere — People, Pipeline, and Month views update too." />
               <Item label="Hide empty" description="Toggle the eye icon to hide instruments with no bookings this week. When active, a blue banner appears in the toolbar — press Escape to cancel, or use the 'Show all instruments' button if no instruments have bookings." />
               <Item label="Setup" description="Instruments are managed by admins in Admin → Instruments." />
             </Section>
@@ -292,7 +292,7 @@ export function HelpGuide() {
             </Section>
 
             <Section title="Instruments">
-              <Item label="Purpose" description="Maintain the workspace's list of bookable equipment — automation robots, sequencers, lab equipment. Assignments can be booked onto an instrument and viewed in Instrument view." />
+              <Item label="Purpose" description="Maintain the workspace's list of bookable equipment — automation robots, sequencers, lab equipment. Assignments can be booked onto one or more instruments and viewed in Instrument view." />
               <Item label="Add instrument" description="Set a name (required), plus optional free-text type (e.g. 'Sequencer') and location (e.g. 'Lab 2, Bench 4')." />
               <Item label="Reorder" description="Drag the handle next to an instrument to change its row order in Instrument view." />
               <Item label="Delete" description="Deleting an instrument unbooks any assignments that used it — the assignments themselves are kept." />
